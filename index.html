@@ -78,6 +78,11 @@
   #usageChip.warn{background:var(--yel-bg); color:var(--yel-fg)}
   #usageChip.capped{background:var(--bad-bg); color:var(--bad-fg)}
 
+  /* FMP health button states */
+  #healthBtn.healthy{background:var(--good-bg); color:var(--good-fg)}
+  #healthBtn.degraded{background:var(--yel-bg); color:var(--yel-fg)}
+  #healthBtn.flipping{background:var(--bad-bg); color:var(--bad-fg)}
+
   /* Net link */
   .net-link{
     background:#f3f4f6; border-radius:10px;
@@ -567,6 +572,8 @@
 
     <div id="usageChip" title="Today's AI research calls vs daily cap"></div>
 
+    <button id="healthBtn" class="btn" title="Probe FMP's data feed for a CDN sym-flip">♡ FMP health</button>
+
     <div class="net-link" id="navToggle">Net ↗</div>
   </header>
 
@@ -639,6 +646,7 @@
     <button class="btn" onclick="setView('watchlist')" style="margin-bottom:12px">↩ Back to Watchlist</button>
     <div class="tw-banner-title">Training Wheels</div>
     <div class="tw-banner-sub">A walkthrough of every data point using NVIDIA (NVDA) as a real example. Hover or click any value to learn what it means.</div>
+    <span class="tw-banner-hint" data-tw="health" style="cursor:pointer">♡ What is the FMP health check?</span>
   </div>
   <div class="card">
     <table>
@@ -1198,12 +1206,29 @@ async function refreshUsage(){
 // refresh after any rescan finishes so the count reflects the latest scan
 setInterval(refreshUsage, 60000);
 
+/* ---------------- FMP health probe ---------------- */
+document.getElementById('healthBtn').addEventListener('click',async()=>{
+  const btn=document.getElementById('healthBtn');
+  btn.className='btn'; btn.innerHTML='<span class="spin">⟳</span> Checking…';
+  try{
+    const h=await api.get('/api/health');
+    btn.classList.add(h.status);
+    const icon=h.status==='healthy'?'✓':h.status==='flipping'?'✕':'⚠';
+    btn.innerHTML=`${icon} FMP ${h.status}`;
+    const detail=(h.probes||[]).map(p=>`${p.sym}: ${p.ok?'✓ '+(p.name||''):'✕ '+(p.name||p.error||'?')}`).join('  ·  ');
+    showToast(`${h.message}\n${detail}`, 9000);
+  }catch{
+    btn.innerHTML='♡ FMP health';
+    showToast('Health check failed — could not reach /api/health.');
+  }
+});
+
 /* ---------------- toast banner ---------------- */
 function showToast(msg, durationMs=4500){
   let el=document.getElementById('toastBanner');
   if(!el){
     el=document.createElement('div'); el.id='toastBanner';
-    el.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:300;background:#2a2e36;color:#e8eaf0;font-size:11px;line-height:1.5;padding:9px 18px;border-radius:9px;box-shadow:0 4px 16px rgba(0,0,0,.22);pointer-events:none;opacity:0;transition:opacity .25s';
+    el.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:300;background:#2a2e36;color:#e8eaf0;font-size:11px;line-height:1.5;padding:9px 18px;border-radius:9px;box-shadow:0 4px 16px rgba(0,0,0,.22);pointer-events:none;opacity:0;transition:opacity .25s;white-space:pre-line;max-width:560px;text-align:center';
     document.body.appendChild(el);
   }
   el.textContent=msg; el.style.opacity='1';
@@ -1373,6 +1398,13 @@ const TW_DATA={
     why:'Disruption often shows up in the fundamentals 2–4 quarters after it begins. The goal is to identify the threat before it appears in margins — not after the damage is done.',
     good:'✓ No credible new entrants with comparable performance; open-source alternatives lack parity; the company\'s moat (patents, switching costs, ecosystem lock-in) is intact or widening.',
     bad:'✗ Well-funded competitor launching directly competing product; regulatory action targeting core business; open-source alternative reaching feature parity; key customer beginning to build in-house.'
+  },
+  health:{
+    title:'FMP Health Check ♡',nvda:'Click the "♡ FMP health" button (top-right) anytime to run it live.',
+    what:'A one-click probe of the data feed (Financial Modeling Prep). It requests the company profile for three unrelated tickers — NVDA, AAPL, and KO (Coca-Cola) — and confirms each returns its OWN correct company. The button turns green (healthy), yellow (degraded), or red (flipping) and a toast lists what each probe returned.',
+    why:'The data feed\'s CDN occasionally "sym-flips" — serving one company\'s financials for many different tickers, which silently poisons your watchlist. This used to take manual command-line debugging to diagnose. Now a single click answers "is the feed flipping right now?" — so you know whether it\'s safe to force a rescan or whether you should wait.',
+    good:'✓ Green / "healthy" — all three probes returned distinct, correct companies. The feed is behaving; rescans will pull accurate data.',
+    bad:'✗ Red / "flipping" — two or more probes returned the SAME company, meaning the feed is actively serving wrong data. Do NOT force-rescan now (you\'d overwrite good rows with poison). Wait a few minutes and re-check; yellow / "degraded" means a partial problem — verify before bulk rescans.'
   },
   integrity:{
     title:'Data-Integrity Warning ⚠',nvda:'No warning shown — NVDA passed all integrity checks this scan.',
