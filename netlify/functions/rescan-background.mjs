@@ -67,7 +67,15 @@ export default async (req) => {
   for (const sym of allTickers) {
     try {
       if (fullTickers.has(sym)) {
-        const row = await scoreTicker(sym, { skipCache });
+        // Pass the stored company name as knownName when it's trusted (unique in blob,
+        // not in the poisoned set). layer1a's nameMismatch guard will reject partial
+        // CDN flips where profile.symbol is correct but companyName is wrong (e.g. FMP
+        // serves AVGO's name/financials for a MU request but stamps symbol="MU").
+        const storedRow = allRows.find(r => r.sym === sym);
+        const knownName = storedRow?.name && storedRow.name !== sym
+          && !watchlistPoisonedNames.has(storedRow.name)
+          ? storedRow.name : undefined;
+        const row = await scoreTicker(sym, { skipCache, knownName });
         pendingFullWrites.push({ sym, row });
         rows.push(row);
       } else {
@@ -96,8 +104,8 @@ export default async (req) => {
 
   // ── PASS 3: Write results, skipping CDN-flipped entries ──────────────────────
   for (const { sym, row } of pendingFullWrites) {
-    if (freshFlipNames.has(row.name)) {
-      // Batch dedup detected a CDN-wide flip — don't write stale data.
+    if (freshFlipNames.has(row.name) || row._flipGuarded) {
+      // Batch dedup OR single-ticker name-guard detected a CDN flip — don't write.
       await deleteFmpCache(sym).catch(() => {});
     } else {
       await putWatchlistRowWithHistory(sym, row);
@@ -106,10 +114,14 @@ export default async (req) => {
 
   // Replace CDN-flipped rows in the final job response with { sym } placeholders
   // so the frontend doesn't display the wrong company's data in the post-scan view.
-  if (freshFlipNames.size > 0) {
+  const hasFlippedRows = freshFlipNames.size > 0 || pendingFullWrites.some(w => w.row._flipGuarded);
+  if (hasFlippedRows) {
+    const existingBySym = Object.fromEntries(existing.map(r => [r.sym, r]));
     for (let i = 0; i < rows.length; i++) {
-      if (rows[i].name && freshFlipNames.has(rows[i].name)) {
-        rows[i] = { sym: rows[i].sym };
+      if ((rows[i].name && freshFlipNames.has(rows[i].name)) || rows[i]._flipGuarded) {
+        // Serve the last stored good data instead of a bare {sym} placeholder.
+        // This keeps the display showing the correct company while FMP's CDN heals.
+        rows[i] = existingBySym[rows[i].sym] || { sym: rows[i].sym };
       }
     }
   }
