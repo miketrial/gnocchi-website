@@ -1,0 +1,1686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gnocchi · Watchlist</title>
+<style>
+  :root{
+    /* verdict palette (from SKILL.md) */
+    --good-bg:#D5F5E3; --good-fg:#1E8449;
+    --bad-bg:#FADBD8;  --bad-fg:#C0392B;
+    --yel-bg:#FEF9E7;  --yel-fg:#B7950B;
+    --neu-bg:#EAF2FF;  --neu-fg:#1A5276;
+    --gray-bg:#EAECEE; --gray-fg:#566573;
+    --pur-bg:#EDE7F6;  --pur-fg:#6A1B9A;
+
+    --ink:#1e2228;          /* grayish, subtle base type */
+    --ink-soft:#4a5260;
+    --ink-faint:#6b7280;
+    --page:#ffffff;         /* plain white, very simple */
+    --card:#ffffff;
+    --shadow:none;
+    --radius:8px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--page);
+    color:var(--ink);
+    font:10.5px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- app shell ---------- */
+  #app{max-width:1600px; margin:0 auto; padding:0 0 90px}
+
+  header.bar{
+    padding:12px 20px 10px;
+    background:linear-gradient(var(--page) 72%, rgba(251,251,252,0));
+    transition:opacity .2s ease;
+    display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+  }
+  .brand{font-size:16px; font-weight:600; color:#4a525e; letter-spacing:.3px}
+  .brand .dot{color:#7aa6c2}
+  .grow{flex:1}
+
+  /* search w/ magnifier */
+  .search{
+    position:relative; display:flex; align-items:center;
+    background:#f3f4f6; border-radius:10px;
+    padding:7px 12px 7px 30px; min-width:210px;
+  }
+  .search svg{position:absolute; left:10px; width:13px; height:13px; stroke:var(--ink-faint)}
+  .search input{
+    border:none; outline:none; background:transparent; font-size:11px;
+    color:#4a525e; width:100%; text-transform:uppercase; letter-spacing:.4px;
+  }
+  .search input::placeholder{color:var(--ink-faint); text-transform:none; letter-spacing:0}
+
+  .btn{
+    background:#f3f4f6; border:none; cursor:pointer;
+    border-radius:10px; padding:8px 15px; font-size:11px; font-weight:600;
+    color:var(--ink); transition:transform .1s, filter .15s;
+  }
+  .btn:hover{filter:brightness(.97)}
+  .btn:active{transform:scale(.97); opacity:.85}
+  .btn .spin{display:inline-block; animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* Rescan + its "last clicked" timer, stacked */
+  .rescan-wrap{display:flex; flex-direction:column; align-items:flex-start; gap:3px}
+  .rescan-timer{font-size:8px; color:var(--ink-faint); font-variant-numeric:tabular-nums}
+
+  /* Net link */
+  .net-link{
+    background:#f3f4f6; border-radius:10px;
+    padding:8px 16px; font-size:11px; font-weight:600; color:#7aa6c2;
+    cursor:pointer; transition:transform .1s;
+  }
+  .net-link:active{transform:scale(.97)}
+
+  /* ---------- table ---------- */
+  .card{
+    background:var(--card); border-radius:0;
+    padding:0; overflow-x:auto;
+  }
+  .card::-webkit-scrollbar{height:7px}
+  .card::-webkit-scrollbar-track{background:var(--page)}
+  .card::-webkit-scrollbar-thumb{background:var(--ink-faint);border-radius:4px;opacity:.5}
+  .card::-webkit-scrollbar-thumb:hover{background:var(--ink-soft)}
+  table{border-collapse:collapse; width:max-content; min-width:100%; white-space:nowrap}
+  thead th{
+    font-size:8.5px; font-weight:600; text-transform:uppercase; letter-spacing:.4px;
+    color:var(--ink-faint); text-align:left; padding:7px 6px 9px; vertical-align:bottom;
+  }
+  thead th .sub{display:block; font-weight:400; text-transform:none; letter-spacing:0; color:#c2c7ce; font-size:8px}
+  tbody td{padding:5px 6px; vertical-align:middle; border-top:1px solid #f4f5f7}
+  tbody tr{transition:background .12s}
+  tbody tr:hover{background:#fafbfc}
+  tbody tr.flash{background:#eef6fb}
+
+  /* Drag and drop */
+  tbody tr[draggable]{cursor:grab}
+  tbody tr[draggable]:active{cursor:grabbing}
+  tbody tr.drag-src{opacity:0.25;transition:opacity .1s}
+  tbody tr.drag-blur{filter:blur(1.5px);opacity:0.35;transition:filter .15s,opacity .15s}
+  tbody tr.drop-above td{border-top:2px solid #3b82f6!important}
+  tbody tr.drop-below td{border-bottom:2px solid #3b82f6!important}
+
+  thead th:first-child, tbody td:first-child{padding-left:8px}
+  thead th:nth-child(3), tbody td:nth-child(3){padding-left:12px}
+  thead th:last-child,  tbody td:last-child {padding-right:20px}
+
+  /* 1 — sticky first two columns */
+  thead th:nth-child(1), tbody td:nth-child(1){position:sticky;left:0;z-index:2;background:var(--card)}
+  thead th:nth-child(2), tbody td:nth-child(2){position:sticky;left:32px;z-index:2;background:var(--card);box-shadow:4px 0 8px -2px rgba(0,0,0,.08)}
+  tbody tr:hover td:nth-child(1),
+  tbody tr:hover td:nth-child(2){background:#fafbfc}
+
+  /* 3 — left score stripe via inset box-shadow on first sticky cell */
+  tbody tr.sc-g  td:nth-child(1){box-shadow:inset 3px 0 0 var(--good-fg)}
+  tbody tr.sc-y  td:nth-child(1){box-shadow:inset 3px 0 0 var(--yel-fg)}
+  tbody tr.sc-r  td:nth-child(1){box-shadow:inset 3px 0 0 var(--bad-fg)}
+  tbody tr.sc-na td:nth-child(1){box-shadow:inset 3px 0 0 var(--pur-fg)}
+
+  /* 4 — right-align number columns */
+  .num{text-align:right}
+  th.num{text-align:right}
+
+  /* analyst rating column */
+  td.ar-col, th.ar-col{max-width:80px; width:80px; font-size:9px; white-space:normal; line-height:1.4; text-align:center}
+  td.ar-col .ar-consensus{font-weight:700; font-size:10px; display:block}
+  td.ar-col .ar-counts{color:var(--ink-faint); font-size:8px; display:block}
+  .ar-pt-pos{background:var(--good-bg);color:var(--good-fg);border-radius:5px;padding:1px 4px;font-weight:600}
+  .ar-pt-neg{background:var(--bad-bg); color:var(--bad-fg); border-radius:5px;padding:1px 4px;font-weight:600}
+  .ar-wrap{position:relative;display:inline-block;cursor:default}
+  .ar-tip{display:none;position:absolute;right:0;top:100%;z-index:200;background:var(--card);border:1px solid #e2e4e8;border-radius:6px;padding:6px 8px;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,.1);font-size:9px;line-height:1.6;white-space:nowrap;color:var(--ink)}
+  .ar-wrap:hover .ar-tip{display:block}
+  .ar-tip-row{display:flex;justify-content:space-between;gap:10px}
+  .ar-tip-firm{color:var(--ink-faint)}
+  .ar-tip-grade{font-weight:600}
+  .ar-tip-up{color:#22c55e}.ar-tip-dn{color:#ef4444}.ar-tip-nt{color:#94a3b8}
+
+  /* group divider lines through header and body */
+  thead tr:nth-child(2) th.grp-start,
+  tbody td.grp-start{border-left:1px solid #eef0f3}
+
+  /* 6 — group header row */
+  thead tr.grphdr th{
+    font-size:7.5px; font-weight:700; text-transform:uppercase; letter-spacing:.6px;
+    color:#b0b8c4; padding:8px 6px 3px; border-bottom:2px solid #dde2e8;
+    background:var(--card);
+  }
+  thead tr.grphdr th:nth-child(1),
+  thead tr.grphdr th:nth-child(2){position:sticky;z-index:2}
+  thead tr.grphdr th:nth-child(1){left:0}
+  thead tr.grphdr th:nth-child(2){left:32px}
+  thead tr.grphdr th.grp{
+    border-bottom:2px solid #dde2e8; color:#8a95a3; padding-bottom:4px;
+    border-left:1px solid #e4e7eb;
+  }
+
+  .idx{color:var(--ink-faint); width:32px; text-align:right}
+  .sym{font-weight:700; color:#4a525e; font-size:11px}
+  .sym .mk{display:inline-block; width:5px; height:5px; border-radius:50%; background:#9fc0d6; margin-right:5px; vertical-align:middle}
+  .name{color:var(--ink-soft); font-size:9.5px; max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; margin-top:1px}
+  .co-cell{max-width:150px; min-width:120px; padding-left:12px}
+  .price-cell{font-size:11px;font-weight:600;color:#464d57;white-space:nowrap;text-align:right}
+
+  /* earnings countdown badge */
+  .earn-badge{display:inline-block;font-size:7.5px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px;vertical-align:middle;background:var(--yel-bg);color:var(--yel-fg);white-space:nowrap}
+  .earn-badge.soon{background:var(--bad-bg);color:var(--bad-fg)}
+
+  /* momentum column values */
+  .mom-hi{color:var(--bad-fg)}
+  .mom-lo{color:var(--ink-faint)}
+  .num-center{text-align:center}
+
+  /* tiny "Last Checked" counter under the company name (counts up 0 → 48h) */
+  .checked{font-size:8px; color:var(--ink-faint); letter-spacing:.2px; margin-top:1px; font-variant-numeric:tabular-nums}
+  .checked.fresh{color:var(--good-fg)}   /* recently checked */
+  .checked.warn {color:var(--yel-fg)}    /* getting close to overdue */
+  .checked.stale{color:var(--bad-fg)}    /* past 48h — overdue */
+
+  /* 8 check squares (labels now live in the column header, not inside the squares) */
+  .checks{display:flex; gap:3px}
+  .chk{ width:26px; height:20px; border-radius:5px; }
+  .chk.good{background:var(--good-bg)}
+  .chk.bad{background:var(--bad-bg)}
+  .chk.na{background:var(--pur-bg)}
+  /* checklist column header: diagonal labels aligned over the 8 squares */
+  .chkhdr{display:flex; gap:3px; height:52px; align-items:flex-end; margin-left:13px; margin-top:4px}
+  .chkhdr>span{width:26px; height:44px; display:flex; align-items:flex-end; justify-content:flex-start; overflow:visible; position:relative}
+  .chkhdr>span .hl{display:block; transform:rotate(-45deg); transform-origin:bottom left;
+    white-space:nowrap; font-size:8px; font-weight:600; text-transform:none; letter-spacing:0;
+    color:var(--ink-faint); padding-bottom:2px}
+  .thlwrap{display:flex; height:52px; align-items:flex-end; justify-content:center; overflow:visible; position:relative}
+  .thl{display:block; transform:rotate(-45deg); transform-origin:bottom center;
+    white-space:nowrap; font-size:8px; font-weight:600; text-transform:uppercase; letter-spacing:.4px;
+    color:var(--ink-faint); padding-bottom:3px; line-height:1}
+
+  /* sortable column headers */
+  th.sortable{cursor:pointer; user-select:none}
+  th.sortable:hover{color:var(--ink-soft)}
+  th.sort-asc .sub::before{content:'▲ '; font-size:7px; opacity:.6}
+  th.sort-desc .sub::before{content:'▼ '; font-size:7px; opacity:.6}
+  th.sort-asc:not(:has(.sub))::after{content:' ▲'; font-size:7px; opacity:.6}
+  th.sort-desc:not(:has(.sub))::after{content:' ▼'; font-size:7px; opacity:.6}
+
+  /* sector badges */
+  .sec{display:inline-block;font-size:7px;font-weight:600;letter-spacing:.2px;padding:1px 5px;border-radius:4px;margin-left:4px;vertical-align:middle;white-space:nowrap}
+  .sec-tech{background:#dbeafe;color:#1d4ed8}
+  .sec-semi{background:#d1fae5;color:#065f46}
+  .sec-saas{background:#ede9fe;color:#5b21b6}
+  .sec-hw{background:#e0f2fe;color:#0369a1}
+  .sec-ind{background:#fef3c7;color:#92400e}
+  .sec-energy{background:#fee2e2;color:#991b1b}
+  .sec-cons{background:#fce7f3;color:#9d174d}
+
+  .score{font-weight:700; font-size:11px; padding:2px 7px; border-radius:6px; text-align:center; cursor:pointer}
+  .score:not(.n):hover{opacity:.8}
+  .score.g{background:var(--good-bg); color:var(--good-fg)}
+  .score.y{background:var(--yel-bg);  color:var(--yel-fg)}
+  .score.r{background:var(--bad-bg);  color:var(--bad-fg)}
+  .score.na{background:var(--pur-bg); color:var(--pur-fg); cursor:help}
+
+  .pill{padding:2px 6px; border-radius:5px; font-size:9px; font-weight:600}
+  .pill.g{background:var(--good-bg); color:var(--good-fg)}
+  .pill.y{background:var(--yel-bg);  color:var(--yel-fg)}
+  .pill.r{background:var(--bad-bg);  color:var(--bad-fg)}
+  .pill.n{background:var(--neu-bg);  color:var(--neu-fg)}
+  .pill.x{background:var(--gray-bg); color:var(--gray-fg)}
+
+  .num{color:#6b7280; font-variant-numeric:tabular-nums}
+  .txt{color:var(--ink-soft); font-size:9.5px; white-space:normal; max-width:110px; line-height:1.35}
+  .txt .clamp{
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  }
+  .txt.trend-up .clamp{background:var(--good-bg);color:var(--good-fg);border-radius:5px;padding:2px 5px;font-weight:600}
+  .txt.trend-dn .clamp{background:var(--bad-bg); color:var(--bad-fg); border-radius:5px;padding:2px 5px;font-weight:600}
+  .txt.trend-fl .clamp{background:var(--yel-bg); color:var(--yel-fg); border-radius:5px;padding:2px 5px;font-weight:600}
+
+  /* legend */
+  .legend{margin-top:38px; display:flex; flex-wrap:wrap; gap:10px 22px; padding:4px 8px; color:var(--ink-faint)}
+  .legend .ttl{width:100%; font-size:9px; text-transform:uppercase; letter-spacing:.5px; color:#c2c7ce; margin-bottom:2px}
+  .legend span b{display:inline-block; width:24px; text-align:center; background:#eef0f2; color:#7b818b; border-radius:4px; font-size:8px; padding:2px 0; margin-right:6px; font-weight:700}
+  .legend span{font-size:9.5px}
+
+  /* context menu */
+  #ctx{
+    position:fixed; z-index:60; display:none; background:var(--card);
+    border:1px solid #e6e8ec; border-radius:9px; padding:5px; min-width:120px;
+  }
+  #ctx div{padding:6px 12px; border-radius:6px; font-size:11px; cursor:pointer; color:#5c6470}
+  #ctx div:hover{background:#f4f5f7}
+  #ctx div.del{color:var(--bad-fg)}
+
+  /* autocomplete dropdown */
+  .ac-wrap{position:relative}
+  #acDrop{
+    position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:100;
+    background:#fff; border:1px solid #e2e4e8; border-radius:9px;
+    box-shadow:0 4px 16px rgba(0,0,0,.10); overflow:hidden; display:none;
+  }
+  .ac-item{
+    padding:7px 12px; font-size:11px; cursor:pointer; display:flex;
+    align-items:center; gap:8px; border-bottom:1px solid #f3f4f6;
+  }
+  .ac-item:last-child{border-bottom:none}
+  .ac-item:hover,.ac-item.sel{background:#f3f8fc}
+  .ac-sym{font-weight:700; color:#4a525e; min-width:46px}
+  .ac-name{color:var(--ink-faint); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .ac-exch{font-size:9px; color:#b0b8c4}
+
+  /* net page editable cells */
+  .net td[contenteditable]{outline:none; min-width:46px}
+  .net td[contenteditable]:focus{background:#f3f8fc; border-radius:5px}
+  .net tbody tr td:last-child{text-align:center}
+  .rowdel{cursor:pointer; color:var(--ink-faint); font-size:13px; padding:0 4px}
+  .rowdel:hover{color:var(--bad-fg)}
+  .addrow{margin-top:10px}
+  .hidden{display:none}
+  .gain-pos{color:var(--good-fg)} .gain-neg{color:var(--bad-fg)}
+
+  /* trend arrow next to score */
+  .tarrow{font-size:9px; font-weight:700; margin-left:4px; vertical-align:middle; cursor:default}
+  .tarrow.up{color:var(--good-fg)}
+  .tarrow.dn{color:var(--bad-fg)}
+  .tarrow.fl{color:var(--ink-faint)}
+
+  /* Typing pipeline animation for scanning rows */
+  tbody tr.scoring td{opacity:0.35;pointer-events:none}
+  tbody tr.scoring .co-cell{opacity:1;position:relative;overflow:visible}
+  .typing-overlay{position:absolute;left:calc(50vw - 32px);top:50%;transform:translate(-50%,-50%);white-space:nowrap;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:11px;color:#378ADD;pointer-events:none;display:flex;align-items:center;gap:2px}
+  .typing-cursor{animation:blink .8s step-end infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  /* ── Training Wheels ─────────────────────────────────────────────────── */
+  .tw-banner{padding:18px 20px 14px}
+  .tw-banner-title{font-size:15px;font-weight:700;color:var(--ink);margin-bottom:3px}
+  .tw-banner-sub{font-size:10px;color:var(--ink-faint);line-height:1.5}
+  .tw-banner-hint{display:inline-block;margin-top:7px;font-size:9.5px;color:var(--ink-faint);background:var(--yel-bg);color:var(--yel-fg);padding:3px 10px;border-radius:6px;font-weight:600}
+  [data-tw]{cursor:pointer}
+  [data-tw]:hover{opacity:.75;transition:opacity .1s}
+  #twTip{
+    display:none;position:fixed;z-index:500;
+    background:var(--card);border:1px solid #dde2e8;border-radius:11px;
+    box-shadow:0 8px 32px rgba(0,0,0,.16);padding:14px 16px 12px;
+    width:300px;max-width:92vw;
+  }
+  #twTipClose{position:absolute;top:9px;right:12px;background:none;border:none;font-size:17px;color:var(--ink-faint);cursor:pointer;line-height:1;padding:0}
+  .tw-tip-title{font-weight:700;font-size:12px;color:var(--ink);margin-bottom:1px}
+  .tw-tip-nvda{font-size:9px;color:var(--ink-faint);margin-bottom:10px;font-style:italic;line-height:1.4}
+  .tw-tip-lbl{font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#b0b8c4;margin-bottom:3px}
+  .tw-tip-body{font-size:10px;color:var(--ink-soft);line-height:1.55;margin-bottom:9px}
+  .tw-tip-good{font-size:9.5px;color:var(--good-fg);line-height:1.5;padding:5px 8px;background:var(--good-bg);border-radius:6px;margin-bottom:5px}
+  .tw-tip-bad{font-size:9.5px;color:var(--bad-fg);line-height:1.5;padding:5px 8px;background:var(--bad-bg);border-radius:6px}
+  .tw-tip-divider{border:none;border-top:1px solid #eef0f3;margin:10px 0}
+</style>
+</head>
+<body>
+
+<!-- ================= THEMES ================= -->
+<style>
+/* ── Dark ─────────────────────────────────────────────────────────────── */
+[data-theme="dark"]{
+  --ink:#e8eaf0; --ink-soft:#b0b8c8; --ink-faint:#6b7588;
+  --page:#16181d; --card:#1e2129;
+  --good-bg:#1a3a28; --good-fg:#4caf80;
+  --bad-bg:#3a1a1a;  --bad-fg:#e57373;
+  --yel-bg:#2e2a14;  --yel-fg:#d4ac3a;
+  --neu-bg:#1a2540;  --neu-fg:#6ea3d8;
+  --gray-bg:#2a2e38; --gray-fg:#8a95a8;
+  --pur-bg:#2a1a3e;  --pur-fg:#b39ddb;
+}
+[data-theme="dark"] body{background:var(--page);color:var(--ink)}
+[data-theme="dark"] header.bar{background:linear-gradient(var(--page) 72%,transparent)}
+[data-theme="dark"] .btn,[data-theme="dark"] .net-link,[data-theme="dark"] .search{background:#2a2e38;color:var(--ink)}
+[data-theme="dark"] .search input{color:var(--ink)}
+[data-theme="dark"] tbody td{border-top-color:#252830}
+[data-theme="dark"] tbody tr:hover{background:#22262f}
+[data-theme="dark"] tbody tr:hover td:nth-child(1),
+[data-theme="dark"] tbody tr:hover td:nth-child(2){background:#22262f}
+[data-theme="dark"] tbody tr.flash{background:#1e2d3a}
+[data-theme="dark"] thead tr.grphdr th{border-bottom-color:#2e323c;background:var(--card)}
+[data-theme="dark"] thead tr:nth-child(2) th.grp-start,
+[data-theme="dark"] tbody td.grp-start{border-left-color:#2e323c}
+[data-theme="dark"] thead th:nth-child(1),[data-theme="dark"] tbody td:nth-child(1),
+[data-theme="dark"] thead th:nth-child(2),[data-theme="dark"] tbody td:nth-child(2){background:var(--card)}
+[data-theme="dark"] .legend span b{background:#2a2e38;color:#8a95a8}
+[data-theme="dark"] #ctx{background:#22262f;border-color:#2e323c;color:var(--ink)}
+[data-theme="dark"] #scoreHist{background:#1e2129}
+[data-theme="dark"] #acDrop{background:#22262f;border-color:#2e323c}
+[data-theme="dark"] .ac-item:hover,.ac-item.sel{background:#2a2e38}
+[data-theme="dark"] #pipelineModal > div{background:#1e2129}
+[data-theme="dark"] .num{color:#8a95a8}
+[data-theme="dark"] .sym{color:#c8d0dc}
+[data-theme="dark"] .price-cell{color:#c8d0dc}
+[data-theme="dark"] #themeSwatch button{background:#2a2e38;color:var(--ink);border-color:#3a3e4a}
+
+/* ── Warm ─────────────────────────────────────────────────────────────── */
+[data-theme="warm"]{
+  --ink:#1e1510; --ink-soft:#4a3c2c; --ink-faint:#78685a;
+  --page:#f5f0e8; --card:#f5f0e8;
+  --good-bg:#c8ead4; --good-fg:#1e6038;
+  --bad-bg:#f8d8d2;  --bad-fg:#9e2e22;
+  --yel-bg:#f8ecc8;  --yel-fg:#7a5808;
+  --neu-bg:#dce6f8;  --neu-fg:#1e3e6e;
+  --gray-bg:#e4ddd4; --gray-fg:#584e44;
+  --pur-bg:#e8e0f4;  --pur-fg:#5a2890;
+}
+[data-theme="warm"] body{background:var(--page);color:var(--ink);font-family:Georgia,"Times New Roman",serif}
+[data-theme="warm"] .brand,.btn,.name,.sym,.num,.txt,.score,.pill,.legend{font-family:Georgia,"Times New Roman",serif}
+[data-theme="warm"] header.bar{background:linear-gradient(var(--page) 72%,transparent)}
+[data-theme="warm"] .btn,[data-theme="warm"] .net-link{background:#e4ddd4;color:var(--ink);border:1px solid #ccc4b8}
+[data-theme="warm"] .search{background:#e4ddd4;border:1px solid #ccc4b8}
+[data-theme="warm"] .search input{color:var(--ink)}
+[data-theme="warm"] tbody td{border-top-color:#e0d8ce}
+[data-theme="warm"] tbody tr:hover{background:#ece6da}
+[data-theme="warm"] tbody tr:hover td:nth-child(1),
+[data-theme="warm"] tbody tr:hover td:nth-child(2){background:#ece6da}
+[data-theme="warm"] thead tr.grphdr th{border-bottom-color:#c8beb4;background:var(--card)}
+[data-theme="warm"] thead tr:nth-child(2) th.grp-start,
+[data-theme="warm"] tbody td.grp-start{border-left-color:#d4ccc4}
+[data-theme="warm"] .num{color:#584e44}
+[data-theme="warm"] .sym{color:#1e1510}
+[data-theme="warm"] .price-cell{color:#1e1510}
+[data-theme="warm"] .legend span b{background:#e4ddd4;color:#584e44}
+[data-theme="warm"] #themeSwatch button{background:#e4ddd4;color:var(--ink);border-color:#ccc4b8}
+
+
+/* ── theme swatch strip ───────────────────────────────────────────────── */
+#themeSwatch{display:flex;align-items:center;gap:6px}
+#themeSwatch button{
+  border:1.5px solid #dde2e8; border-radius:7px;
+  padding:5px 9px; font-size:10px; font-weight:600;
+  cursor:pointer; background:#f3f4f6; color:#464d57;
+  transition:border-color .15s, opacity .15s;
+  white-space:nowrap;
+}
+#themeSwatch button.active{border-color:#4a525e;opacity:1}
+#themeSwatch button:not(.active){opacity:.65}
+#themeSwatch button:hover{opacity:1}
+</style>
+
+<!-- ================= APP ================= -->
+<div id="app">
+  <header class="bar" id="bar">
+    <div class="rescan-wrap" id="wlLeft">
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn" id="rescan">Rescan</button>
+        <button class="btn" id="pipelineBtn" onclick="document.getElementById('pipelineModal').style.display='flex'">Scoring Pipeline</button>
+        <button class="btn" id="twToggle">Training Wheels</button>
+      </div>
+      <div class="rescan-timer" id="rescanTimer"></div>
+    </div>
+
+    <!-- Pipeline modal -->
+    <div id="pipelineModal" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.45);align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
+      <div style="background:#fff;border-radius:14px;box-shadow:0 8px 40px rgba(0,0,0,.22);padding:24px;max-width:720px;width:90vw;max-height:90vh;overflow-y:auto;position:relative">
+        <button onclick="document.getElementById('pipelineModal').style.display='none'" style="position:absolute;top:14px;right:16px;background:none;border:none;font-size:18px;color:#8a95a8;cursor:pointer;line-height:1">✕</button>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8a95a8;margin-bottom:14px">Scoring Pipeline</div>
+        <svg viewBox="0 0 720 920" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+          <defs>
+            <marker id="parr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#8a95a8"/></marker>
+            <marker id="parr-g" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#3d9970"/></marker>
+          </defs>
+          <rect x="260" y="20" width="200" height="48" rx="10" fill="#464d57"/>
+          <text x="360" y="40" text-anchor="middle" fill="#fff" font-size="12" font-weight="600">User Action</text>
+          <text x="360" y="57" text-anchor="middle" fill="#b0b8c4" font-size="10">Add ticker · Force Rescan</text>
+          <line x1="360" y1="68" x2="360" y2="100" stroke="#8a95a8" stroke-width="1.5" marker-end="url(#parr)"/>
+          <rect x="260" y="100" width="200" height="48" rx="10" fill="#f3f4f6" stroke="#dde2e8" stroke-width="1.5"/>
+          <text x="360" y="120" text-anchor="middle" fill="#464d57" font-size="12" font-weight="600">Cache Check</text>
+          <text x="360" y="137" text-anchor="middle" fill="#8a95a8" font-size="10">Netlify Blobs · _v:5 · 24h TTL</text>
+          <line x1="360" y1="148" x2="360" y2="178" stroke="#8a95a8" stroke-width="1.5" marker-end="url(#parr)"/>
+          <text x="369" y="166" fill="#8a95a8" font-size="9">miss / stale</text>
+          <line x1="460" y1="124" x2="560" y2="124" stroke="#3d9970" stroke-width="1.5" marker-end="url(#parr-g)"/>
+          <text x="507" y="118" text-anchor="middle" fill="#3d9970" font-size="9">hit (fresh)</text>
+          <rect x="560" y="100" width="130" height="48" rx="10" fill="#e8f5e9" stroke="#81c784" stroke-width="1.5"/>
+          <text x="625" y="120" text-anchor="middle" fill="#2e7d32" font-size="11" font-weight="600">Skip to Display</text>
+          <text x="625" y="136" text-anchor="middle" fill="#66bb6a" font-size="9">no FMP calls needed</text>
+          <rect x="180" y="178" width="360" height="212" rx="10" fill="#eef2ff" stroke="#7986cb" stroke-width="1.5"/>
+          <text x="360" y="198" text-anchor="middle" fill="#3949ab" font-size="12" font-weight="700">Layer 1a — FMP Pull  (13 endpoints)</text>
+          <rect x="196" y="208" width="150" height="36" rx="6" fill="#fff" stroke="#c5cae9" stroke-width="1"/>
+          <text x="271" y="223" text-anchor="middle" fill="#464d57" font-size="10" font-weight="600">Core Financials</text>
+          <text x="271" y="237" text-anchor="middle" fill="#8a95a8" font-size="9">income · BS · CF</text>
+          <rect x="374" y="208" width="150" height="36" rx="6" fill="#fff" stroke="#c5cae9" stroke-width="1"/>
+          <text x="449" y="223" text-anchor="middle" fill="#464d57" font-size="10" font-weight="600">Growth Rates  (Layer B)</text>
+          <text x="449" y="237" text-anchor="middle" fill="#8a95a8" font-size="9">inc-growth · fin-growth</text>
+          <rect x="196" y="254" width="150" height="36" rx="6" fill="#fff" stroke="#c5cae9" stroke-width="1"/>
+          <text x="271" y="269" text-anchor="middle" fill="#464d57" font-size="10" font-weight="600">Ratios  (Layer A)</text>
+          <text x="271" y="283" text-anchor="middle" fill="#8a95a8" font-size="9">PE · PS · D/E · margins</text>
+          <rect x="374" y="254" width="150" height="36" rx="6" fill="#fff" stroke="#c5cae9" stroke-width="1"/>
+          <text x="449" y="269" text-anchor="middle" fill="#464d57" font-size="10" font-weight="600">Earnings Calendar</text>
+          <text x="449" y="283" text-anchor="middle" fill="#8a95a8" font-size="9">next date · beat/miss</text>
+          <rect x="196" y="300" width="150" height="36" rx="6" fill="#fff" stroke="#c5cae9" stroke-width="1"/>
+          <text x="271" y="315" text-anchor="middle" fill="#464d57" font-size="10" font-weight="600">Analyst</text>
+          <text x="271" y="329" text-anchor="middle" fill="#8a95a8" font-size="9">grades · price-target</text>
+          <rect x="374" y="300" width="150" height="36" rx="6" fill="#fff" stroke="#c5cae9" stroke-width="1"/>
+          <text x="449" y="315" text-anchor="middle" fill="#464d57" font-size="10" font-weight="600">Profile · Insider</text>
+          <text x="449" y="329" text-anchor="middle" fill="#8a95a8" font-size="9">profile · insider-trading</text>
+          <rect x="196" y="346" width="328" height="32" rx="5" fill="#fff3e0" stroke="#ffb74d" stroke-width="1"/>
+          <text x="360" y="359" text-anchor="middle" fill="#e65100" font-size="10" font-weight="600">Layer C — Sanity Gates</text>
+          <text x="360" y="372" text-anchor="middle" fill="#bf360c" font-size="9">PE 0.5–500x · PS 0.05–200x · growth −99% to +4900% · D/E 0–50x</text>
+          <line x1="360" y1="390" x2="360" y2="420" stroke="#8a95a8" stroke-width="1.5" marker-end="url(#parr)"/>
+          <rect x="180" y="420" width="360" height="76" rx="10" fill="#fce4ec" stroke="#e57373" stroke-width="1.5"/>
+          <text x="360" y="440" text-anchor="middle" fill="#b71c1c" font-size="12" font-weight="700">Layer 2 — Haiku Web Search  (3 calls)</text>
+          <rect x="196" y="450" width="96" height="34" rx="6" fill="#fff" stroke="#ef9a9a" stroke-width="1"/>
+          <text x="244" y="465" text-anchor="middle" fill="#464d57" font-size="10" font-weight="600">Contracts</text>
+          <text x="244" y="478" text-anchor="middle" fill="#8a95a8" font-size="9">Col D</text>
+          <rect x="312" y="450" width="96" height="34" rx="6" fill="#fff" stroke="#ef9a9a" stroke-width="1"/>
+          <text x="360" y="465" text-anchor="middle" fill="#464d57" font-size="10" font-weight="600">Departures</text>
+          <text x="360" y="478" text-anchor="middle" fill="#8a95a8" font-size="9">Col F</text>
+          <rect x="428" y="450" width="96" height="34" rx="6" fill="#fff" stroke="#ef9a9a" stroke-width="1"/>
+          <text x="476" y="465" text-anchor="middle" fill="#464d57" font-size="10" font-weight="600">Disruption</text>
+          <text x="476" y="478" text-anchor="middle" fill="#8a95a8" font-size="9">Col H</text>
+          <line x1="360" y1="496" x2="360" y2="526" stroke="#8a95a8" stroke-width="1.5" marker-end="url(#parr)"/>
+          <rect x="180" y="526" width="360" height="160" rx="10" fill="#e8f5e9" stroke="#66bb6a" stroke-width="1.5"/>
+          <text x="360" y="546" text-anchor="middle" fill="#1b5e20" font-size="12" font-weight="700">scoreLocally()  — 8 checks</text>
+          <rect x="196" y="554" width="74" height="28" rx="5" fill="#fff" stroke="#a5d6a7" stroke-width="1"/>
+          <text x="233" y="565" text-anchor="middle" fill="#464d57" font-size="9" font-weight="600">B Revenue</text>
+          <text x="233" y="577" text-anchor="middle" fill="#8a95a8" font-size="8">FMP Q YoY</text>
+          <rect x="280" y="554" width="74" height="28" rx="5" fill="#fff" stroke="#a5d6a7" stroke-width="1"/>
+          <text x="317" y="565" text-anchor="middle" fill="#464d57" font-size="9" font-weight="600">C Margins</text>
+          <text x="317" y="577" text-anchor="middle" fill="#8a95a8" font-size="8">FMP Δ ratio</text>
+          <rect x="364" y="554" width="74" height="28" rx="5" fill="#fff" stroke="#ef9a9a" stroke-width="1"/>
+          <text x="401" y="565" text-anchor="middle" fill="#464d57" font-size="9" font-weight="600">D Contracts</text>
+          <text x="401" y="577" text-anchor="middle" fill="#8a95a8" font-size="8">Haiku search</text>
+          <rect x="448" y="554" width="74" height="28" rx="5" fill="#fff" stroke="#a5d6a7" stroke-width="1"/>
+          <text x="485" y="565" text-anchor="middle" fill="#464d57" font-size="9" font-weight="600">E Debt</text>
+          <text x="485" y="577" text-anchor="middle" fill="#8a95a8" font-size="8">ratios D/E</text>
+          <rect x="196" y="592" width="74" height="28" rx="5" fill="#fff" stroke="#ef9a9a" stroke-width="1"/>
+          <text x="233" y="603" text-anchor="middle" fill="#464d57" font-size="9" font-weight="600">F Departures</text>
+          <text x="233" y="615" text-anchor="middle" fill="#8a95a8" font-size="8">Haiku search</text>
+          <rect x="280" y="592" width="74" height="28" rx="5" fill="#fff" stroke="#a5d6a7" stroke-width="1"/>
+          <text x="317" y="603" text-anchor="middle" fill="#464d57" font-size="9" font-weight="600">G Forecast</text>
+          <text x="317" y="615" text-anchor="middle" fill="#8a95a8" font-size="8">earnings beat</text>
+          <rect x="364" y="592" width="74" height="28" rx="5" fill="#fff" stroke="#ef9a9a" stroke-width="1"/>
+          <text x="401" y="603" text-anchor="middle" fill="#464d57" font-size="9" font-weight="600">H Disruption</text>
+          <text x="401" y="615" text-anchor="middle" fill="#8a95a8" font-size="8">Haiku search</text>
+          <rect x="448" y="592" width="74" height="28" rx="5" fill="#fff" stroke="#a5d6a7" stroke-width="1"/>
+          <text x="485" y="603" text-anchor="middle" fill="#464d57" font-size="9" font-weight="600">I Insider</text>
+          <text x="485" y="615" text-anchor="middle" fill="#8a95a8" font-size="8">open-market</text>
+          <rect x="196" y="630" width="328" height="44" rx="6" fill="#f0faf1" stroke="#a5d6a7" stroke-width="1"/>
+          <text x="360" y="647" text-anchor="middle" fill="#2e7d32" font-size="10" font-weight="600">Score  0–8  →  scoreColor (Green / Yellow / Red)</text>
+          <text x="360" y="664" text-anchor="middle" fill="#66bb6a" font-size="9">buildValuation() · buildAnalysis() · toRow()</text>
+          <line x1="360" y1="686" x2="360" y2="716" stroke="#8a95a8" stroke-width="1.5" marker-end="url(#parr)"/>
+          <rect x="180" y="716" width="360" height="60" rx="10" fill="#f3f4f6" stroke="#dde2e8" stroke-width="1.5"/>
+          <text x="360" y="736" text-anchor="middle" fill="#464d57" font-size="12" font-weight="600">Save · Display</text>
+          <text x="360" y="753" text-anchor="middle" fill="#8a95a8" font-size="10">putWatchlistRowWithHistory()  →  renderWatchlist()</text>
+          <path d="M180,746 Q60,746 60,124 Q60,124 260,124" fill="none" stroke="#8a95a8" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#parr)"/>
+          <text x="92" y="810" text-anchor="middle" fill="#8a95a8" font-size="10" font-weight="600">48h / force</text>
+          <text x="92" y="823" text-anchor="middle" fill="#8a95a8" font-size="9">rescan path</text>
+          <rect x="180" y="790" width="360" height="32" rx="8" fill="#fff8e1" stroke="#ffe082" stroke-width="1.5"/>
+          <text x="360" y="804" text-anchor="middle" fill="#f57f17" font-size="9" font-weight="600">Stale if:  scored_at &gt; 48 h ago  (STALE_DAYS=2)  or  force=true in POST body</text>
+          <text x="360" y="818" text-anchor="middle" fill="#f57f17" font-size="9">Cache v5 mismatch also forces full re-pull (all 13 FMP endpoints)</text>
+          <rect x="180" y="836" width="155" height="62" rx="8" fill="#f9f9fa" stroke="#e0e3e8" stroke-width="1"/>
+          <text x="257" y="852" text-anchor="middle" fill="#464d57" font-size="9" font-weight="700">SOURCE</text>
+          <rect x="192" y="860" width="10" height="10" rx="2" fill="#eef2ff" stroke="#7986cb" stroke-width="1"/>
+          <text x="208" y="870" fill="#464d57" font-size="9">FMP REST endpoint</text>
+          <rect x="192" y="876" width="10" height="10" rx="2" fill="#fce4ec" stroke="#e57373" stroke-width="1"/>
+          <text x="208" y="886" fill="#464d57" font-size="9">Haiku web search</text>
+          <rect x="345" y="836" width="195" height="62" rx="8" fill="#f9f9fa" stroke="#e0e3e8" stroke-width="1"/>
+          <text x="442" y="852" text-anchor="middle" fill="#464d57" font-size="9" font-weight="700">LAYER</text>
+          <text x="357" y="866" fill="#464d57" font-size="9">A — FMP pre-computed ratios (primary)</text>
+          <text x="357" y="879" fill="#464d57" font-size="9">B — growth endpoints (authoritative YoY)</text>
+          <text x="357" y="892" fill="#464d57" font-size="9">C — sanity range gates (all values)</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="grow"></div>
+
+    <div id="wlControls" style="display:flex; gap:12px; align-items:flex-start;">
+      <div class="ac-wrap">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+          <input id="addInput" placeholder="Add to watchlist…" autocomplete="off">
+        </div>
+        <div id="acDrop"></div>
+      </div>
+    </div>
+
+    <div id="themeSwatch">
+      <button data-t="dark">Dark</button>
+      <button data-t="warm">Warm</button>
+    </div>
+
+    <div class="net-link" id="navToggle">Net ↗</div>
+  </header>
+
+  <!-- ===== WATCHLIST VIEW ===== -->
+  <div id="watchlistView">
+    <div class="card">
+      <table>
+        <thead>
+          <tr class="grphdr">
+            <th colspan="3"></th>
+            <th colspan="2" class="grp">Scoring</th>
+            <th colspan="5" class="grp">Valuation</th>
+            <th colspan="3" class="grp">Analysis</th>
+            <th colspan="2" class="grp">Ratings</th>
+            <th colspan="2" class="grp">Momentum</th>
+          </tr>
+          <tr>
+            <th></th>
+            <th class="sortable" data-sort="name">Company<span class="sub">(ticker)</span></th>
+            <th class="num sortable" data-sort="price">Price<span class="sub">live</span></th>
+            <th class="grp-start"><div class="chkhdr"><span><span class="hl">Revenue</span></span><span><span class="hl">Margin</span></span><span><span class="hl">Contract</span></span><span><span class="hl">Debt</span></span><span><span class="hl">Departures</span></span><span><span class="hl">Forecast</span></span><span><span class="hl">Disruption</span></span><span><span class="hl">Insider</span></span></div></th>
+            <th class="sortable" data-sort="score">Score<span class="sub">of 8</span></th>
+            <th class="grp-start sortable" data-sort="vs">vs Sector<span class="sub">P/E</span></th>
+            <th class="num sortable" data-sort="fwd">P/E<span class="sub">fwd</span></th>
+            <th class="num sortable" data-sort="ttm">P/E<span class="sub">ttm</span></th>
+            <th class="num sortable" data-sort="yr5">P/E<span class="sub">5yr avg</span></th>
+            <th>FWD vs TTM<span class="sub">&nbsp;</span></th>
+            <th class="grp-start">Trend<span class="sub">direction</span></th>
+            <th>Expectations<span class="sub">priced-in</span></th>
+            <th>Catalysts<span class="sub">forward</span></th>
+            <th class="num grp-start sortable" data-sort="ps">P/S<span class="sub">ratio</span></th>
+            <th class="num ar-col">Analyst<span class="sub">&nbsp;</span></th>
+            <th class="num grp-start">Beta<span class="sub">market sens.</span></th>
+            <th class="num">Rel Vol<span class="sub">vs 20d avg</span></th>
+          </tr>
+        </thead>
+        <tbody id="wlBody"></tbody>
+      </table>
+    </div>
+
+    <div class="legend">
+      <div class="ttl">Trend color &nbsp;·&nbsp; direction of the business</div>
+      <span><b style="background:var(--good-bg);color:var(--good-fg)">↑</b><span style="color:var(--good-fg);font-weight:600">Upward</span> · revenue &amp; margins improving</span>
+      <span><b style="background:var(--yel-bg);color:var(--yel-fg)">→</b><span style="color:var(--yel-fg);font-weight:600">Steady</span> · mixed or flat trajectory</span>
+      <span><b style="background:var(--bad-bg);color:var(--bad-fg)">↓</b><span style="color:var(--bad-fg);font-weight:600">Downward</span> · declining metrics</span>
+      <span><b style="background:var(--pur-bg);color:var(--pur-fg)">?</b><span style="color:var(--pur-fg);font-weight:600">Purple</span> · data unavailable — rescan to refresh</span>
+    </div>
+
+  <!-- ===== NET VIEW ===== -->
+  <div id="netView" class="hidden">
+    <div class="card net">
+      <table>
+        <thead>
+          <tr>
+            <th>Ticker</th><th>Company</th><th>Date Bought</th>
+            <th>Cost Basis<span class="sub">$</span></th><th>Shares<span class="sub">#</span></th>
+            <th>Total Buy<span class="sub">$</span></th><th>Notes</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="netBody"></tbody>
+      </table>
+      <button class="btn addrow" id="addNetRow">+ Add holding</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TRAINING WHEEL VIEW ===== -->
+<div id="twView" class="hidden">
+  <div class="tw-banner">
+    <button class="btn" onclick="setView('watchlist')" style="margin-bottom:12px">↩ Back to Watchlist</button>
+    <div class="tw-banner-title">Training Wheels</div>
+    <div class="tw-banner-sub">A walkthrough of every data point using NVIDIA (NVDA) as a real example. Hover or click any value to learn what it means.</div>
+  </div>
+  <div class="card">
+    <table>
+      <thead>
+        <tr class="grphdr">
+          <th colspan="3">Training Wheels</th>
+          <th colspan="2" class="grp">Scoring</th>
+          <th colspan="5" class="grp">Valuation</th>
+          <th colspan="3" class="grp">Analysis</th>
+          <th colspan="2" class="grp">Ratings</th>
+          <th colspan="2" class="grp">Momentum</th>
+        </tr>
+        <tr>
+          <th></th>
+          <th>Company<span class="sub">(ticker)</span></th>
+          <th class="num">Price<span class="sub">live</span></th>
+          <th class="grp-start"><div class="chkhdr"><span><span class="hl">Revenue</span></span><span><span class="hl">Margin</span></span><span><span class="hl">Contract</span></span><span><span class="hl">Debt</span></span><span><span class="hl">Departures</span></span><span><span class="hl">Forecast</span></span><span><span class="hl">Disruption</span></span><span><span class="hl">Insider</span></span></div></th>
+          <th>Score<span class="sub">of 8</span></th>
+          <th class="grp-start">vs Sector<span class="sub">P/E</span></th>
+          <th class="num">P/E<span class="sub">fwd</span></th>
+          <th class="num">P/E<span class="sub">ttm</span></th>
+          <th class="num">P/E<span class="sub">5yr avg</span></th>
+          <th>FWD vs TTM<span class="sub">&nbsp;</span></th>
+          <th class="grp-start">Trend<span class="sub">direction</span></th>
+          <th>Expectations<span class="sub">priced-in</span></th>
+          <th>Catalysts<span class="sub">forward</span></th>
+          <th class="num grp-start">P/S<span class="sub">ratio</span></th>
+          <th class="num ar-col">Analyst<span class="sub">&nbsp;</span></th>
+          <th class="num grp-start">Beta<span class="sub">market sens.</span></th>
+          <th class="num">Rel Vol<span class="sub">vs 20d avg</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="sc-g">
+          <td class="idx">1.</td>
+          <td class="co-cell">
+            <span class="sym"><span class="mk"></span>NVDA</span><span class="sec sec-semi">Semis</span>
+            <span class="name">NVIDIA Corp</span>
+            <div class="checked fresh">Example stock · Training Wheels</div>
+          </td>
+          <td class="num price-cell" data-tw="price">$131.00</td>
+          <td class="grp-start">
+            <div class="checks">
+              <div class="chk good" data-tw="revenue"></div>
+              <div class="chk good" data-tw="margin"></div>
+              <div class="chk good" data-tw="contract"></div>
+              <div class="chk good" data-tw="debt"></div>
+              <div class="chk good" data-tw="departures"></div>
+              <div class="chk good" data-tw="forecast"></div>
+              <div class="chk good" data-tw="disruption"></div>
+              <div class="chk good" data-tw="insider"></div>
+            </div>
+          </td>
+          <td><span class="score g" data-tw="score">8/8</span><span class="tarrow up">↑</span></td>
+          <td class="grp-start"><span class="pill y" data-tw="vs">+22%</span></td>
+          <td class="num" data-tw="fwd">35.2x</td>
+          <td class="num" data-tw="ttm">54.8x</td>
+          <td class="num" data-tw="yr5">~38x</td>
+          <td><span class="pill g" data-tw="ftcomp">Bullish</span></td>
+          <td class="txt trend-up grp-start"><div class="clamp" data-tw="trend">Revenue ↑↑, margins ↑</div></td>
+          <td class="txt"><div class="clamp" data-tw="exp">Partially priced-in; Blackwell demand unquantified</div></td>
+          <td class="txt"><div class="clamp" data-tw="cat">Earn 12d — Q2 earnings · GTC · Blackwell ramp</div></td>
+          <td class="num grp-start" data-tw="ps">~20x</td>
+          <td class="ar-col" data-tw="ar">
+            <div class="ar-wrap">
+              <span class="ar-consensus">4.7 Buy</span>
+              <span class="ar-counts">32B · 14H · 0S · <span class="ar-pt-pos">+8% PT</span></span>
+            </div>
+          </td>
+          <td class="num grp-start" data-tw="beta">1.7</td>
+          <td class="num" data-tw="relvol">1.3x</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Training Wheels tooltip card -->
+<div id="twTip">
+  <button id="twTipClose">✕</button>
+  <div class="tw-tip-title" id="twTipTitle"></div>
+  <div class="tw-tip-nvda" id="twTipNvda"></div>
+  <hr class="tw-tip-divider">
+  <div class="tw-tip-lbl">What it means</div>
+  <div class="tw-tip-body" id="twTipWhat"></div>
+  <div class="tw-tip-lbl">Why it matters for trading</div>
+  <div class="tw-tip-body" id="twTipWhy"></div>
+  <div class="tw-tip-good" id="twTipGood"></div>
+  <div class="tw-tip-bad" id="twTipBad"></div>
+</div>
+
+<!-- floating tooltip for check squares -->
+<div id="tipBox" style="position:fixed;z-index:200;display:none;background:#2a2e36;color:#e8eaf0;font-size:10px;line-height:1.45;padding:6px 10px;border-radius:7px;box-shadow:0 2px 10px rgba(0,0,0,.22);max-width:270px;pointer-events:none;white-space:normal"></div>
+
+<!-- score history popover (click-triggered) -->
+<div id="scoreHist" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.5;padding:12px 14px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:240px;pointer-events:auto;white-space:normal;border:0.5px solid rgba(255,255,255,.08)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <span id="scoreHistTitle" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8a95a8">Score History</span>
+    <span id="scoreHistClose" style="cursor:pointer;color:#8a95a8;font-size:13px;line-height:1;padding:0 2px">✕</span>
+  </div>
+  <svg id="scoreHistSvg" width="212" height="88" style="display:block;margin-bottom:8px"></svg>
+  <div id="scoreHistRows" style="max-height:120px;overflow-y:auto;scrollbar-width:thin"></div>
+</div>
+
+<!-- context menu -->
+<div id="ctx"><div id="ctxRescan">Force rescan</div><div class="del" id="ctxDel">Delete row</div></div>
+
+<script>
+const app=document.getElementById('app');
+
+/* ---------------- seed data ----------------
+   verdicts order: Revenue,Margin,Contract,Debt,Departures,Forecast,Disruption,Insider */
+const LABELS=['Revenue','Mgn','Con','Debt','Dep','Fct','Dis','Ins'];
+const hoursAgo=h=>new Date(Date.now()-h*3600000).toISOString();
+let dragSrc = null;
+function saveWatchlistOrder(){
+  try{localStorage.setItem('gn_order',JSON.stringify(watchlist.map(r=>r.sym)));}catch(e){}
+}
+function applyOrder(list){
+  const order=JSON.parse(localStorage.getItem('gn_order')||'[]');
+  if(!order.length) return list;
+  const map=Object.fromEntries(list.map(r=>[r.sym,r]));
+  const ordered=order.filter(s=>map[s]).map(s=>map[s]);
+  const rest=list.filter(r=>!order.includes(r.sym));
+  return [...ordered,...rest];
+}
+
+let watchlist = [
+  {sym:'AMZN', name:'Amazon', sector:'saas', v:[1,1,1,1,1,1,1,1], score:'8/8',
+   vs:'+13%', vsc:'y', fwd:'28.3x', ttm:'28.9x', yr5:'~48x', ft:'Bullish', ftc:'g',
+   trend:'Revenue ↑, AWS margin ↑', exp:'Premium but justified by AWS reaccel', cat:'Q2 earnings; AWS re:Invent', ps:'~3.3x', ar:'4.6 Buy\n32B · 0H · 0S · +12% PT', scored_at:hoursAgo(2),
+   next_earnings_date:'2026-07-31', short_float_pct:0.008, beta:1.1, volume:45000000, avg_volume:35000000,
+   reasons:['TTM $638B vs prior $575B (+11%)','Gross 49.1% vs 47.6% (+1.5pp YoY)','AWS & Prime enterprise renewals (Q2)','Net cash $61B positive','No C-suite exits (90d)','Guidance vs consensus: unknown','No new material threat (6mo)','No open-market sales in 60d'],
+   history:[{score:'8/8',scored_at:hoursAgo(74)}]},
+  {sym:'NOW', name:'ServiceNow', sector:'saas', v:[1,1,1,1,1,1,1,0], score:'7/8',
+   vs:'-21%', vsc:'g', fwd:'27.7x', ttm:'63.1x', yr5:'~85x', ft:'Bullish', ftc:'g',
+   trend:'Subscription rev ↑, margins ↑', exp:'Cheap vs SaaS median; insider selling', cat:'Q2 print; Knowledge conf.', ps:'~14x', ar:'4.5 Buy\n28B · 2H · 0S · +15% PT', scored_at:hoursAgo(11),
+   next_earnings_date:'2026-07-23', short_float_pct:0.012, beta:0.9, volume:1200000, avg_volume:1000000,
+   reasons:['TTM $12.4B vs prior $10.8B (+15%)','Gross 79.1% vs 77.0% (+2.1pp YoY)','Enterprise platform renewals expanding (Q2)','Net cash $3.1B positive; D/E 0.28x','No C-suite exits (90d)','Guidance vs consensus: unknown','No new material threat (6mo)','Open-market sale $4.2M on 2026-05-15'],
+   history:[{score:'6/8',scored_at:hoursAgo(75)},{score:'7/8',scored_at:hoursAgo(147)}]},
+  {sym:'DELL', name:'Dell Technologies', sector:'hw', v:[1,0,1,1,1,1,1,0], score:'6/8',
+   vs:'-3%', vsc:'g', fwd:'21.4x', ttm:'~22x', yr5:'~12x', ft:'Bullish', ftc:'g',
+   trend:'AI servers ↑, margin pressure', exp:'In-line vs HW; backlog rich', cat:'ISG backlog update', ps:'~0.8x', ar:'4.2 Buy\n18B · 3H · 0S · +8% PT', scored_at:hoursAgo(27),
+   next_earnings_date:'2026-08-28', short_float_pct:0.018, beta:1.2, volume:8000000, avg_volume:7000000,
+   reasons:['TTM $101B vs prior $92B (+10%)','Gross 22.3% vs 23.1% (-0.8pp; Op 6.1% vs 5.9% +0.2pp)','ISG backlog growth; AI server contracts','Net cash $3.2B positive; D/E 0.52x','No C-suite exits (90d)','Guidance vs consensus: unknown','No new material threat (6mo)','Open-market sale $1.1M on 2026-04-30'],
+   history:[{score:'5/8',scored_at:hoursAgo(75)}]},
+  {sym:'AVGO', name:'Broadcom', sector:'semi', v:[1,1,1,0,1,1,1,1], score:'7/8',
+   vs:'+18%', vsc:'y', fwd:'33.0x', ttm:'~40x', yr5:'~22x', ft:'Bullish', ftc:'g',
+   trend:'AI/custom silicon ↑', exp:'Rich but AI-levered; debt from VMW', cat:'Q3 earnings; VMW synergies', ps:'~18x', ar:'4.7 Buy\n35B · 1H · 0S · +18% PT', scored_at:hoursAgo(46),
+   next_earnings_date:'2026-09-04', short_float_pct:0.009, beta:1.15, volume:12000000, avg_volume:10000000,
+   reasons:['TTM $62B vs prior $36B (+72%)','Gross 64.1% vs 61.3% (+2.8pp YoY)','AI custom silicon + VMware contracts (Q3)','Net debt $34B; D/E 1.8x; Cov 4.2x','No C-suite exits (90d)','Guidance vs consensus: unknown','No new material threat (6mo)','No open-market sales in 60d'],
+   history:[{score:'7/8',scored_at:hoursAgo(73)},{score:'6/8',scored_at:hoursAgo(145)}]},
+  {sym:'MU', name:'Micron', sector:'semi', v:[1,1,0,1,0,1,1,1], score:'5/8',
+   vs:'-30%', vsc:'g', fwd:'12.5x', ttm:'N/M (loss)', yr5:'~15x', ft:'Unprofitable', ftc:'x',
+   trend:'HBM ramp ↑, cycle turning', exp:'Cheap vs semis; cyclical', cat:'HBM3E qualification; Q4', ps:'~4x', ar:'4.4 Buy\n22B · 2H · 0S · +25% PT', scored_at:hoursAgo(50),
+   next_earnings_date:'2026-06-25', short_float_pct:0.035, beta:1.6, volume:22000000, avg_volume:15000000,
+   reasons:['TTM $34B vs prior $21B (+62%)','Gross 37.2% vs 22.1% (+15.1pp YoY)','HBM3E qualification pending — no signed contract this Q','Net cash $2.4B positive; D/E 0.31x','CEO transition ongoing — no permanent COO named','Guidance vs consensus: unknown','No new material threat (6mo)','No open-market sales in 60d'],
+   history:[{score:'4/8',scored_at:hoursAgo(74)},{score:'3/8',scored_at:hoursAgo(146)}]},
+];
+
+let net = [
+  {t:'MU',   c:'Micron',            d:'6/8/2026',  cb:'944.41',  sh:'0.5', notes:''},
+  {t:'SNDK', c:'Sandisk',           d:'6/8/2026',  cb:'1690.20', sh:'0.25',notes:''},
+  {t:'AVGO', c:'Broadcom',          d:'6/1/2026',  cb:'457.45',  sh:'2',   notes:''},
+  {t:'TSM',  c:'Taiwan Semi',       d:'6/10/2026', cb:'413.38',  sh:'2',   notes:''},
+  {t:'NOW',  c:'Service Now',       d:'6/10/2026', cb:'103.02',  sh:'5',   notes:''},
+  {t:'GEV',  c:'General Elec. Verona',d:'6/11/2026',cb:'909.88', sh:'0.5', notes:''},
+];
+
+/* ---------------- sort state ---------------- */
+let sortCol = null, sortDir = 1;
+const SECTOR_LABEL = {tech:'Tech',semi:'Semis',saas:'SaaS',hw:'Hardware',ind:'Industrials',energy:'Energy',cons:'Consumer'};
+function sortVal(r, col){
+  const num = s => parseFloat((s||'').replace(/[~x%]/g,'')) || 0;
+  switch(col){
+    case 'name':  return (r.name||'').toLowerCase();
+    case 'price': return r.price != null ? +r.price : -Infinity;
+    case 'score': return parseScore(r.score);
+    case 'vs':    return num(r.vs);
+    case 'fwd':   return num(r.fwd);
+    case 'ttm':   return num(r.ttm);
+    case 'yr5':   return num(r.yr5);
+    case 'ps':    return num(r.ps);
+    default:      return 0;
+  }
+}
+function applySortHeaders(){
+  document.querySelectorAll('th[data-sort]').forEach(th=>{
+    th.classList.remove('sort-asc','sort-desc');
+    if(th.dataset.sort === sortCol) th.classList.add(sortDir===1?'sort-asc':'sort-desc');
+  });
+}
+document.querySelector('thead').addEventListener('click', e=>{
+  const th = e.target.closest('th[data-sort]'); if(!th) return;
+  const col = th.dataset.sort;
+  if(sortCol === col) sortDir *= -1; else { sortCol = col; sortDir = 1; }
+  watchlist.sort((a,b)=>{
+    const av=sortVal(a,col), bv=sortVal(b,col);
+    return (av<bv?-1:av>bv?1:0)*sortDir;
+  });
+  try{localStorage.setItem('gn_sort',JSON.stringify({col:sortCol,dir:sortDir}));}catch(e){}
+  applySortHeaders();
+  renderWatchlist();
+});
+
+/* ---------------- render watchlist ---------------- */
+function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function scoreClass(s){const n=Math.abs(parseInt(s));return n>=7?'g':n>=5?'y':'r';}
+function parseScore(s){const m=(s||'').match(/\d+/);return m?parseInt(m[0]):NaN;}
+function trendArrow(row){
+  if(!row.history||!row.history.length) return '<span class="tarrow fl" title="First scan — no prior data">→</span>';
+  const prev=parseScore(row.history[0]?.score), curr=parseScore(row.score);
+  if(isNaN(prev)||isNaN(curr)) return '';
+  const diff=curr-prev;
+  const prevLabel=row.history[0].score;
+  if(diff>0) return `<span class="tarrow up" title="Was ${prevLabel}">↑${diff}</span>`;
+  if(diff<0) return `<span class="tarrow dn" title="Was ${prevLabel}">↓${Math.abs(diff)}</span>`;
+  return `<span class="tarrow fl" title="Same as ${prevLabel}">→</span>`;
+}
+function trendClass(t){
+  if(!t) return 'trend-fl';
+  const ups=(t.match(/↑/g)||[]).length, dns=(t.match(/↓/g)||[]).length;
+  if(ups>dns) return 'trend-up';
+  if(dns>ups) return 'trend-dn';
+  if(/bullish|accelerat|expanding|growing|rising/i.test(t)) return 'trend-up';
+  if(/declin|compress|contract|weak|falling/i.test(t)) return 'trend-dn';
+  return 'trend-fl';
+}
+function isUnavailable(reason){
+  return /unavailable|^No (contract|departure|disruption) data$|^No data$/i.test(reason||'');
+}
+function renderWatchlist(){
+  const tb=document.getElementById('wlBody'); tb.innerHTML='';
+  watchlist.forEach((r,i)=>{
+    const reasons=r.reasons||[];
+    const checks=(r.v||[]).map((g,k)=>{
+      const reason=reasons[k]||LABELS[k];
+      const na=isUnavailable(reason);
+      return `<div class="chk ${na?'na':g?'good':'bad'}" data-tip="${escHtml(reason)}"></div>`;
+    }).join('');
+    const hasNA=reasons.some(isUnavailable);
+    const tr=document.createElement('tr');
+    tr.dataset.sym=r.sym;
+    if(r.scoring) tr.classList.add('scoring');
+    else tr.classList.add(hasNA?'sc-na':'sc-'+scoreClass(r.score));
+    const scoreEl=r.scoring
+      ?'<span class="score" style="background:transparent;color:var(--ink-faint);font-weight:400">—</span>'
+      :hasNA
+        ?`<span class="score na" title="Score invalid — some data could not be fetched">${r.score}</span>${trendArrow(r)}`
+        :`<span class="score ${scoreClass(r.score)}">${r.score}</span>${trendArrow(r)}`;
+    const daysUntil=r.next_earnings_date?Math.ceil((new Date(r.next_earnings_date)-Date.now())/86400000):null;
+    const earnBadge=daysUntil!=null&&daysUntil>0&&daysUntil<=90
+      ?`<span class="earn-badge${daysUntil<=14?' soon':''}" title="Earnings in ${daysUntil} days">${daysUntil}d</span>`:'';
+    const relVol=(r.volume&&r.avg_volume)?(r.volume/r.avg_volume).toFixed(1)+'x':null;
+    const rvClass=relVol&&parseFloat(relVol)>=2?'mom-hi':relVol&&parseFloat(relVol)>=1.5?'':'mom-lo';
+    const betaStr=r.beta!=null?r.beta.toFixed(1):null;
+    const betaClass=r.beta>=2?'mom-hi':r.beta>=1?'':'mom-lo';
+    const coCell=r.scoring
+      ?`<td class="co-cell"><span class="sym" style="opacity:0.3"><span class="mk"></span>${r.sym}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
+      :`<td class="co-cell"><span class="sym"><span class="mk"></span>${r.sym}</span>${r.sector?`<span class="sec sec-${r.sector}">${SECTOR_LABEL[r.sector]||r.sector}</span>`:''} <span class="name">${escHtml((r.name||'').length>16?(r.name.slice(0,15)+'…'):r.name)}</span><div class="checked" data-since="${r.scored_at||''}"></div></td>`;
+    tr.innerHTML=`
+      <td class="idx">${i+1}.</td>
+      ${coCell}
+      <td class="num price-cell">${r.price!=null?'$'+(+r.price).toFixed(2):'—'}</td>
+      <td class="grp-start"><div class="checks">${checks}</div></td>
+      <td>${scoreEl}</td>
+      <td class="grp-start"><span class="pill ${r.vsc}">${r.vs}</span>${r.vsSector?`<div style="font-size:7px;color:var(--ink-faint);margin-top:2px;line-height:1.3;white-space:normal;max-width:80px">${r.vsSector} · ${r.vsSectorPE}x avg</div>`:''}</td>
+      <td class="num">${r.fwd}</td>
+      <td class="num">${r.ttm}</td>
+      <td class="num">${r.yr5}</td>
+      <td><span class="pill ${r.ftc}">${r.ft}</span></td>
+      <td class="txt grp-start ${trendClass(r.trend)}"><div class="clamp">${r.trend}</div></td>
+      <td class="txt"><div class="clamp">${r.exp}</div></td>
+      <td class="txt"><div class="clamp">${daysUntil!=null&&daysUntil>0&&daysUntil<=90?`Earn ${daysUntil}d — `:''}${r.cat}</div></td>
+      <td class="num grp-start">${r.ps}</td>
+      <td class="ar-col">${(()=>{const parts=r.ar.split('\n');const consensus=parts[0]||r.ar;const raw=parts[1]||'';const counts=raw.replace(/([-+]?\d+)% PT/,(_,n)=>{const v=parseFloat(n);return`<span class="${v>=0?'ar-pt-pos':'ar-pt-neg'}">${v>=0?'+':''}${v}% PT</span>`;});return`<div class="ar-wrap"><span class="ar-consensus">${consensus}</span>${counts?`<span class="ar-counts">${counts}</span>`:''}`+(r.arGrades&&r.arGrades.length?`<div class="ar-tip"><div style="font-weight:700;margin-bottom:3px;font-size:9px">Recent analyst actions</div>${r.arGrades.map(g=>{const act=g.action==='upgrade'?'↑':g.action==='downgrade'?'↓':'→';const cls=g.action==='upgrade'?'ar-tip-up':g.action==='downgrade'?'ar-tip-dn':'ar-tip-nt';return`<div class="ar-tip-row"><span class="ar-tip-firm">${g.gradingCompany}</span><span class="ar-tip-grade ${cls}">${act} ${g.newGrade}</span></div>`;}).join('')}</div>`:'')+`</div>`;})()} </td>
+      <td class="num grp-start ${betaClass}">${betaStr??'—'}</td>
+      <td class="num ${rvClass}">${relVol??'—'}</td>`;
+    // Drag and drop
+    tr.setAttribute('draggable', 'true');
+    tr.addEventListener('dragstart', e => {
+      dragSrc = tr;
+      const clone = tr.cloneNode(true);
+      clone.style.cssText = `position:fixed;top:-2000px;left:0;transform:scale(1.04);transform-origin:0 0;background:var(--card);box-shadow:0 8px 28px rgba(0,0,0,.2);border-radius:6px;width:${tr.offsetWidth}px;pointer-events:none`;
+      document.body.appendChild(clone);
+      e.dataTransfer.setDragImage(clone, e.offsetX, e.offsetY);
+      requestAnimationFrame(() => clone.remove());
+      e.dataTransfer.effectAllowed = 'move';
+      requestAnimationFrame(() => {
+        document.querySelectorAll('#wlBody tr').forEach(row =>
+          row === tr ? row.classList.add('drag-src') : row.classList.add('drag-blur')
+        );
+      });
+    });
+    tr.addEventListener('dragover', e => {
+      e.preventDefault();
+      if (!dragSrc || dragSrc === tr) return;
+      document.querySelectorAll('#wlBody tr').forEach(r => r.classList.remove('drop-above','drop-below'));
+      const rect = tr.getBoundingClientRect();
+      tr.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drop-above' : 'drop-below');
+    });
+    tr.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!dragSrc || dragSrc === tr) return;
+      const fromSym = dragSrc.dataset.sym;
+      const toSym   = tr.dataset.sym;
+      const insertAfter = tr.classList.contains('drop-below');
+      const fromIdx = watchlist.findIndex(r => r.sym === fromSym);
+      const [moved] = watchlist.splice(fromIdx, 1);
+      const toIdx = watchlist.findIndex(r => r.sym === toSym);
+      watchlist.splice(insertAfter ? toIdx + 1 : toIdx, 0, moved);
+      saveWatchlistOrder();
+      renderWatchlist();
+    });
+    tr.addEventListener('dragend', () => {
+      document.querySelectorAll('#wlBody tr').forEach(r =>
+        r.classList.remove('drag-src','drag-blur','drop-above','drop-below')
+      );
+      dragSrc = null;
+    });
+    tb.appendChild(tr);
+  });
+  updateChecked();
+  syncCheckAnims();
+}
+
+/* ---------------- check-square tooltip (fixed-position, escapes overflow) --- */
+const tipBox=document.getElementById('tipBox');
+document.getElementById('wlBody').addEventListener('mouseover',e=>{
+  const chk=e.target.closest('.chk[data-tip]');
+  if(!chk){tipBox.style.display='none';return;}
+  tipBox.textContent=chk.dataset.tip;
+  tipBox.style.display='block';
+});
+document.getElementById('wlBody').addEventListener('mousemove',e=>{
+  if(tipBox.style.display==='none') return;
+  tipBox.style.left=(e.clientX+14)+'px';
+  tipBox.style.top =(e.clientY-38)+'px';
+});
+document.getElementById('wlBody').addEventListener('mouseleave',()=>{tipBox.style.display='none';});
+
+/* ---------------- score history popover (click) ---------------- */
+const scoreHist=document.getElementById('scoreHist');
+const scoreHistRows=document.getElementById('scoreHistRows');
+const scoreHistSvg=document.getElementById('scoreHistSvg');
+const scoreHistTitle=document.getElementById('scoreHistTitle');
+function fmtHistDate(iso){
+  if(!iso) return '—';
+  const d=new Date(iso);
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+function fmtShortDate(iso){
+  if(!iso) return '';
+  const d=new Date(iso);
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+}
+function scoreColor(n){ return n>=7?'#4caf87':n>=5?'#e8a838':'#c0392b'; }
+
+function buildScoreChart(entries){
+  // entries = oldest→newest after reverse
+  const pts=[...entries].reverse();
+  const n=pts.length;
+  const W=212,H=88,pl=22,pr=6,pt=6,pb=18;
+  const cW=W-pl-pr, cH=H-pt-pb;
+  const xs=i=>pl+(n<2?cW/2:i/(n-1)*cW);
+  const ys=v=>pt+cH-(v/8)*cH;
+  let svg='';
+  // grid lines at 0, 4, 8
+  [0,4,8].forEach(v=>{
+    svg+=`<line x1="${pl}" y1="${ys(v)}" x2="${W-pr}" y2="${ys(v)}" stroke="rgba(255,255,255,.07)" stroke-width="0.5"/>`;
+    svg+=`<text x="${pl-3}" y="${ys(v)+3.5}" text-anchor="end" fill="#606878" font-size="8">${v}</text>`;
+  });
+  // fill area under line
+  if(n>1){
+    const apts=pts.map((p,i)=>`${xs(i)},${ys(parseInt(p.score))}`).join(' ');
+    const firstX=xs(0),lastX=xs(n-1),baseY=ys(0);
+    svg+=`<polygon points="${firstX},${baseY} ${apts} ${lastX},${baseY}" fill="rgba(55,138,221,.10)"/>`;
+    svg+=`<polyline points="${apts}" fill="none" stroke="#378ADD" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
+  // dots
+  pts.forEach((p,i)=>{
+    const v=parseInt(p.score);
+    svg+=`<circle cx="${xs(i)}" cy="${ys(v)}" r="${n===1?4:2.5}" fill="${scoreColor(v)}" stroke="#1e2230" stroke-width="1"/>`;
+  });
+  // x-axis date labels: first and last
+  if(n>=1) svg+=`<text x="${xs(0)}" y="${H-3}" text-anchor="start" fill="#606878" font-size="8">${fmtShortDate(pts[0].scored_at)}</text>`;
+  if(n>=2) svg+=`<text x="${xs(n-1)}" y="${H-3}" text-anchor="end" fill="#606878" font-size="8">${fmtShortDate(pts[n-1].scored_at)}</text>`;
+  return svg;
+}
+
+function openScoreHist(row, anchorEl){
+  const raw=[{score:row.score,scored_at:row.scored_at,current:true},...(row.history||[])].filter(h=>h.score&&h.scored_at);
+  const seenDays=new Set();
+  const entries=raw.filter(h=>{
+    const day=h.scored_at.slice(0,10);
+    if(seenDays.has(day)) return false;
+    seenDays.add(day); return true;
+  }).slice(0,50);
+  if(!entries.length) return;
+  scoreHistTitle.textContent=`${row.sym} — score history (${entries.length} scan${entries.length===1?'':'s'})`;
+  scoreHistSvg.innerHTML=buildScoreChart(entries);
+  const SIX_MONTHS_MS=6*30*24*3600e3;
+  const now=Date.now();
+  scoreHistRows.innerHTML=entries.map(h=>{
+    const stale=new Date(h.scored_at).getTime()<now-SIX_MONTHS_MS;
+    const n=parseInt(h.score);
+    return `<div style="display:flex;justify-content:space-between;gap:20px;padding:2px 0;${stale?'opacity:0.4':''}">
+      <span style="color:#8a95a8">${fmtHistDate(h.scored_at)}${h.current?' <span style="font-size:8px;color:#555f72">(current)</span>':''}</span>
+      <span style="font-weight:700;color:${scoreColor(n)}">${h.score}</span>
+    </div>`;
+  }).join('');
+  scoreHist.style.display='block';
+  // Position near the clicked element, keeping within viewport
+  const rect=anchorEl.getBoundingClientRect();
+  const pw=scoreHist.offsetWidth||244, ph=scoreHist.offsetHeight||260;
+  let x=rect.right+10, y=rect.top-ph/2+rect.height/2;
+  if(x+pw>window.innerWidth-8) x=rect.left-pw-10;
+  scoreHist.style.left=Math.max(8,x)+'px';
+  scoreHist.style.top=Math.max(8,Math.min(y,window.innerHeight-ph-8))+'px';
+}
+
+document.getElementById('wlBody').addEventListener('click',e=>{
+  const scoreEl=e.target.closest('.score:not(.n)');
+  if(!scoreEl) return;
+  const tr=scoreEl.closest('tr[data-sym]');
+  if(!tr) return;
+  const row=watchlist.find(r=>r.sym===tr.dataset.sym);
+  if(!row) return;
+  e.stopPropagation();
+  if(scoreHist.style.display==='block'){ scoreHist.style.display='none'; return; }
+  openScoreHist(row, scoreEl);
+});
+document.getElementById('scoreHistClose').addEventListener('click',()=>scoreHist.style.display='none');
+document.addEventListener('click',e=>{
+  if(!scoreHist.contains(e.target)) scoreHist.style.display='none';
+});
+
+/* ---------------- "Last Checked" counter (counts up 0 → 48h) ----------------
+   green = recently checked · yellow = getting close · red = past 48h, overdue */
+const WINDOW_MS=48*60*60*1000;
+function updateChecked(){
+  document.querySelectorAll('.checked').forEach(el=>{
+    el.classList.remove('fresh','warn','stale');
+    const since=el.dataset.since;
+    if(!since){el.textContent=''; return;}              // unscored / placeholder row
+    const elapsed=Date.now()-new Date(since).getTime();
+    const h=Math.floor(elapsed/3600000), m=Math.floor(elapsed%3600000/60000), s=Math.floor(elapsed%60000/1000);
+    const ago=h>0?`${h}h ${m}m`:`${m}m ${s}s`;
+    if(elapsed>=WINDOW_MS){ el.classList.add('stale'); el.textContent=`Last checked ${ago} · overdue`; }
+    else{
+      el.classList.add(elapsed>=WINDOW_MS*0.75?'warn':'fresh');
+      el.textContent=`Last checked ${ago}`;
+    }
+  });
+}
+setInterval(updateChecked,1000);
+
+/* ---------------- render net ---------------- */
+function fmt(n){return isNaN(n)?'—':'$'+Number(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});}
+function renderNet(){
+  const tb=document.getElementById('netBody'); tb.innerHTML='';
+  net.forEach((r,i)=>{
+    const total=fmt(parseFloat(r.cb)*parseFloat(r.sh));
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td contenteditable data-k="t" class="sym">${r.t}</td>
+      <td contenteditable data-k="c" class="name">${r.c}</td>
+      <td contenteditable data-k="d" class="num">${r.d}</td>
+      <td contenteditable data-k="cb" class="num">${r.cb}</td>
+      <td contenteditable data-k="sh" class="num">${r.sh}</td>
+      <td class="num total">${total}</td>
+      <td contenteditable data-k="notes" class="txt">${r.notes}</td>
+      <td><span class="rowdel" data-i="${i}">✕</span></td>`;
+    tr.querySelectorAll('[contenteditable]').forEach(c=>{
+      c.addEventListener('input',()=>{
+        net[i][c.dataset.k]=c.textContent.trim();
+        tr.querySelector('.total').textContent=fmt(parseFloat(net[i].cb)*parseFloat(net[i].sh));
+      });
+      c.addEventListener('blur',async()=>{                 // persist on blur
+        if(!API_LIVE) return;
+        const row=net[i];
+        if(row.id) await api.send('/api/net/'+row.id,'PUT',row).catch(()=>{});
+        else{ try{const s=await api.send('/api/net','POST',row).then(r=>r.json());row.id=s.id;}catch{} }
+      });
+    });
+    tr.querySelector('.rowdel').onclick=async()=>{
+      const row=net[i];
+      if(API_LIVE&&row.id) await api.send('/api/net/'+row.id,'DELETE').catch(()=>{});
+      net.splice(i,1);renderNet();
+    };
+    tb.appendChild(tr);
+  });
+}
+
+function render(){renderWatchlist();renderNet();}
+
+/* ---------------- API layer (graceful fallback to seed data) ---------------- */
+let API_LIVE=false;
+const api={
+  async get(u){const r=await fetch(u);if(!r.ok)throw 0;return r.json();},
+  async send(u,m,b){const r=await fetch(u,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});if(!r.ok&&r.status!==202)throw 0;return r;},
+};
+async function init(){
+  try{
+    const wl=await api.get('/api/watchlist');
+    API_LIVE=true;
+    if(Array.isArray(wl)&&wl.length) watchlist=applyOrder(wl);
+    const nt=await api.get('/api/net').catch(()=>[]);
+    if(Array.isArray(nt)&&nt.length) net=nt;
+  }catch{ API_LIVE=false; /* offline / static open → keep seed data */ }
+  try{
+    const saved=JSON.parse(localStorage.getItem('gn_sort')||'null');
+    if(saved?.col){
+      sortCol=saved.col; sortDir=saved.dir??1;
+      watchlist.sort((a,b)=>{const av=sortVal(a,sortCol),bv=sortVal(b,sortCol);return(av<bv?-1:av>bv?1:0)*sortDir;});
+    }
+  }catch(e){}
+  applySortHeaders();
+  render();
+}
+init();
+
+/* ---------------- toast banner ---------------- */
+function showToast(msg, durationMs=4500){
+  let el=document.getElementById('toastBanner');
+  if(!el){
+    el=document.createElement('div'); el.id='toastBanner';
+    el.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:300;background:#2a2e36;color:#e8eaf0;font-size:11px;line-height:1.5;padding:9px 18px;border-radius:9px;box-shadow:0 4px 16px rgba(0,0,0,.22);pointer-events:none;opacity:0;transition:opacity .25s';
+    document.body.appendChild(el);
+  }
+  el.textContent=msg; el.style.opacity='1';
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>{ el.style.opacity='0'; },durationMs);
+}
+
+// Typing pipeline animation state (persists across renderWatchlist re-renders)
+const _scanAnims=new Map(); // sym → {msgIdx, charIdx, text, id}
+
+function startCheckAnim(sym){
+  if(_scanAnims.has(sym)) clearInterval(_scanAnims.get(sym).id);
+  const msgs=[`> scoring ${sym}`,'fetching ratios','checking momentum','computing P/E','vs sector data','analyst grades','running model','finalizing…'];
+  const state={msgIdx:0,charIdx:0,text:'',id:null};
+  _scanAnims.set(sym,state);
+  state.id=setInterval(()=>{
+    const msg=msgs[state.msgIdx%msgs.length];
+    if(state.charIdx<msg.length){
+      state.text=msg.slice(0,++state.charIdx);
+    }else{
+      state.msgIdx++; state.charIdx=0; state.text='';
+    }
+    syncCheckAnim(sym);
+  },45);
+}
+
+function stopCheckAnim(sym){
+  const s=_scanAnims.get(sym);
+  if(s) clearInterval(s.id);
+  _scanAnims.delete(sym);
+}
+
+function syncCheckAnim(sym){
+  const el=document.querySelector(`tr[data-sym="${sym}"] .typing-text`);
+  if(!el) return;
+  const s=_scanAnims.get(sym);
+  if(s) el.textContent=s.text;
+}
+
+function syncCheckAnims(){
+  _scanAnims.forEach((_,sym)=>syncCheckAnim(sym));
+}
+
+// poll a background job until done, re-rendering rows as they land
+function pollJob(jobId){
+  const t=setInterval(async()=>{
+    try{
+      const j=await api.get('/api/jobs/'+jobId);
+      const total=j.total||0;
+      const done=j.rows?j.rows.filter(r=>!r.error).length:0;
+      if(j.rows&&j.rows.length){
+        const updated=[];
+        j.rows.forEach(row=>{
+          if(row.error) return;
+          // Match by requested sym first; fall back to returned sym so new adds still work
+          let i=watchlist.findIndex(r=>r.sym===row.sym);
+          if(i<0) i=watchlist.findIndex(r=>r.scoring&&r.sym===row.sym);
+          if(i>=0){
+            const origSym=watchlist[i].sym; const origName=watchlist[i].name;
+            watchlist[i]=row; watchlist[i].sym=origSym;
+            // Guard against FMP sym-flip leaking wrong company name
+            if(row.sym&&row.sym.toUpperCase()!==origSym.toUpperCase()) watchlist[i].name=origName;
+          }
+          else watchlist.push(row);
+          updated.push(watchlist[i>=0?i:watchlist.length-1].sym);
+        });
+        renderWatchlist();
+        updated.forEach(sym=>{ stopCheckAnim(sym); flash(sym); });
+      }
+      if(j.status==='done'||j.status==='error'){
+        clearInterval(t);
+        _scanAnims.forEach((_,sym)=>stopCheckAnim(sym)); // stop any remaining
+        rescanBtn.disabled=false;
+        if(j.status==='done'&&j.total===0){
+          rescanBtn.innerHTML='✓ All fresh';
+          showToast('All tickers scored within 48 h — Shift+click ⟳ to force a full refresh, or right-click a row.');
+          setTimeout(()=>{rescanBtn.innerHTML='⟳ Rescan';},3000);
+        }else{
+          rescanBtn.innerHTML='⟳ Rescan';
+          if(j.rows&&j.rows.filter(r=>!r.error).length>0)
+            showToast(`Rescored ${j.rows.filter(r=>!r.error).length} ticker(s) — scores updated.`);
+        }
+        // Re-fetch from the blob store (authoritative) so the display always reflects
+        // what was actually written — not the job's interim rows, which may contain
+        // stale data from mid-scan or CDN-flip placeholders.
+        try{
+          const freshWl=await api.get('/api/watchlist');
+          if(Array.isArray(freshWl)&&freshWl.length){watchlist=applyOrder(freshWl);renderWatchlist();}
+        }catch(e){}
+      }
+    }catch{/* keep polling */}
+  },2500);
+}
+
+/* ---------------- view toggle ---------------- */
+let currentView='watchlist';
+function setView(v){
+  currentView=v;
+  document.getElementById('watchlistView').classList.toggle('hidden',v!=='watchlist');
+  document.getElementById('netView').classList.toggle('hidden',v!=='net');
+  document.getElementById('twView').classList.toggle('hidden',v!=='tw');
+  const isWL=v==='watchlist';
+  document.getElementById('wlControls').style.display=isWL?'flex':'none';
+  document.getElementById('wlLeft').style.display=isWL?'flex':'none';
+  document.getElementById('navToggle').textContent=v==='net'?'↩ Watchlist':'Net ↗';
+  document.getElementById('twToggle').textContent=v==='tw'?'↩ Watchlist':'Training Wheels';
+  window.scrollTo(0,0);
+}
+document.getElementById('navToggle').onclick=()=>setView(currentView==='net'?'watchlist':'net');
+document.getElementById('twToggle').onclick=()=>setView(currentView==='tw'?'watchlist':'tw');
+
+/* ---------------- Training Wheels content ---------------- */
+const TW_DATA={
+  price:{
+    title:'Live Price',nvda:'$131.00 — real-time market quote',
+    what:'The current price of one share on the open market, updated live during trading hours.',
+    why:'Price alone tells you nothing about value — a $10 stock can be more expensive than a $500 one depending on earnings. Use it alongside P/E and P/S ratios to judge whether you\'re paying a fair price.',
+    good:'✓ Price rising on heavy volume; breaking above a key resistance level (52-week high, 200-day moving average) — signals institutional buying and momentum.',
+    bad:'✗ Price falling on heavy volume; breaking below key support — signals distribution. Avoid catching falling knives without a clear fundamental catalyst.'
+  },
+  revenue:{
+    title:'Revenue',nvda:'TTM $113B vs $61B prior year (+85% YoY) — GOOD',
+    what:'Total money earned from selling products or services before any expenses are deducted. Also called the "top line" because it sits at the top of the income statement.',
+    why:'Revenue growth is the engine of the business. Without it, profit growth becomes unsustainable. Accelerating growth signals expanding demand and market share gains — the single most watched fundamental metric.',
+    good:'✓ YoY growth >15%; growth rate accelerating quarter-over-quarter; entering new markets. NVDA\'s 85% growth far exceeds semiconductor peers.',
+    bad:'✗ Declining revenue; deceleration for 2+ consecutive quarters; price cuts needed just to maintain volume — all warn of eroding competitive position.'
+  },
+  margin:{
+    title:'Gross Margin',nvda:'Gross 75.1% vs 64.6% prior year (+10.5pp YoY) — GOOD',
+    what:'The percentage of revenue remaining after subtracting the direct cost of making the product (COGS). For NVDA this is revenue minus chip fabrication costs paid to TSMC.',
+    why:'Expanding margins reveal pricing power. A company sustaining 70%+ gross margins — like NVDA — is extracting exceptional value per dollar of revenue. It\'s the clearest sign of a durable competitive moat.',
+    good:'✓ Gross margin >50% and expanding YoY; operating margins rising alongside gross margins (compounding efficiency); pricing power maintained even in a macro slowdown.',
+    bad:'✗ Gross margin compressing quarter-over-quarter; margins falling while revenue grows (competitors forcing price cuts); rising input costs that can\'t be passed on to customers.'
+  },
+  contract:{
+    title:'Contracts & Backlog',nvda:'Blackwell/GB200 orders booked through 2026; hyperscaler commitments confirmed — GOOD',
+    what:'Signed purchase orders or committed deals for future product delivery. Represents locked-in future revenue that hasn\'t hit the income statement yet.',
+    why:'A growing backlog reduces revenue uncertainty and gives you visibility into future earnings — before the market prices it in. Demand exceeding supply is one of the most bullish structural setups.',
+    good:'✓ Backlog growing faster than current revenue; multi-quarter visibility; wins with blue-chip customers (hyperscalers, government). NVDA\'s AI chip backlog extends well into 2026.',
+    bad:'✗ Backlog shrinking or flat; order cancellations or deferrals; single customer >40% of backlog (concentration risk that can unwind fast).'
+  },
+  debt:{
+    title:'Debt & Balance Sheet',nvda:'Net cash ~$14B positive; D/E ~0.4x; interest coverage >20x — GOOD',
+    what:'Measures financial health: how much debt the company carries vs. its cash reserves and earnings power. Key metrics: net cash position, Debt/Equity ratio, and interest coverage ratio.',
+    why:'A clean balance sheet gives a company the flexibility to invest, acquire, buy back stock, and survive downturns without diluting shareholders. In rising rate environments, heavy debt becomes a direct earnings headwind.',
+    good:'✓ Net cash positive (more cash than debt); D/E below 1.0x; interest coverage above 3x; debt declining over time — all true for NVDA.',
+    bad:'✗ Net debt position and rising; D/E above 2.0x; interest coverage below 1.5x; refinancing at materially higher rates; debt growing faster than earnings.'
+  },
+  departures:{
+    title:'C-Suite Departures',nvda:'No executive departures in the past 90 days — GOOD',
+    what:'Tracks sudden exits of senior executives — CEO, CFO, COO, CTO, or board members — in the past 90 days. Planned retirements announced well in advance are treated differently from abrupt departures.',
+    why:'Executives have access to non-public information. A sudden CFO resignation is one of the most reliable early-warning signals of undisclosed problems — accounting issues, regulatory pressure, or serious internal conflict.',
+    good:'✓ Stable, long-tenured leadership with significant equity ownership; any transitions announced months in advance with a clear successor plan.',
+    bad:'✗ CFO or CEO leaving with <2 weeks notice; multiple C-suite exits within a 6-month window; executive citing "personal reasons" during a turbulent period for the business.'
+  },
+  forecast:{
+    title:'Earnings Forecast vs. Consensus',nvda:'Q2 guide ~$45B vs analyst consensus ~$43B — GOOD (beat & raise)',
+    what:'Compares management\'s own guidance for the next quarter against what Wall Street analysts collectively expected. A "beat and raise" means beating the current quarter AND raising future guidance.',
+    why:'Guidance is management putting their credibility on the line. Companies that consistently beat and raise build a premium valuation multiple over time. Even a small guidance cut can cause an outsized sell-off.',
+    good:'✓ Guidance above consensus by >3%; management known for conservative guidance (sets up positive surprises); raising full-year outlook alongside quarterly results.',
+    bad:'✗ Guidance below consensus; repeated cuts over multiple quarters (erodes trust); wide gap between guidance and actual results signals poor internal visibility.'
+  },
+  disruption:{
+    title:'Competitive Disruption',nvda:'No material new threat identified in the past 6 months — GOOD',
+    what:'Assesses whether a new technology, competitor, or regulatory action has emerged in the past 6 months that could materially erode market share or pricing power.',
+    why:'Disruption often shows up in the fundamentals 2–4 quarters after it begins. The goal is to identify the threat before it appears in margins — not after the damage is done.',
+    good:'✓ No credible new entrants with comparable performance; open-source alternatives lack parity; the company\'s moat (patents, switching costs, ecosystem lock-in) is intact or widening.',
+    bad:'✗ Well-funded competitor launching directly competing product; regulatory action targeting core business; open-source alternative reaching feature parity; key customer beginning to build in-house.'
+  },
+  insider:{
+    title:'Insider Trading',nvda:'No open-market purchases or sales in the past 60 days — GOOD',
+    what:'Tracks open-market stock purchases and sales by executives, directors, and >10% shareholders. Excludes pre-planned 10b5-1 sales (scheduled months in advance) which are less meaningful signals.',
+    why:'Insiders have legal access to non-public information. Open-market buying — especially by the CEO using personal funds — is one of the strongest bullish signals available. They don\'t buy unless they expect the stock to go up.',
+    good:'✓ CEO or CFO buying shares with personal funds on the open market; cluster buying (multiple insiders buying in the same week); insider ownership >10% of float.',
+    bad:'✗ Large open-market sale by CEO or CFO without a pre-planned 10b5-1; multiple insiders selling in the same week; insider ownership steadily declining over 12 months.'
+  },
+  score:{
+    title:'Composite Score',nvda:'8/8 — all eight fundamental checks passed',
+    what:'The total number of green checks out of 8 covering: Revenue growth, Margin expansion, Contracts, Debt health, C-suite stability, Earnings forecast, Disruption risk, and Insider activity.',
+    why:'A high score confirms the fundamental picture is clean. It\'s most powerful combined with valuation — a 7/8 score at a discount to peers is a high-conviction setup; a 7/8 at extreme premium needs extra scrutiny.',
+    good:'✓ 7–8/8: strong fundamental backdrop, suitable for medium-term holds. Score trending up (↑) means momentum is building. Best trades often pair high score with reasonable valuation.',
+    bad:'✗ Below 5/8: too many red flags to justify a full position. A declining score (↓) is an early exit signal even if the stock hasn\'t moved yet — the fundamentals are deteriorating.'
+  },
+  vs:{
+    title:'vs. Sector P/E',nvda:'+22% premium vs. semiconductor sector median P/E',
+    what:'Shows whether NVDA\'s P/E is above or below the average P/E of its sector peers. A premium means the market expects NVDA to grow faster than the typical semiconductor company.',
+    why:'Context matters more than the raw P/E number. A 35x P/E is cheap for a company growing 80% annually but expensive for one growing 5%. Sector comparison normalizes for the current interest-rate environment.',
+    good:'✓ Small-to-moderate premium (10–25%) justified by materially faster growth; premium shrinking as earnings grow into valuation (natural de-rating while stock rises); sector being re-rated upward by institutions.',
+    bad:'✗ Extreme premium (>50%) without step-change in business quality; premium expanding faster than earnings growth; sector falling out of institutional favor while premium holds — last one out loses.'
+  },
+  fwd:{
+    title:'Forward P/E',nvda:'35.2x — price ÷ next 12 months estimated EPS',
+    what:'Price per share divided by analysts\' consensus EPS estimate for the next 12 months. The most widely used valuation metric for growth stocks because it reflects future earnings potential.',
+    why:'Forward P/E is a bet on the future. To quickly gauge whether it\'s reasonable, use the PEG ratio: P/E divided by the annual growth rate. PEG below 1.0x is historically undervalued; above 2.0x is expensive.',
+    good:'✓ Forward P/E below 5-year average; P/E falling as earnings grow (multiple compression while stock rises — the ideal setup); PEG ratio below 1.5x relative to the growth rate.',
+    bad:'✗ Forward P/E far above 5-year average with no growth acceleration; estimates being revised downward while P/E stays elevated; PEG ratio above 3.0x — paying too much for growth.'
+  },
+  ttm:{
+    title:'Trailing P/E (TTM)',nvda:'54.8x — price ÷ actual last 12 months EPS',
+    what:'Price per share divided by actual reported earnings per share over the trailing 12 months. Unlike Forward P/E, this uses real delivered numbers — not analyst estimates.',
+    why:'Trailing P/E shows what you\'re paying for proven earnings. The gap between TTM and Forward P/E is key: if forward is much lower than trailing, earnings are accelerating — a bullish structural signal.',
+    good:'✓ TTM P/E falling quarter-over-quarter (earnings growing faster than price); forward P/E well below TTM (acceleration is real and confirmed by results); trading at a discount to closest peers on TTM.',
+    bad:'✗ TTM P/E rising (price running ahead of earnings); forward P/E above TTM (market expects earnings to decline — classic value trap warning); comparing TTM P/E across different industries (never meaningful).'
+  },
+  yr5:{
+    title:'5-Year Average P/E',nvda:'~38x — NVDA\'s historical fair-value anchor',
+    what:'The average P/E the stock has traded at over the past 5 years. Acts as a mean-reversion reference point — the price level the market has historically considered "normal" for this company.',
+    why:'When a stock trades below its 5-year average P/E, it\'s historically cheap even if the absolute number looks high. When it trades well above, it needs exceptional near-term growth to avoid a painful re-rating.',
+    good:'✓ Current P/E near or below the 5-year average; 5-year average rising over time (the market trusting the business more); a discount caused by a temporary headwind, not structural deterioration.',
+    bad:'✗ Current P/E materially above 5-year average without a step-change in business quality; the 5-year average itself declining (market losing conviction); buying at peak P/E during a hype cycle — the most common retail mistake.'
+  },
+  ftcomp:{
+    title:'Forward vs. Trailing P/E',nvda:'Bullish — forward 35x well below trailing 55x, confirming earnings acceleration',
+    what:'A direct comparison between what you\'re paying for future earnings vs. what past earnings delivered. When forward P/E is lower than trailing, earnings are expected to grow — a bullish signal.',
+    why:'This single comparison tells you the direction of the earnings trend with no math required. It\'s the fastest way to identify whether a stock is in an earnings acceleration or deceleration cycle.',
+    good:'✓ Forward P/E significantly below trailing (Bullish): earnings are growing, the multiple is naturally compressing as the company delivers. NVDA at 35x fwd vs 55x ttm is a textbook acceleration setup.',
+    bad:'✗ Forward P/E above trailing (Bearish): analysts expect earnings to shrink. The stock may look cheap on trailing history but be expensive on forward reality — the most dangerous type of value trap.'
+  },
+  trend:{
+    title:'Business Trend',nvda:'Revenue ↑↑, Gross margins ↑ — dual acceleration',
+    what:'A qualitative summary of whether revenue and margins are improving, stable, or deteriorating based on the most recent 2–4 quarters of reported data.',
+    why:'Trend is the direction, not just the current level. A company at 10% margins growing to 15% is more interesting than one at 20% margins falling to 15%. Trend predicts where earnings will be — not just where they are today.',
+    good:'✓ Both revenue and margins rising (the best case — compounding momentum); improving from a trough with a clear catalyst (recovery play); one metric rising while the other is stable (still net positive).',
+    bad:'✗ Both revenue and margins declining (avoid or short); revenue growing but margins compressing (scale without leverage — often signals competition heating up); one-time items masking structural deterioration.'
+  },
+  exp:{
+    title:'Expectations Priced-In',nvda:'Partially priced-in — Blackwell demand not fully reflected in consensus estimates',
+    what:'An assessment of how much of the good news (or bad news) is already reflected in the current stock price and analyst consensus models.',
+    why:'Markets are forward-looking. Buying after good news is announced often means you\'re the last one in. The best trades happen when you identify what the market hasn\'t yet valued — before the crowd arrives.',
+    good:'✓ "Not priced in" — a significant catalyst or product cycle not yet in consensus estimates. Happens when coverage is thin, the sector is out of favor, or the company is mid-transition.',
+    bad:'✗ "Fully priced in" — every analyst has the same thesis, consensus already reflects the bull case, and the stock needs to significantly beat just to hold current levels. This is where most retail investors buy at the top.'
+  },
+  cat:{
+    title:'Upcoming Catalysts',nvda:'Q2 earnings · GTC 2026 developer conference · Blackwell ramp update',
+    what:'Specific upcoming events with a realistic chance of moving the stock price — earnings releases, product launches, conferences, regulatory decisions, analyst days, or shareholder meetings.',
+    why:'Stocks often move in anticipation of catalysts, not after the event. Knowing what\'s coming lets you position before the move. No upcoming catalysts typically means the stock sits flat for months.',
+    good:'✓ Multiple near-term catalysts within 30–60 days; events that can change consensus estimates (earnings beats, new product wins, large contract announcements); management-controlled catalysts like buybacks or spin-offs.',
+    bad:'✗ No catalysts for 90+ days; catalysts dependent on third-party decisions (FDA, regulatory bodies); expected catalysts that are already fully priced in — the event passes with no move.'
+  },
+  ps:{
+    title:'Price-to-Sales (P/S)',nvda:'~20x — market cap ÷ annual revenue',
+    what:'Market capitalization divided by total annual revenue. Unlike P/E, it works even when a company has no earnings, making it useful for early-stage growth companies or those in a loss year.',
+    why:'P/S is hard to manipulate — revenue is the most reliable top line. A low P/S relative to peers often signals undervaluation. A very high P/S requires exceptional, sustained growth to justify over time.',
+    good:'✓ P/S below sector median; P/S declining as revenue grows faster than market cap (de-rating as growth delivers — healthy); high gross margin business with low P/S is a rare and powerful setup.',
+    bad:'✗ P/S above 20x without 50%+ revenue growth; P/S expanding (price running well ahead of revenue); comparing P/S across industries without adjusting for margin profiles — context is everything.'
+  },
+  earn:{
+    title:'Earnings Countdown',nvda:'12 days until next earnings report',
+    what:'The number of days until the company\'s next quarterly earnings release — the single most important scheduled event for a stock.',
+    why:'Stocks frequently move 5–15% on earnings day. But the real opportunity is the run-up: strong stocks often drift higher in the 2–3 weeks before earnings as traders position for a beat. Knowing the countdown lets you time entries and exits.',
+    good:'✓ 10–30 days out with strong fundamentals: classic run-up setup. Buy into strength before the crowd arrives. Exit before the print if you\'re not confident in the beat.',
+    bad:'✗ Holding through earnings without conviction is speculation, not investing. If the stock has already run 20%+ into earnings, the risk/reward is often poor — the good news may already be priced in.'
+  },
+  beta:{
+    title:'Beta',nvda:'1.7 — moves ~70% more than the S&P 500 on any given day',
+    what:'Beta measures how much a stock moves relative to the S&P 500. A beta of 1.0 means it moves in lockstep with the market. A beta of 1.7 means it amplifies market moves by ~70% — if the S&P drops 2%, expect this stock to drop ~3.4%.',
+    why:'Beta tells you how much market risk you are taking on. High-beta stocks like NVDA amplify both gains and losses. They outperform in bull markets but get punished harder in corrections. Knowing beta lets you size positions appropriately and set realistic expectations for drawdowns.',
+    good:'✓ High-beta stock (>1.5) in a confirmed uptrend or strong bull market: amplified gains. If the S&P is up 15% YTD and your stock is up 25%, that is beta working for you. Ideal for growth-oriented, shorter-term positions where you have high conviction.',
+    bad:'✗ High-beta stock in a weak or falling market: losses compound fast. A beta of 1.7 in a 20% market correction implies a ~34% drawdown. Size high-beta positions smaller to manage total portfolio risk. Low beta (<0.8) means the stock barely moves — fine for capital preservation, but do not expect big gains in a rally.'
+  },
+  relvol:{
+    title:'Relative Volume',nvda:'1.3x — slightly above average, normal trading day',
+    what:'Today\'s trading volume divided by the 20-day average volume. Shows whether unusual buying or selling activity is occurring compared to a typical day.',
+    why:'Volume is the fuel behind price moves. A stock moving 3% on 3x normal volume is a much stronger signal than the same move on 0.5x volume. Institutions can\'t hide — when they\'re buying or selling, volume spikes.',
+    good:'✓ Rel Vol ≥2x with price rising: institutional accumulation — strong momentum signal. ≥3x on a breakout above a key level is one of the most reliable short-term entry signals.',
+    bad:'✗ Price rising on Rel Vol <0.8x: low-conviction move, likely to fade. Rel Vol ≥2x with price falling: aggressive distribution — smart money is exiting. Don\'t fight the tape.'
+  },
+  ar:{
+    title:'Analyst Rating & Price Target',nvda:'4.7/5 · 32 Buy · 14 Hold · 0 Sell · +8% price target consensus',
+    what:'The aggregate view of Wall Street analysts covering the stock — how many rate it Buy, Hold, or Sell, and what their financial models say the stock is worth (the price target).',
+    why:'Analyst ratings reflect institutional consensus. A high buy count signals broad conviction. More importantly, watch for changes — upgrades, estimate raises, and price target increases drive near-term price movement more than the static rating itself.',
+    good:'✓ High buy ratio (>60% of analysts); rising price targets after earnings; recent upgrades from Hold to Buy; PT well above current price (>15% implied upside); analysts raising EPS estimates post-results.',
+    bad:'✗ Growing hold count (analysts becoming cautious without formally downgrading — a stealth warning); PT cuts even while maintaining a Buy rating; first sell ratings appearing; consensus PT below or at current price.'
+  }
+};
+
+(function(){
+  const tip=document.getElementById('twTip');
+  function showTip(key,x,y){
+    const d=TW_DATA[key]; if(!d) return;
+    document.getElementById('twTipTitle').textContent=d.title;
+    document.getElementById('twTipNvda').textContent='NVDA example: '+d.nvda;
+    document.getElementById('twTipWhat').textContent=d.what;
+    document.getElementById('twTipWhy').textContent=d.why;
+    document.getElementById('twTipGood').textContent=d.good;
+    document.getElementById('twTipBad').textContent=d.bad;
+    tip.style.display='block';
+    const W=window.innerWidth,tw=310;
+    let left=x+14, top=y+14;
+    if(left+tw>W-10) left=x-tw-14;
+    if(top+tip.offsetHeight>window.innerHeight-10) top=Math.max(10,window.innerHeight-tip.offsetHeight-10);
+    tip.style.left=left+'px'; tip.style.top=top+'px';
+  }
+  const twView=document.getElementById('twView');
+  let twPinned=false;
+  twView.addEventListener('mouseover',e=>{
+    if(twPinned) return;
+    const el=e.target.closest('[data-tw]'); if(!el) return;
+    showTip(el.dataset.tw, e.clientX, e.clientY);
+  });
+  twView.addEventListener('mousemove',e=>{
+    if(twPinned) return;
+    if(tip.style.display==='none') return;
+    const W=window.innerWidth,tw=310;
+    let left=e.clientX+14, top=e.clientY+14;
+    if(left+tw>W-10) left=e.clientX-tw-14;
+    if(top+tip.offsetHeight>window.innerHeight-10) top=Math.max(10,window.innerHeight-tip.offsetHeight-10);
+    tip.style.left=left+'px'; tip.style.top=top+'px';
+  });
+  twView.addEventListener('mouseout',e=>{
+    if(twPinned) return;
+    const el=e.target.closest('[data-tw]'); if(!el) return;
+    const to=e.relatedTarget; if(el.contains(to)||tip.contains(to)) return;
+    tip.style.display='none';
+  });
+  twView.addEventListener('click',e=>{
+    const el=e.target.closest('[data-tw]'); if(!el) return;
+    twPinned=!twPinned;
+    if(twPinned) showTip(el.dataset.tw, e.clientX, e.clientY);
+    else tip.style.display='none';
+  });
+  document.getElementById('twTipClose').addEventListener('click',()=>{twPinned=false;tip.style.display='none';});
+  document.addEventListener('click',e=>{
+    if(!twPinned) return;
+    if(!tip.contains(e.target)&&!e.target.closest('[data-tw]')){twPinned=false;tip.style.display='none';}
+  });
+})();
+
+/* ---------------- autocomplete ---------------- */
+const addInput=document.getElementById('addInput');
+const acDrop=document.getElementById('acDrop');
+let acIdx=-1, acItems=[], acTimer=null;
+
+function acHide(){ acDrop.style.display='none'; acIdx=-1; acItems=[]; }
+function acShow(results){
+  acItems=results;
+  acIdx=-1;
+  acDrop.innerHTML=results.map((r,i)=>
+    `<div class="ac-item" data-i="${i}">
+       <span class="ac-sym">${r.symbol}</span>
+       <span class="ac-name">${r.name}</span>
+       <span class="ac-exch">${r.exchange}</span>
+     </div>`
+  ).join('');
+  acDrop.style.display=results.length?'block':'none';
+  acDrop.querySelectorAll('.ac-item').forEach(el=>{
+    el.addEventListener('mousedown',ev=>{
+      ev.preventDefault();
+      pickAc(parseInt(el.dataset.i));
+    });
+  });
+}
+function acHighlight(i){
+  acDrop.querySelectorAll('.ac-item').forEach((el,j)=>el.classList.toggle('sel',j===i));
+}
+function pickAc(i){
+  const r=acItems[i]; if(!r) return;
+  addInput.value=r.symbol;
+  acHide();
+  addInput.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+}
+
+addInput.addEventListener('input',()=>{
+  clearTimeout(acTimer);
+  const q=addInput.value.trim();
+  if(q.length<1){ acHide(); return; }
+  acTimer=setTimeout(async()=>{
+    try{
+      const res=await fetch('/api/search?q='+encodeURIComponent(q));
+      const data=await res.json();
+      acShow(data);
+    }catch{ acHide(); }
+  },150);
+});
+
+addInput.addEventListener('keydown',async e=>{
+  if(acDrop.style.display!=='none'&&acItems.length){
+    if(e.key==='ArrowDown'){ e.preventDefault(); acIdx=Math.min(acIdx+1,acItems.length-1); acHighlight(acIdx); return; }
+    if(e.key==='ArrowUp'){   e.preventDefault(); acIdx=Math.max(acIdx-1,0); acHighlight(acIdx); return; }
+    if(e.key==='Enter'&&acIdx>=0){ e.stopImmediatePropagation(); pickAc(acIdx); return; }
+    if(e.key==='Escape'){ acHide(); return; }
+  }
+});
+addInput.addEventListener('blur',()=>setTimeout(acHide,150));
+
+/* ---------------- add ticker (scoring pipeline) ---------------- */
+addInput.addEventListener('keydown',async e=>{
+  if(e.key!=='Enter') return;
+  const sym=addInput.value.trim().toUpperCase();
+  if(!sym) return;
+  addInput.value='';
+  // placeholder row while the scoring pipeline runs
+  if(!watchlist.find(r=>r.sym===sym))
+    watchlist.push({sym,name:'Scoring…',scoring:true,v:[0,0,0,0,0,0,0,0],score:'–/8',
+      vs:'…',vsc:'n',fwd:'…',ttm:'…',yr5:'…',ft:'…',ftc:'n',trend:'pending',exp:'pending',cat:'pending',ps:'…',ar:'…',arGrades:[]});
+  renderWatchlist(); flash(sym);
+  startCheckAnim(sym);
+  if(API_LIVE){
+    const jobId=crypto.randomUUID();
+    rescanBtn.disabled=true; rescanBtn.innerHTML='<span class="spin">⟳</span> Scoring…';
+    await api.send('/api/watchlist/add','POST',{ticker:sym,jobId}).catch(()=>{});
+    pollJob(jobId);
+  }
+});
+
+/* ---------------- rescan ----------------
+   Normal click = smart rescan (skips rows scored in the last 2 days, to save cost).
+   Shift+click  = force a full rescan of every row. */
+const rescanBtn=document.getElementById('rescan');
+rescanBtn.title='Click: refresh stale rows only (>2 days). Shift+click: force full rescan.';
+rescanBtn.onclick=async(e)=>{
+  const force=e.shiftKey;
+  localStorage.setItem('gn_last_rescan', Date.now()); updateRescanTimer();
+  rescanBtn.disabled=true;
+  rescanBtn.innerHTML=(force?'Full rescan…':'Refreshing stale…');
+  // Mark rows that will be rescanned as scoring so scan bars appear immediately
+  const STALE_MS=48*60*60*1000;
+  const now=Date.now();
+  watchlist.forEach(r=>{
+    if(force||!r.scored_at||now-new Date(r.scored_at).getTime()>STALE_MS) r.scoring=true;
+  });
+  renderWatchlist();
+  watchlist.filter(r=>r.scoring).forEach(r=>startCheckAnim(r.sym));
+  if(API_LIVE){
+    const jobId=crypto.randomUUID();
+    await api.send('/api/watchlist/rescan','POST',{jobId,force,clientTickers:watchlist.map(r=>r.sym)}).catch(()=>{});
+    pollJob(jobId);
+  }else{
+    // Offline demo: simulate check animations completing one by one
+    const scanning=watchlist.filter(r=>r.scoring);
+    let i=0;
+    const t=setInterval(()=>{
+      if(i<scanning.length){
+        const sym=scanning[i].sym;
+        scanning[i].scoring=false; stopCheckAnim(sym); renderWatchlist(); flash(sym); i++;
+      }else{clearInterval(t);rescanBtn.disabled=false;rescanBtn.innerHTML='⟳ Rescan';}
+    },1200);
+  }
+};
+
+/* "Last rescan" timer below the button — counts up: minutes → hours → days. */
+function updateRescanTimer(){
+  const el=document.getElementById('rescanTimer'); if(!el) return;
+  const ts=Number(localStorage.getItem('gn_last_rescan'));
+  if(!ts){el.textContent='Last rescan:never'; return;}
+  const s=Math.floor((Date.now()-ts)/1000);
+  let v;
+  if(s<60)            v='just now';
+  else if(s<3600)     v=Math.floor(s/60)+'m ago';
+  else if(s<86400)    v=Math.floor(s/3600)+'h ago';
+  else                v=Math.floor(s/86400)+'d ago';
+  el.textContent='Last rescan:'+v;
+}
+updateRescanTimer();
+setInterval(updateRescanTimer,15000);
+function flash(sym){
+  const tr=document.querySelector(`tr[data-sym="${sym}"]`);
+  if(tr){tr.classList.add('flash');setTimeout(()=>tr.classList.remove('flash'),700);}
+}
+
+/* ---------------- right-click delete ---------------- */
+const ctx=document.getElementById('ctx'); let ctxSym=null;
+document.getElementById('wlBody').addEventListener('contextmenu',e=>{
+  const tr=e.target.closest('tr'); if(!tr) return;
+  e.preventDefault(); ctxSym=tr.dataset.sym;
+  ctx.style.display='block'; ctx.style.left=e.clientX+'px'; ctx.style.top=e.clientY+'px';
+});
+document.getElementById('ctxRescan').onclick=async()=>{
+  const sym=ctxSym; ctx.style.display='none';
+  const row=watchlist.find(r=>r.sym===sym); if(!row) return;
+  row.scoring=true; renderWatchlist();
+  startCheckAnim(sym);
+  const jobId='jr-'+Date.now();
+  if(API_LIVE){
+    await api.send('/api/watchlist/rescan','POST',{jobId,force:true,tickers:[sym],clientTickers:[sym]}).catch(()=>{});
+    const t=setInterval(async()=>{
+      const j=await api.get('/api/jobs/'+jobId).catch(()=>null);
+      if(!j) return;
+      if(j.status==='done'){
+        stopCheckAnim(sym);
+        if(j.rows&&j.rows[0]){
+          const origName=row.name;
+          Object.assign(row,j.rows[0]); row.sym=sym;
+          if(j.rows[0].sym&&j.rows[0].sym.toUpperCase()!==sym.toUpperCase()) row.name=origName;
+        }
+        row.scoring=false; clearInterval(t);
+        renderWatchlist(); flash(sym);
+        showToast(`${sym} rescored — ${row.score} (score updated)`);
+      } else if(j.status==='error'){
+        stopCheckAnim(sym);
+        row.scoring=false; clearInterval(t); renderWatchlist();
+      }
+    },3000);
+  }else{
+    setTimeout(()=>{ stopCheckAnim(sym); row.scoring=false; renderWatchlist(); },1500);
+  }
+};
+document.getElementById('ctxDel').onclick=async()=>{
+  const sym=ctxSym;
+  watchlist=watchlist.filter(r=>r.sym!==sym); renderWatchlist(); ctx.style.display='none';
+  if(API_LIVE) await api.send('/api/watchlist/'+encodeURIComponent(sym),'DELETE').catch(()=>{});
+};
+document.addEventListener('click',()=>ctx.style.display='none');
+
+/* ---------------- add net row ---------------- */
+document.getElementById('addNetRow').onclick=async()=>{
+  const row={t:'',c:'',d:'',cb:'0',sh:'0',notes:''};
+  if(API_LIVE){ try{const saved=await api.send('/api/net','POST',row).then(r=>r.json()); row.id=saved.id;}catch{} }
+  net.push(row); renderNet();
+};
+
+/* ---------------- scroll fade header ---------------- */
+const bar=document.getElementById('bar');
+window.addEventListener('scroll',()=>{
+  const y=window.scrollY;
+  const op=Math.max(0,1-y/120);
+  bar.style.opacity=op;
+  bar.style.pointerEvents=op===0?'none':'';
+});
+
+/* ── Theme switcher ── */
+(function(){
+  const root=document.documentElement;
+  const btns=[...document.querySelectorAll('#themeSwatch button')];
+  function applyTheme(t){
+    root.setAttribute('data-theme',t);
+    btns.forEach(b=>b.classList.toggle('active',b.dataset.t===t));
+    try{localStorage.setItem('gn_theme',t)}catch(e){}
+  }
+  // Restore saved theme on load
+  const saved=localStorage.getItem('gn_theme')||'warm';
+  applyTheme(saved);
+  btns.forEach(b=>b.addEventListener('click',()=>applyTheme(b.dataset.t)));
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+  edge_functions = "netlify/edge-functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[edge_functions]]
+  function = "basic-auth"
+  path = "/*"
+
+# friendly /api/* → functions mapping
+[[redirects]]
+  from = "/api/search"
+  to = "/.netlify/functions/search"
+  status = 200
+
+[[redirects]]
+  from = "/api/jobs/*"
+  to = "/.netlify/functions/jobs/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/watchlist/add"
+  to = "/.netlify/functions/add-background"
+  status = 200
+
+[[redirects]]
+  from = "/api/watchlist/rescan"
+  to = "/.netlify/functions/rescan-background"
+  status = 200
+
+[[redirects]]
+  from = "/api/watchlist"
+  to = "/.netlify/functions/watchlist"
+  status = 200
+
+[[redirects]]
+  from = "/api/watchlist/*"
+  to = "/.netlify/functions/watchlist-delete/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/net/*"
+  to = "/.netlify/functions/net/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/net"
+  to = "/.netlify/functions/net"
+  status = 200

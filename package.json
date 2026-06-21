@@ -1,0 +1,17 @@
+{
+  "name": "gnocchi-screener",
+  "version": "1.0.0",
+  "description": "Gnocchi.website stock watchlist dashboard — Netlify front end + functions",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.40.0",
+    "@netlify/blobs": "^8.1.0"
+  },
+  "devDependencies": {
+    "netlify-cli": "^17.0.0"
+  }
+}
