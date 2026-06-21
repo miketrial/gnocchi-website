@@ -27,7 +27,7 @@
   body{
     background:var(--page);
     color:var(--ink);
-    font:10.5px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font:9.5px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     -webkit-font-smoothing:antialiased;
   }
 
@@ -35,10 +35,10 @@
   #app{max-width:1600px; margin:0 auto; padding:0 0 90px}
 
   header.bar{
-    padding:12px 20px 10px;
+    padding:8px 14px 8px;
     background:linear-gradient(var(--page) 72%, rgba(251,251,252,0));
     transition:opacity .2s ease;
-    display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap;
   }
   .brand{font-size:16px; font-weight:600; color:#4a525e; letter-spacing:.3px}
   .brand .dot{color:#7aa6c2}
@@ -90,11 +90,11 @@
   .card::-webkit-scrollbar-thumb:hover{background:var(--ink-soft)}
   table{border-collapse:collapse; width:max-content; min-width:100%; white-space:nowrap}
   thead th{
-    font-size:8.5px; font-weight:600; text-transform:uppercase; letter-spacing:.4px;
-    color:var(--ink-faint); text-align:left; padding:7px 6px 9px; vertical-align:bottom;
+    font-size:8px; font-weight:600; text-transform:uppercase; letter-spacing:.4px;
+    color:var(--ink-faint); text-align:left; padding:5px 5px 7px; vertical-align:bottom;
   }
-  thead th .sub{display:block; font-weight:400; text-transform:none; letter-spacing:0; color:#c2c7ce; font-size:8px}
-  tbody td{padding:5px 6px; vertical-align:middle; border-top:1px solid #f4f5f7}
+  thead th .sub{display:block; font-weight:400; text-transform:none; letter-spacing:0; color:#c2c7ce; font-size:7.5px}
+  tbody td{padding:3px 5px; vertical-align:middle; border-top:1px solid #f4f5f7}
   tbody tr{transition:background .12s}
   tbody tr:hover{background:#fafbfc}
   tbody tr.flash{background:#eef6fb}
@@ -106,6 +106,14 @@
   tbody tr.drag-blur{filter:blur(1.5px);opacity:0.35;transition:filter .15s,opacity .15s}
   tbody tr.drop-above td{border-top:2px solid #3b82f6!important}
   tbody tr.drop-below td{border-bottom:2px solid #3b82f6!important}
+
+  /* Pin divider row — solid accent-blue line */
+  tr.pin-divider td{padding:0;height:4px;border-top:2px solid rgba(122,166,194,0.4);background:transparent}
+  [data-theme="dark"] tr.pin-divider td{border-top-color:rgba(122,166,194,0.25)}
+  [data-theme="warm"] tr.pin-divider td{border-top-color:rgba(122,166,194,0.35)}
+
+  /* Pinned row indicator — star before sym */
+  tbody tr.pinned .sym::before{content:'★';color:#7aa6c2;margin-right:4px;font-size:9px;vertical-align:middle;line-height:1}
 
   thead th:first-child, tbody td:first-child{padding-left:8px}
   thead th:nth-child(3), tbody td:nth-child(3){padding-left:12px}
@@ -160,15 +168,15 @@
     border-left:1px solid #e4e7eb;
   }
 
-  .idx{color:var(--ink-faint); width:32px; text-align:right}
-  .sym{font-weight:700; color:#4a525e; font-size:11px}
-  .sym .mk{display:inline-block; width:5px; height:5px; border-radius:50%; background:#9fc0d6; margin-right:5px; vertical-align:middle}
-  .name{color:var(--ink-soft); font-size:9.5px; max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; margin-top:1px}
-  .co-cell{max-width:150px; min-width:120px; padding-left:12px}
-  .price-cell{font-size:11px;font-weight:600;color:#464d57;white-space:nowrap;text-align:right}
+  .idx{color:var(--ink-faint); width:26px; text-align:right}
+  .sym{font-weight:700; color:#4a525e; font-size:10px}
+  .sym .mk{display:inline-block; width:4px; height:4px; border-radius:50%; background:#9fc0d6; margin-right:4px; vertical-align:middle}
+  .name{color:var(--ink-soft); font-size:8.5px; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; margin-top:1px}
+  .co-cell{max-width:130px; min-width:100px; padding-left:10px}
+  .price-cell{font-size:10px;font-weight:600;color:#464d57;white-space:nowrap;text-align:right}
 
   /* earnings countdown badge */
-  .earn-badge{display:inline-block;font-size:7.5px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px;vertical-align:middle;background:var(--yel-bg);color:var(--yel-fg);white-space:nowrap}
+  .earn-badge{display:inline-block;font-size:7px;font-weight:700;padding:0 4px;border-radius:4px;margin-left:3px;vertical-align:middle;background:var(--yel-bg);color:var(--yel-fg);white-space:nowrap}
   .earn-badge.soon{background:var(--bad-bg);color:var(--bad-fg)}
 
   /* momentum column values */
@@ -184,19 +192,19 @@
 
   /* 8 check squares (labels now live in the column header, not inside the squares) */
   .checks{display:flex; gap:3px}
-  .chk{ width:26px; height:20px; border-radius:5px; }
+  .chk{ width:22px; height:16px; border-radius:4px; }
   .chk.good{background:var(--good-bg)}
   .chk.bad{background:var(--bad-bg)}
   .chk.na{background:var(--pur-bg)}
   /* checklist column header: diagonal labels aligned over the 8 squares */
-  .chkhdr{display:flex; gap:3px; height:52px; align-items:flex-end; margin-left:13px; margin-top:4px}
-  .chkhdr>span{width:26px; height:44px; display:flex; align-items:flex-end; justify-content:flex-start; overflow:visible; position:relative}
+  .chkhdr{display:flex; gap:2px; height:44px; align-items:flex-end; margin-left:10px; margin-top:4px}
+  .chkhdr>span{width:22px; height:36px; display:flex; align-items:flex-end; justify-content:flex-start; overflow:visible; position:relative}
   .chkhdr>span .hl{display:block; transform:rotate(-45deg); transform-origin:bottom left;
-    white-space:nowrap; font-size:8px; font-weight:600; text-transform:none; letter-spacing:0;
+    white-space:nowrap; font-size:7.5px; font-weight:600; text-transform:none; letter-spacing:0;
     color:var(--ink-faint); padding-bottom:2px}
-  .thlwrap{display:flex; height:52px; align-items:flex-end; justify-content:center; overflow:visible; position:relative}
+  .thlwrap{display:flex; height:44px; align-items:flex-end; justify-content:center; overflow:visible; position:relative}
   .thl{display:block; transform:rotate(-45deg); transform-origin:bottom center;
-    white-space:nowrap; font-size:8px; font-weight:600; text-transform:uppercase; letter-spacing:.4px;
+    white-space:nowrap; font-size:7.5px; font-weight:600; text-transform:uppercase; letter-spacing:.4px;
     color:var(--ink-faint); padding-bottom:3px; line-height:1}
 
   /* sortable column headers */
@@ -217,14 +225,14 @@
   .sec-energy{background:#fee2e2;color:#991b1b}
   .sec-cons{background:#fce7f3;color:#9d174d}
 
-  .score{font-weight:700; font-size:11px; padding:2px 7px; border-radius:6px; text-align:center; cursor:pointer}
+  .score{font-weight:700; font-size:10px; padding:1px 5px; border-radius:5px; text-align:center; cursor:pointer}
   .score:not(.n):hover{opacity:.8}
   .score.g{background:var(--good-bg); color:var(--good-fg)}
   .score.y{background:var(--yel-bg);  color:var(--yel-fg)}
   .score.r{background:var(--bad-bg);  color:var(--bad-fg)}
   .score.na{background:var(--pur-bg); color:var(--pur-fg); cursor:help}
 
-  .pill{padding:2px 6px; border-radius:5px; font-size:9px; font-weight:600}
+  .pill{padding:1px 5px; border-radius:4px; font-size:8.5px; font-weight:600}
   .pill.g{background:var(--good-bg); color:var(--good-fg)}
   .pill.y{background:var(--yel-bg);  color:var(--yel-fg)}
   .pill.r{background:var(--bad-bg);  color:var(--bad-fg)}
@@ -232,7 +240,7 @@
   .pill.x{background:var(--gray-bg); color:var(--gray-fg)}
 
   .num{color:#6b7280; font-variant-numeric:tabular-nums}
-  .txt{color:var(--ink-soft); font-size:9.5px; white-space:normal; max-width:110px; line-height:1.35}
+  .txt{color:var(--ink-soft); font-size:9px; white-space:normal; max-width:100px; line-height:1.3}
   .txt .clamp{
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
   }
@@ -724,7 +732,7 @@
 </div>
 
 <!-- context menu -->
-<div id="ctx"><div id="ctxRescan">Force rescan</div><div class="del" id="ctxDel">Delete row</div></div>
+<div id="ctx"><div id="ctxRescan">Force rescan</div><div id="ctxPin">Pin to top</div><div class="del" id="ctxDel">Delete row</div></div>
 
 <script>
 const app=document.getElementById('app');
@@ -734,6 +742,12 @@ const app=document.getElementById('app');
 const LABELS=['Revenue','Mgn','Con','Debt','Dep','Fct','Dis','Ins'];
 const hoursAgo=h=>new Date(Date.now()-h*3600000).toISOString();
 let dragSrc = null;
+
+/* ---------- pins ---------- */
+let pinnedSyms = new Set(JSON.parse(localStorage.getItem('gn_pins')||'[]'));
+function savePins(){ try{localStorage.setItem('gn_pins',JSON.stringify([...pinnedSyms]));}catch(e){} }
+
+
 function saveWatchlistOrder(){
   try{localStorage.setItem('gn_order',JSON.stringify(watchlist.map(r=>r.sym)));}catch(e){}
 }
@@ -853,7 +867,18 @@ function isUnavailable(reason){
 }
 function renderWatchlist(){
   const tb=document.getElementById('wlBody'); tb.innerHTML='';
-  watchlist.forEach((r,i)=>{
+  // Pinned rows first, then the rest in their existing order
+  const pinned = watchlist.filter(r=>pinnedSyms.has(r.sym));
+  const unpinned = watchlist.filter(r=>!pinnedSyms.has(r.sym));
+  const ordered = [...pinned, ...unpinned];
+  const dividerAt = pinned.length > 0 && unpinned.length > 0 ? pinned.length : -1;
+  ordered.forEach((r,i)=>{
+    if(i===dividerAt){
+      const div=document.createElement('tr'); div.className='pin-divider';
+      const numCols=document.querySelectorAll('thead th').length||18;
+      div.innerHTML=`<td colspan="${numCols}"></td>`;
+      tb.appendChild(div);
+    }
     const reasons=r.reasons||[];
     const checks=(r.v||[]).map((g,k)=>{
       const reason=reasons[k]||LABELS[k];
@@ -863,6 +888,7 @@ function renderWatchlist(){
     const hasNA=reasons.some(isUnavailable);
     const tr=document.createElement('tr');
     tr.dataset.sym=r.sym;
+    if(pinnedSyms.has(r.sym)) tr.classList.add('pinned');
     if(r.scoring) tr.classList.add('scoring');
     else tr.classList.add(hasNA?'sc-na':'sc-'+scoreClass(r.score));
     const scoreEl=r.scoring
@@ -1608,8 +1634,9 @@ function flash(sym){
 /* ---------------- right-click delete ---------------- */
 const ctx=document.getElementById('ctx'); let ctxSym=null;
 document.getElementById('wlBody').addEventListener('contextmenu',e=>{
-  const tr=e.target.closest('tr'); if(!tr) return;
+  const tr=e.target.closest('tr'); if(!tr||tr.classList.contains('pin-divider')) return;
   e.preventDefault(); ctxSym=tr.dataset.sym;
+  document.getElementById('ctxPin').textContent=pinnedSyms.has(ctxSym)?'Unpin':'Pin to top';
   ctx.style.display='block'; ctx.style.left=e.clientX+'px'; ctx.style.top=e.clientY+'px';
 });
 document.getElementById('ctxRescan').onclick=async()=>{
@@ -1647,6 +1674,13 @@ document.getElementById('ctxRescan').onclick=async()=>{
   }else{
     setTimeout(()=>{ stopCheckAnim(sym); row.scoring=false; renderWatchlist(); },1500);
   }
+};
+document.getElementById('ctxPin').onclick=()=>{
+  const sym=ctxSym; ctx.style.display='none';
+  if(pinnedSyms.has(sym)) pinnedSyms.delete(sym);
+  else pinnedSyms.add(sym);
+  savePins();
+  renderWatchlist();
 };
 document.getElementById('ctxDel').onclick=async()=>{
   const sym=ctxSym;
