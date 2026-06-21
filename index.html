@@ -413,6 +413,7 @@
         <button class="btn" id="twToggle">Training Wheels</button>
       </div>
       <div class="rescan-timer" id="rescanTimer"></div>
+      <div style="font-size:10px;color:#8a95a8;margin-top:2px">v1</div>
     </div>
 
     <!-- Pipeline modal -->
@@ -1230,15 +1231,9 @@ function pollJob(jobId){
             showToast(`Rescored ${j.rows.filter(r=>!r.error).length} ticker(s) — scores updated.`);
         }
         // The final job rows already contain the correctly scored data; the display is
-        // already correct at this point. Re-fetching immediately races against blob write
-        // propagation and can overwrite the correct display with stale data.
-        // Delay 4 s to let blob writes settle, then sync to pick up any ordering changes.
-        setTimeout(async()=>{
-          try{
-            const freshWl=await api.get('/api/watchlist');
-            if(Array.isArray(freshWl)&&freshWl.length){watchlist=applyOrder(freshWl);renderWatchlist();}
-          }catch(e){}
-        },4000);
+        // already correct at this point. Re-fetching from the blob immediately (or even
+        // after a short delay) races against Netlify's write propagation and clobbers the
+        // correct display with stale data. Trust the job rows as the source of truth.
       }
     }catch{/* keep polling */}
   },2500);
