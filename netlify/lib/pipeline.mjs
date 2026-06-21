@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getFmpCache, putFmpCache, deleteFmpCache } from "./store.mjs";
+import { getFmpCache, putFmpCache, deleteFmpCache, getLayer2Cache, putLayer2Cache, deleteLayer2Cache } from "./store.mjs";
 
 // Haiku only — used for the 3 event columns that require live web search.
 const GATHER_MODEL = "claude-haiku-4-5";
@@ -828,16 +828,28 @@ export async function scoreTicker(ticker, { knownName, skipCache } = {}) {
   const client  = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const runDate = new Date().toISOString().slice(0, 10);
 
-  const l1a    = await layer1a(ticker, { knownName, skipCache });
-  const layer2 = await gatherLayer2(client, ticker, l1a.company_name, runDate);
-  // Web search returns <cite> tags in summaries — strip all HTML before storing.
+  const l1a = await layer1a(ticker, { knownName, skipCache });
+
+  // Layer 2 (Haiku + web search) is expensive — cache for 7 days.
+  // skipCache (force rescan) evicts and refetches so the user always gets
+  // fresh event data when they explicitly ask for it.
   const stripHtml = s => (s || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-  for (const key of ['contracts', 'departures', 'disruption']) {
-    if (layer2[key]?.summary) layer2[key].summary = stripHtml(layer2[key].summary);
+  let layer2;
+  if (!skipCache) {
+    layer2 = await getLayer2Cache(ticker).catch(() => null);
   }
-  const scoring  = scoreLocally(l1a, layer2, runDate);
+  if (!layer2) {
+    if (skipCache) await deleteLayer2Cache(ticker).catch(() => {});
+    layer2 = await gatherLayer2(client, ticker, l1a.company_name, runDate);
+    for (const key of ['contracts', 'departures', 'disruption']) {
+      if (layer2[key]?.summary) layer2[key].summary = stripHtml(layer2[key].summary);
+    }
+    await putLayer2Cache(ticker, layer2).catch(() => {});
+  }
+
+  const scoring   = scoreLocally(l1a, layer2, runDate);
   const valuation = buildValuation(l1a);
-  const analysis = buildAnalysis(l1a, valuation);
+  const analysis  = buildAnalysis(l1a, valuation);
 
   return toRow(ticker, scoring, valuation, analysis, l1a);
 }

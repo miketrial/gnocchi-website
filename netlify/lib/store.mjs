@@ -1,10 +1,11 @@
 import { getStore } from "@netlify/blobs";
 
 // Three namespaces in Netlify Blobs.
-const watchlistStore = () => getStore("watchlist"); // key = TICKER
-const netStore       = () => getStore("net");       // key = id
-const jobsStore      = () => getStore("jobs");      // key = jobId
-const fmpCacheStore  = () => getStore("fmp-cache"); // key = TICKER, TTL 24h
+const watchlistStore   = () => getStore("watchlist");    // key = TICKER
+const netStore         = () => getStore("net");          // key = id
+const jobsStore        = () => getStore("jobs");         // key = jobId
+const fmpCacheStore    = () => getStore("fmp-cache");    // key = TICKER, TTL 24h
+const layer2CacheStore = () => getStore("layer2-cache"); // key = TICKER, TTL 7d
 
 /* ---------- FMP cache (24h TTL) ---------- */
 const FMP_TTL_MS = 24 * 60 * 60 * 1000;
@@ -18,6 +19,20 @@ export async function putFmpCache(ticker, data) {
 }
 export async function deleteFmpCache(ticker) {
   await fmpCacheStore().delete(ticker.toUpperCase()).catch(() => {});
+}
+
+/* ---------- Layer 2 cache (7-day TTL) ---------- */
+const LAYER2_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export async function getLayer2Cache(ticker) {
+  const entry = await layer2CacheStore().get(ticker.toUpperCase(), { type: "json" }).catch(() => null);
+  if (!entry || !entry.ts || Date.now() - entry.ts > LAYER2_TTL_MS) return null;
+  return entry.data;
+}
+export async function putLayer2Cache(ticker, data) {
+  await layer2CacheStore().setJSON(ticker.toUpperCase(), { ts: Date.now(), data });
+}
+export async function deleteLayer2Cache(ticker) {
+  await layer2CacheStore().delete(ticker.toUpperCase()).catch(() => {});
 }
 
 /* ---------- watchlist ---------- */
