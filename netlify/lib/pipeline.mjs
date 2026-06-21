@@ -356,9 +356,17 @@ async function layer1a(ticker, { knownName } = {}) {
     // derived from the wrong company's raw data. Spreading them would let the wrong
     // company's numbers flow into scoreLocally even though the raw arrays are cleared.
     // All absent fields → undefined → null-safe guards in scoring treat them as null/BAD.
+    //
+    // Use result.company_name (FMP's returned name) rather than knownName here.
+    // This is critical for self-healing: when the blob is poisoned with APLD data and FMP
+    // heals, each ticker gets its own correct name → dedup doesn't fire → bare shells are
+    // written → avg_volume=null forces full rescore next rescan → heals in 2 passes.
+    // If we used knownName (= "Applied Digital Corp" from poisoned blob), all bare shells
+    // would share that name → dedup would fire → no writes → permanent deadlock.
     return {
       _v: 12,
-      company_name:         knownName,
+      _flipGuarded:         true,
+      company_name:         result.company_name,
       price:                null,
       market_cap:           null,
       beta:                 null,
@@ -789,6 +797,7 @@ function toRow(ticker, scoring, valuation, analysis, l1a) {
     avg_volume:         l1a.avg_volume ?? null,
     price_updated_at:   new Date().toISOString(),
     scored_at:          new Date().toISOString(),
+    _flipGuarded:       l1a._flipGuarded ?? false,
   };
 }
 
