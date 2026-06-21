@@ -74,16 +74,24 @@ function nameMismatch(known, fresh) {
 }
 
 /* ---------- Layer 1a: FMP pull — triple-layer validated (v5) ---------- */
-async function layer1a(ticker, { knownName } = {}) {
+async function layer1a(ticker, { knownName, skipCache } = {}) {
   const delay = ms => new Promise(r => setTimeout(r, ms));
 
-  const cached = await getFmpCache(ticker);
-  if (cached && cached._v === 12) {
-    // If we have a known good name, validate the cache entry isn't from a sym-flip
-    if (knownName && cached.company_name && nameMismatch(knownName, cached.company_name)) {
-      await deleteFmpCache(ticker); // evict poisoned entry, fall through to fresh fetch
-    } else {
-      return cached;
+  // A force rescan must bypass the FMP cache entirely. The cache can hold data
+  // poisoned by a prior CDN sym-flip (e.g. Applied Digital served for every
+  // ticker); reading it would make "force rescan" silently serve stale poison
+  // and never hit the healed FMP endpoint. Evict so we refetch fresh below.
+  if (skipCache) {
+    await deleteFmpCache(ticker).catch(() => {});
+  } else {
+    const cached = await getFmpCache(ticker);
+    if (cached && cached._v === 12) {
+      // If we have a known good name, validate the cache entry isn't from a sym-flip
+      if (knownName && cached.company_name && nameMismatch(knownName, cached.company_name)) {
+        await deleteFmpCache(ticker); // evict poisoned entry, fall through to fresh fetch
+      } else {
+        return cached;
+      }
     }
   }
 
@@ -816,11 +824,11 @@ export async function fetchLivePrice(ticker) {
 }
 
 /* ---------- Orchestrate one ticker ---------- */
-export async function scoreTicker(ticker, { knownName } = {}) {
+export async function scoreTicker(ticker, { knownName, skipCache } = {}) {
   const client  = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const runDate = new Date().toISOString().slice(0, 10);
 
-  const l1a    = await layer1a(ticker, { knownName });
+  const l1a    = await layer1a(ticker, { knownName, skipCache });
   const layer2 = await gatherLayer2(client, ticker, l1a.company_name, runDate);
   // Web search returns <cite> tags in summaries — strip all HTML before storing.
   const stripHtml = s => (s || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();

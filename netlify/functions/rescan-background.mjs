@@ -51,11 +51,15 @@ export default async (req) => {
   // caused a deadlock when the blob itself was poisoned with wrong company names:
   // the guard would block the healed FMP data from fixing the stale blob entry.
   // CDN-wide flips are caught by the batch dedup in PASS 2 instead.
+  // A force/single-ticker rescan means "ignore the cache and refetch fresh from
+  // FMP" — otherwise a poisoned cache entry (CDN sym-flip) is served forever and
+  // the healed FMP data never reaches the display or the blob.
+  const skipCache = !!force || !!(onlyTickers && onlyTickers.length);
   const pendingFullWrites = [];
   for (const sym of allTickers) {
     try {
       if (fullTickers.has(sym)) {
-        const row = await scoreTicker(sym);
+        const row = await scoreTicker(sym, { skipCache });
         pendingFullWrites.push({ sym, row });
         rows.push(row);
       } else {
