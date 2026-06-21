@@ -118,6 +118,49 @@ async function runScan({ jobId, force, onlyTickers, clientTickers }) {
     Object.entries(freshNameCount).filter(([, c]) => c > 1).map(([n]) => n)
   );
 
+  // ── PASS 3b: Data-integrity self-check ───────────────────────────────────────
+  // Proactively flag suspicious freshly-scored rows so poisoning / bad data is
+  // caught immediately (a ⚠ on the row) instead of discovered visually days later.
+  // Warnings are attached to the row object BEFORE the write below, so they persist
+  // in the blob and also ride along in the job response the frontend is polling.
+  const PRICE_DIVERGENCE = 0.30; // ±30% vs last known price
+  const SCORE_SWING      = 4;    // |new − old| ≥ 4 points in a single scan
+  const existingBySymAll = Object.fromEntries(existing.map(r => [r.sym, r]));
+  // name → [syms] across the full displayed set (fresh + untouched) to catch
+  // cross-ticker name collisions that the in-batch PASS 2 dedup can miss.
+  const finalNameMap = {};
+  for (const r of rows) {
+    if (r && r.name && r.name !== r.sym) (finalNameMap[r.name] ||= []).push(r.sym);
+  }
+  for (const { sym, row } of pendingFullWrites) {
+    if (freshFlipNames.has(row.name) || row._flipGuarded) continue; // not written → skip
+    const warnings = [];
+    const prev = existingBySymAll[sym];
+
+    const dupSyms = (finalNameMap[row.name] || []).filter(s => s !== sym);
+    if (dupSyms.length) warnings.push(`Company name "${row.name}" also on ${dupSyms.join(", ")} — possible CDN flip`);
+
+    if (prev && prev.price > 0 && row.price > 0) {
+      const ratio = row.price / prev.price;
+      if (ratio > 1 + PRICE_DIVERGENCE || ratio < 1 - PRICE_DIVERGENCE) {
+        const pct = Math.round((ratio - 1) * 100);
+        warnings.push(`Price moved ${pct >= 0 ? "+" : ""}${pct}% since last scan ($${(+prev.price).toFixed(2)} → $${(+row.price).toFixed(2)})`);
+      }
+    }
+
+    const ns = Math.abs(parseInt(row.score)), ps = prev ? Math.abs(parseInt(prev.score)) : NaN;
+    if (!isNaN(ns) && !isNaN(ps) && Math.abs(ns - ps) >= SCORE_SWING) {
+      warnings.push(`Score swung ${ps}/8 → ${ns}/8 in one scan`);
+    }
+
+    if (warnings.length) {
+      row.warnings = warnings;
+      console.warn(`[integrity] ${sym}: ${warnings.join(" | ")}`);
+    } else if (row.warnings) {
+      delete row.warnings; // clear a stale warning from a prior scan
+    }
+  }
+
   // ── PASS 3: Write results, skipping CDN-flipped entries ──────────────────────
   for (const { sym, row } of pendingFullWrites) {
     if (freshFlipNames.has(row.name) || row._flipGuarded) {
