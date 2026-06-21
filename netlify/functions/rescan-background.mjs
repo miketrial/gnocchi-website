@@ -1,5 +1,6 @@
 import { scoreTicker, fetchLivePrice } from "../lib/pipeline.mjs";
 import { listWatchlist, putWatchlistRowWithHistory, patchWatchlistPrice, getWatchlistRow, putJob, deleteFmpCache, acquireRescanLock, releaseRescanLock } from "../lib/store.mjs";
+import { probeFmpHealth } from "../lib/health.mjs";
 
 const STALE_DAYS = 2;
 
@@ -23,6 +24,24 @@ export default async (req) => {
 };
 
 async function runScan({ jobId, force, onlyTickers, clientTickers }) {
+  // Safety gate: before a FULL rescan (the main Rescan button), probe the feed.
+  // If FMP's CDN is actively flipping, abort early — scoring ~24 tickers now would
+  // burn FMP + Haiku quota and risk overwriting good rows with poison. Targeted
+  // single/multi-ticker rescans (right-click) skip the gate: they're explicit and
+  // already protected by the per-ticker name guard + integrity check.
+  const isFullScan = !(onlyTickers && onlyTickers.length);
+  if (isFullScan) {
+    const health = await probeFmpHealth();
+    if (health.status === "flipping") {
+      await putJob(jobId, {
+        status: "error",
+        error: "Rescan blocked — FMP data feed is currently flipping (serving one company for multiple tickers). Wait a few minutes and try again. Click “FMP health” to re-check.",
+        health,
+      });
+      return new Response("", { status: 202 });
+    }
+  }
+
   const existing = await listWatchlist();
 
   // ── Pre-scan: clear FMP cache for any tickers poisoned by a prior CDN sym-flip ──
