@@ -71,6 +71,13 @@
   .rescan-wrap{display:flex; flex-direction:column; align-items:flex-start; gap:3px}
   .rescan-timer{font-size:8px; color:var(--ink-faint); font-variant-numeric:tabular-nums}
 
+  /* AI budget chip */
+  #usageChip{font-size:9px; font-weight:600; padding:4px 9px; border-radius:8px; white-space:nowrap;
+    background:#f3f4f6; color:var(--ink-faint); font-variant-numeric:tabular-nums; display:none}
+  #usageChip.ok{color:#1E8449}
+  #usageChip.warn{background:var(--yel-bg); color:var(--yel-fg)}
+  #usageChip.capped{background:var(--bad-bg); color:var(--bad-fg)}
+
   /* Net link */
   .net-link{
     background:#f3f4f6; border-radius:10px;
@@ -554,6 +561,8 @@
       <button data-t="dark">Dark</button>
       <button data-t="warm">Warm</button>
     </div>
+
+    <div id="usageChip" title="Today's AI research calls vs daily cap"></div>
 
     <div class="net-link" id="navToggle">Net ↗</div>
   </header>
@@ -1165,8 +1174,26 @@ async function init(){
   }catch(e){}
   applySortHeaders();
   render();
+  refreshUsage();
 }
 init();
+
+/* ---------------- AI budget chip ---------------- */
+async function refreshUsage(){
+  const el=document.getElementById('usageChip'); if(!el) return;
+  try{
+    const u=await api.get('/api/usage');
+    if(u&&typeof u.used==='number'){
+      el.style.display='block';
+      el.textContent=`AI ${u.used}/${u.cap}`;
+      const pct=u.cap?u.used/u.cap:0;
+      el.className=u.capped?'capped':pct>=0.8?'warn':'ok';
+      el.title=`Today's AI research calls: ${u.used} of ${u.cap} (≈ $${u.est_cost_usd}). ${u.capped?'Cap reached — Layer 2 paused until tomorrow.':u.remaining+' remaining.'}`;
+    }
+  }catch{ el.style.display='none'; }
+}
+// refresh after any rescan finishes so the count reflects the latest scan
+setInterval(refreshUsage, 60000);
 
 /* ---------------- toast banner ---------------- */
 function showToast(msg, durationMs=4500){
@@ -1246,8 +1273,12 @@ function pollJob(jobId){
       if(j.status==='done'||j.status==='error'){
         clearInterval(t);
         _scanAnims.forEach((_,sym)=>stopCheckAnim(sym)); // stop any remaining
+        refreshUsage();
         rescanBtn.disabled=false;
-        if(j.status==='done'&&j.total===0){
+        if(j.status==='error'){
+          rescanBtn.innerHTML='⟳ Rescan';
+          showToast(j.error||'Rescan failed — try again.');
+        }else if(j.status==='done'&&j.total===0){
           rescanBtn.innerHTML='✓ All fresh';
           showToast('All tickers scored within 48 h — Shift+click ⟳ to force a full refresh, or right-click a row.');
           setTimeout(()=>{rescanBtn.innerHTML='⟳ Rescan';},3000);
@@ -1664,11 +1695,12 @@ document.getElementById('ctxRescan').onclick=async()=>{
           if(fresh.name&&fresh.sym&&fresh.sym.toUpperCase()!==sym.toUpperCase()) row.name=origName;
         }
         row.scoring=false; clearInterval(t);
-        renderWatchlist(); flash(sym);
+        renderWatchlist(); flash(sym); refreshUsage();
         showToast(`${sym} rescored — ${row.score} (score updated)`);
       } else if(j.status==='error'){
         stopCheckAnim(sym);
         row.scoring=false; clearInterval(t); renderWatchlist();
+        showToast(j.error||`${sym} rescan failed.`);
       }
     },3000);
   }else{
