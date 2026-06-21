@@ -65,13 +65,13 @@ export default async (req) => {
         const storedRow = cleanRows.find(r => r.sym === sym);
         const row = await scoreTicker(sym, { knownName: storedRow?.name });
         pendingFullWrites.push({ sym, row });
-        // _flipGuarded means nameMismatch fired: the row has null financials and a bare shell.
-        // Show the old stored data in the interim display instead of the bare shell, so the
-        // user sees their correct last-known data rather than a confusing name/score change
-        // during the scan window.
+        // _flipGuarded means the stored company name didn't match what FMP returned.
+        // Push a bare { sym } placeholder so the old (potentially poisoned) stored data
+        // doesn't merge into the display. The bare shell will be written to the blob in
+        // PASS 3 with the correct FMP company name, which breaks the deadlock on the next
+        // rescan.
         if (row._flipGuarded) {
-          const displayRow = allRows.find(r => r.sym === sym) || { sym };
-          rows.push(displayRow);
+          rows.push({ sym });
         } else {
           rows.push(row);
         }
@@ -99,13 +99,19 @@ export default async (req) => {
     Object.entries(freshNameCount).filter(([, c]) => c > 1).map(([n]) => n)
   );
 
-  // ── PASS 3: Write results, skipping CDN-flipped and name-guarded entries ──────
+  // ── PASS 3: Write results ─────────────────────────────────────────────────────
   for (const { sym, row } of pendingFullWrites) {
-    if (freshFlipNames.has(row.name) || row._flipGuarded) {
-      // Either the batch dedup detected a CDN-wide flip, or the individual nameMismatch
-      // guard fired for this ticker. Either way: wipe FMP cache so the next rescan
-      // refetches fresh, but do NOT write to the watchlist blob — preserve whatever
-      // correct data was already there.
+    if (freshFlipNames.has(row.name)) {
+      // CDN-wide flip: multiple tickers got the same company name this batch.
+      // Don't write — preserve whatever was in the blob before this scan.
+      await deleteFmpCache(sym).catch(() => {});
+    } else if (row._flipGuarded) {
+      // Individual name mismatch: stored name ≠ FMP name, but FMP returned a unique
+      // name (not a CDN-wide flip). The stored name is likely stale/poisoned from a
+      // prior flip. Write the bare shell so the blob gets the correct company name
+      // (row.name = result.company_name from FMP). Next rescan will see the right name,
+      // skip the guard, and write the full score.
+      await putWatchlistRowWithHistory(sym, row);
       await deleteFmpCache(sym).catch(() => {});
     } else {
       await putWatchlistRowWithHistory(sym, row);
