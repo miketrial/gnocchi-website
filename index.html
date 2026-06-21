@@ -107,6 +107,24 @@
   tbody tr.drop-above td{border-top:2px solid #3b82f6!important}
   tbody tr.drop-below td{border-bottom:2px solid #3b82f6!important}
 
+  /* Compact mode — toggled by .compact on <body> */
+  body.compact tbody td{padding:2px 4px}
+  body.compact .chk{height:14px}
+  body.compact .checked{display:none}
+  body.compact .name{display:none}
+  body.compact .earn-badge{display:none}
+  body.compact .txt .clamp{-webkit-line-clamp:1}
+  body.compact .sec{display:none}
+  .btn.btn-active{background:#e0eaff;color:#2251cc}
+
+  /* Pin divider row */
+  tr.pin-divider td{padding:0;height:3px;border-top:2px dashed #dde2e8;background:transparent}
+  [data-theme="dark"] tr.pin-divider td{border-top-color:#2e323c}
+  [data-theme="warm"] tr.pin-divider td{border-top-color:#d4ccc4}
+
+  /* Pinned row indicator */
+  tbody tr.pinned .sym::before{content:'·';color:#7aa6c2;margin-right:3px;font-weight:900;font-size:14px;vertical-align:middle}
+
   thead th:first-child, tbody td:first-child{padding-left:8px}
   thead th:nth-child(3), tbody td:nth-child(3){padding-left:12px}
   thead th:last-child,  tbody td:last-child {padding-right:20px}
@@ -542,6 +560,8 @@
       </div>
     </div>
 
+    <button id="compactBtn" class="btn" title="Toggle compact rows">⊟ Compact</button>
+
     <div id="themeSwatch">
       <button data-t="dark">Dark</button>
       <button data-t="warm">Warm</button>
@@ -724,7 +744,7 @@
 </div>
 
 <!-- context menu -->
-<div id="ctx"><div id="ctxRescan">Force rescan</div><div class="del" id="ctxDel">Delete row</div></div>
+<div id="ctx"><div id="ctxRescan">Force rescan</div><div id="ctxPin">Pin to top</div><div class="del" id="ctxDel">Delete row</div></div>
 
 <script>
 const app=document.getElementById('app');
@@ -734,6 +754,27 @@ const app=document.getElementById('app');
 const LABELS=['Revenue','Mgn','Con','Debt','Dep','Fct','Dis','Ins'];
 const hoursAgo=h=>new Date(Date.now()-h*3600000).toISOString();
 let dragSrc = null;
+
+/* ---------- pins ---------- */
+let pinnedSyms = new Set(JSON.parse(localStorage.getItem('gn_pins')||'[]'));
+function savePins(){ try{localStorage.setItem('gn_pins',JSON.stringify([...pinnedSyms]));}catch(e){} }
+
+/* ---------- compact mode ---------- */
+(function(){
+  const saved = localStorage.getItem('gn_compact')==='1';
+  if(saved) document.body.classList.add('compact');
+})();
+document.getElementById('compactBtn').addEventListener('click',()=>{
+  const on = document.body.classList.toggle('compact');
+  document.getElementById('compactBtn').classList.toggle('btn-active', on);
+  try{localStorage.setItem('gn_compact', on?'1':'0');}catch(e){}
+});
+// sync button state on load
+(function(){
+  if(document.body.classList.contains('compact'))
+    document.getElementById('compactBtn').classList.add('btn-active');
+})();
+
 function saveWatchlistOrder(){
   try{localStorage.setItem('gn_order',JSON.stringify(watchlist.map(r=>r.sym)));}catch(e){}
 }
@@ -853,7 +894,18 @@ function isUnavailable(reason){
 }
 function renderWatchlist(){
   const tb=document.getElementById('wlBody'); tb.innerHTML='';
-  watchlist.forEach((r,i)=>{
+  // Pinned rows first, then the rest in their existing order
+  const pinned = watchlist.filter(r=>pinnedSyms.has(r.sym));
+  const unpinned = watchlist.filter(r=>!pinnedSyms.has(r.sym));
+  const ordered = [...pinned, ...unpinned];
+  const dividerAt = pinned.length > 0 && unpinned.length > 0 ? pinned.length : -1;
+  ordered.forEach((r,i)=>{
+    if(i===dividerAt){
+      const div=document.createElement('tr'); div.className='pin-divider';
+      const numCols=document.querySelectorAll('thead th').length||18;
+      div.innerHTML=`<td colspan="${numCols}"></td>`;
+      tb.appendChild(div);
+    }
     const reasons=r.reasons||[];
     const checks=(r.v||[]).map((g,k)=>{
       const reason=reasons[k]||LABELS[k];
@@ -863,6 +915,7 @@ function renderWatchlist(){
     const hasNA=reasons.some(isUnavailable);
     const tr=document.createElement('tr');
     tr.dataset.sym=r.sym;
+    if(pinnedSyms.has(r.sym)) tr.classList.add('pinned');
     if(r.scoring) tr.classList.add('scoring');
     else tr.classList.add(hasNA?'sc-na':'sc-'+scoreClass(r.score));
     const scoreEl=r.scoring
@@ -1608,8 +1661,9 @@ function flash(sym){
 /* ---------------- right-click delete ---------------- */
 const ctx=document.getElementById('ctx'); let ctxSym=null;
 document.getElementById('wlBody').addEventListener('contextmenu',e=>{
-  const tr=e.target.closest('tr'); if(!tr) return;
+  const tr=e.target.closest('tr'); if(!tr||tr.classList.contains('pin-divider')) return;
   e.preventDefault(); ctxSym=tr.dataset.sym;
+  document.getElementById('ctxPin').textContent=pinnedSyms.has(ctxSym)?'Unpin':'Pin to top';
   ctx.style.display='block'; ctx.style.left=e.clientX+'px'; ctx.style.top=e.clientY+'px';
 });
 document.getElementById('ctxRescan').onclick=async()=>{
@@ -1647,6 +1701,13 @@ document.getElementById('ctxRescan').onclick=async()=>{
   }else{
     setTimeout(()=>{ stopCheckAnim(sym); row.scoring=false; renderWatchlist(); },1500);
   }
+};
+document.getElementById('ctxPin').onclick=()=>{
+  const sym=ctxSym; ctx.style.display='none';
+  if(pinnedSyms.has(sym)) pinnedSyms.delete(sym);
+  else pinnedSyms.add(sym);
+  savePins();
+  renderWatchlist();
 };
 document.getElementById('ctxDel').onclick=async()=>{
   const sym=ctxSym;
