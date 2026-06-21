@@ -1,5 +1,5 @@
 import { scoreTicker, fetchLivePrice } from "../lib/pipeline.mjs";
-import { listWatchlist, putWatchlistRowWithHistory, patchWatchlistPrice, getWatchlistRow, putJob, deleteWatchlistRow, deleteFmpCache } from "../lib/store.mjs";
+import { listWatchlist, putWatchlistRowWithHistory, patchWatchlistPrice, getWatchlistRow, putJob, deleteFmpCache } from "../lib/store.mjs";
 
 const STALE_DAYS = 2;
 
@@ -9,10 +9,10 @@ export default async (req) => {
 
   const existing = await listWatchlist();
 
-  // ── Pre-scan: wipe watchlist entries poisoned by a previous CDN sym-flip ──────
-  // If multiple tickers share the same company name in the stored watchlist, a prior
-  // bad rescan overwrote them all with one wrong company's data. Delete those entries
-  // and their FMP cache entries so this scan forces fresh fetches for them.
+  // ── Pre-scan: clear FMP cache for any tickers poisoned by a prior CDN sym-flip ──
+  // If multiple tickers share the same company name in the blob, a prior bad rescan
+  // wrote one wrong company's data for all of them. Clear their FMP cache so this
+  // scan fetches fresh data rather than serving the poisoned cache entry.
   const existingNameCount = {};
   for (const r of existing) {
     const n = r.name;
@@ -21,16 +21,9 @@ export default async (req) => {
   const watchlistPoisonedNames = new Set(
     Object.entries(existingNameCount).filter(([, c]) => c > 1).map(([n]) => n)
   );
-  const wipedSyms = new Set();
   if (watchlistPoisonedNames.size > 0) {
     const poisonedRows = existing.filter(r => watchlistPoisonedNames.has(r.name));
-    for (const r of poisonedRows) wipedSyms.add(r.sym);
-    await Promise.all(
-      poisonedRows.flatMap(r => [
-        deleteWatchlistRow(r.sym).catch(() => {}),
-        deleteFmpCache(r.sym).catch(() => {}),
-      ])
-    );
+    await Promise.all(poisonedRows.map(r => deleteFmpCache(r.sym).catch(() => {})));
   }
 
   const storedSyms = new Set(existing.map(r => r.sym));
@@ -38,9 +31,6 @@ export default async (req) => {
     .filter(sym => !storedSyms.has(sym))
     .map(sym => ({ sym }));
   const allRows = [...existing, ...extraRows];
-
-  // For storedRow lookups, exclude wiped entries so knownName isn't also poisoned.
-  const cleanRows = allRows.filter(r => !wipedSyms.has(r.sym));
 
   const cutoff = Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000;
 
@@ -57,12 +47,19 @@ export default async (req) => {
   await putJob(jobId, { status: "running", total, completed: 0, rows });
 
   // ── PASS 1: Score all tickers; collect full-rescore rows without writing yet ──
+  // Trust FMP data directly — the individual knownName guard was removed because it
+  // caused a deadlock when the blob itself was poisoned with wrong company names:
+  // the guard would block the healed FMP data from fixing the stale blob entry.
+  // CDN-wide flips are caught by the batch dedup in PASS 2 instead.
+  // A force/single-ticker rescan means "ignore the cache and refetch fresh from
+  // FMP" — otherwise a poisoned cache entry (CDN sym-flip) is served forever and
+  // the healed FMP data never reaches the display or the blob.
+  const skipCache = !!force || !!(onlyTickers && onlyTickers.length);
   const pendingFullWrites = [];
   for (const sym of allTickers) {
     try {
       if (fullTickers.has(sym)) {
-        const storedRow = cleanRows.find(r => r.sym === sym);
-        const row = await scoreTicker(sym, { knownName: storedRow?.name });
+        const row = await scoreTicker(sym, { skipCache });
         pendingFullWrites.push({ sym, row });
         rows.push(row);
       } else {
@@ -92,16 +89,15 @@ export default async (req) => {
   // ── PASS 3: Write results, skipping CDN-flipped entries ──────────────────────
   for (const { sym, row } of pendingFullWrites) {
     if (freshFlipNames.has(row.name)) {
-      // CDN still flipping for this ticker: wipe FMP cache so next rescan refetches,
-      // but do NOT write this poisoned row to the watchlist.
+      // Batch dedup detected a CDN-wide flip — don't write stale data.
       await deleteFmpCache(sym).catch(() => {});
     } else {
       await putWatchlistRowWithHistory(sym, row);
     }
   }
 
-  // Replace CDN-flipped rows in the job response with { sym } placeholders so
-  // the frontend doesn't display the wrong company's data.
+  // Replace CDN-flipped rows in the final job response with { sym } placeholders
+  // so the frontend doesn't display the wrong company's data in the post-scan view.
   if (freshFlipNames.size > 0) {
     for (let i = 0; i < rows.length; i++) {
       if (rows[i].name && freshFlipNames.has(rows[i].name)) {

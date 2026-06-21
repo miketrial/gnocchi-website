@@ -74,16 +74,24 @@ function nameMismatch(known, fresh) {
 }
 
 /* ---------- Layer 1a: FMP pull — triple-layer validated (v5) ---------- */
-async function layer1a(ticker, { knownName } = {}) {
+async function layer1a(ticker, { knownName, skipCache } = {}) {
   const delay = ms => new Promise(r => setTimeout(r, ms));
 
-  const cached = await getFmpCache(ticker);
-  if (cached && cached._v === 12) {
-    // If we have a known good name, validate the cache entry isn't from a sym-flip
-    if (knownName && cached.company_name && nameMismatch(knownName, cached.company_name)) {
-      await deleteFmpCache(ticker); // evict poisoned entry, fall through to fresh fetch
-    } else {
-      return cached;
+  // A force rescan must bypass the FMP cache entirely. The cache can hold data
+  // poisoned by a prior CDN sym-flip (e.g. Applied Digital served for every
+  // ticker); reading it would make "force rescan" silently serve stale poison
+  // and never hit the healed FMP endpoint. Evict so we refetch fresh below.
+  if (skipCache) {
+    await deleteFmpCache(ticker).catch(() => {});
+  } else {
+    const cached = await getFmpCache(ticker);
+    if (cached && cached._v === 12) {
+      // If we have a known good name, validate the cache entry isn't from a sym-flip
+      if (knownName && cached.company_name && nameMismatch(knownName, cached.company_name)) {
+        await deleteFmpCache(ticker); // evict poisoned entry, fall through to fresh fetch
+      } else {
+        return cached;
+      }
     }
   }
 
@@ -356,9 +364,17 @@ async function layer1a(ticker, { knownName } = {}) {
     // derived from the wrong company's raw data. Spreading them would let the wrong
     // company's numbers flow into scoreLocally even though the raw arrays are cleared.
     // All absent fields → undefined → null-safe guards in scoring treat them as null/BAD.
+    //
+    // Use result.company_name (FMP's returned name) rather than knownName here.
+    // This is critical for self-healing: when the blob is poisoned with APLD data and FMP
+    // heals, each ticker gets its own correct name → dedup doesn't fire → bare shells are
+    // written → avg_volume=null forces full rescore next rescan → heals in 2 passes.
+    // If we used knownName (= "Applied Digital Corp" from poisoned blob), all bare shells
+    // would share that name → dedup would fire → no writes → permanent deadlock.
     return {
       _v: 12,
-      company_name:         knownName,
+      _flipGuarded:         true,
+      company_name:         result.company_name,
       price:                null,
       market_cap:           null,
       beta:                 null,
@@ -789,6 +805,7 @@ function toRow(ticker, scoring, valuation, analysis, l1a) {
     avg_volume:         l1a.avg_volume ?? null,
     price_updated_at:   new Date().toISOString(),
     scored_at:          new Date().toISOString(),
+    _flipGuarded:       l1a._flipGuarded ?? false,
   };
 }
 
@@ -807,11 +824,11 @@ export async function fetchLivePrice(ticker) {
 }
 
 /* ---------- Orchestrate one ticker ---------- */
-export async function scoreTicker(ticker, { knownName } = {}) {
+export async function scoreTicker(ticker, { knownName, skipCache } = {}) {
   const client  = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const runDate = new Date().toISOString().slice(0, 10);
 
-  const l1a    = await layer1a(ticker, { knownName });
+  const l1a    = await layer1a(ticker, { knownName, skipCache });
   const layer2 = await gatherLayer2(client, ticker, l1a.company_name, runDate);
   // Web search returns <cite> tags in summaries — strip all HTML before storing.
   const stripHtml = s => (s || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();

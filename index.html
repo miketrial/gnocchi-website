@@ -413,6 +413,7 @@
         <button class="btn" id="twToggle">Training Wheels</button>
       </div>
       <div class="rescan-timer" id="rescanTimer"></div>
+      <div style="font-size:10px;color:#8a95a8;margin-top:2px">v4</div>
     </div>
 
     <!-- Pipeline modal -->
@@ -1118,7 +1119,7 @@ function render(){renderWatchlist();renderNet();}
 /* ---------------- API layer (graceful fallback to seed data) ---------------- */
 let API_LIVE=false;
 const api={
-  async get(u){const r=await fetch(u);if(!r.ok)throw 0;return r.json();},
+  async get(u){const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw 0;return r.json();},
   async send(u,m,b){const r=await fetch(u,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});if(!r.ok&&r.status!==202)throw 0;return r;},
 };
 async function init(){
@@ -1229,13 +1230,10 @@ function pollJob(jobId){
           if(j.rows&&j.rows.filter(r=>!r.error).length>0)
             showToast(`Rescored ${j.rows.filter(r=>!r.error).length} ticker(s) — scores updated.`);
         }
-        // Re-fetch from the blob store (authoritative) so the display always reflects
-        // what was actually written — not the job's interim rows, which may contain
-        // stale data from mid-scan or CDN-flip placeholders.
-        try{
-          const freshWl=await api.get('/api/watchlist');
-          if(Array.isArray(freshWl)&&freshWl.length){watchlist=applyOrder(freshWl);renderWatchlist();}
-        }catch(e){}
+        // The final job rows already contain the correctly scored data; the display is
+        // already correct at this point. Re-fetching from the blob immediately (or even
+        // after a short delay) races against Netlify's write propagation and clobbers the
+        // correct display with stale data. Trust the job rows as the source of truth.
       }
     }catch{/* keep polling */}
   },2500);
@@ -1627,10 +1625,16 @@ document.getElementById('ctxRescan').onclick=async()=>{
       if(!j) return;
       if(j.status==='done'){
         stopCheckAnim(sym);
-        if(j.rows&&j.rows[0]){
+        // The background scan returns ALL watchlist rows, not just the one we
+        // requested — the others come back as their stored rows. Pick the row
+        // that actually matches this ticker; never blindly take j.rows[0]
+        // (that would stamp whichever company is listed first onto this row).
+        const fresh=(j.rows||[]).find(r=>r.sym&&r.sym.toUpperCase()===sym.toUpperCase());
+        if(fresh&&!fresh.error){
           const origName=row.name;
-          Object.assign(row,j.rows[0]); row.sym=sym;
-          if(j.rows[0].sym&&j.rows[0].sym.toUpperCase()!==sym.toUpperCase()) row.name=origName;
+          Object.assign(row,fresh); row.sym=sym;
+          // If FMP returned a different company name (sym-flip), keep our name.
+          if(fresh.name&&fresh.sym&&fresh.sym.toUpperCase()!==sym.toUpperCase()) row.name=origName;
         }
         row.scoring=false; clearInterval(t);
         renderWatchlist(); flash(sym);
