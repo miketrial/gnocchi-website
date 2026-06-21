@@ -1229,13 +1229,16 @@ function pollJob(jobId){
           if(j.rows&&j.rows.filter(r=>!r.error).length>0)
             showToast(`Rescored ${j.rows.filter(r=>!r.error).length} ticker(s) — scores updated.`);
         }
-        // Re-fetch from the blob store (authoritative) so the display always reflects
-        // what was actually written — not the job's interim rows, which may contain
-        // stale data from mid-scan or CDN-flip placeholders.
-        try{
-          const freshWl=await api.get('/api/watchlist');
-          if(Array.isArray(freshWl)&&freshWl.length){watchlist=applyOrder(freshWl);renderWatchlist();}
-        }catch(e){}
+        // The final job rows already contain the correctly scored data; the display is
+        // already correct at this point. Re-fetching immediately races against blob write
+        // propagation and can overwrite the correct display with stale data.
+        // Delay 4 s to let blob writes settle, then sync to pick up any ordering changes.
+        setTimeout(async()=>{
+          try{
+            const freshWl=await api.get('/api/watchlist');
+            if(Array.isArray(freshWl)&&freshWl.length){watchlist=applyOrder(freshWl);renderWatchlist();}
+          }catch(e){}
+        },4000);
       }
     }catch{/* keep polling */}
   },2500);
