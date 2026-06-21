@@ -1,5 +1,5 @@
 import { scoreTicker, fetchLivePrice } from "../lib/pipeline.mjs";
-import { listWatchlist, putWatchlistRowWithHistory, patchWatchlistPrice, getWatchlistRow, putJob, deleteFmpCache } from "../lib/store.mjs";
+import { listWatchlist, putWatchlistRowWithHistory, patchWatchlistPrice, getWatchlistRow, putJob, deleteFmpCache, acquireRescanLock, releaseRescanLock } from "../lib/store.mjs";
 
 const STALE_DAYS = 2;
 
@@ -7,6 +7,22 @@ export default async (req) => {
   const { jobId, force, tickers: onlyTickers, clientTickers } = await req.json().catch(() => ({}));
   if (!jobId) return new Response("Missing jobId", { status: 400 });
 
+  // Concurrency guard: refuse to start if another rescan is already running.
+  // Stacked parallel scans are the main cause of runaway FMP/Anthropic cost.
+  const gotLock = await acquireRescanLock(jobId);
+  if (!gotLock) {
+    await putJob(jobId, { status: "error", error: "A rescan is already in progress — try again in a moment." });
+    return new Response("", { status: 202 });
+  }
+
+  try {
+    return await runScan({ jobId, force, onlyTickers, clientTickers });
+  } finally {
+    await releaseRescanLock(jobId);
+  }
+};
+
+async function runScan({ jobId, force, onlyTickers, clientTickers }) {
   const existing = await listWatchlist();
 
   // ── Pre-scan: clear FMP cache for any tickers poisoned by a prior CDN sym-flip ──
@@ -128,4 +144,4 @@ export default async (req) => {
 
   await putJob(jobId, { status: "done", total, completed: rows.length, rows });
   return new Response("", { status: 202 });
-};
+}
