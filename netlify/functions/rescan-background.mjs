@@ -41,6 +41,14 @@ export default async (req) => {
       : allRows.filter(r => !r.scored_at || new Date(r.scored_at).getTime() < cutoff || r.avg_volume == null);
   const fullTickers = new Set(fullPool.map(r => r.sym));
 
+  // Self-heal: any ticker whose stored company name is shared with another ticker
+  // is poisoned (a prior CDN sym-flip wrote one company's data onto many rows).
+  // Force a full re-score for these regardless of staleness — otherwise a plain
+  // rescan skips them (their timestamp is recent) and the poison never clears.
+  for (const r of existing) {
+    if (watchlistPoisonedNames.has(r.name)) fullTickers.add(r.sym);
+  }
+
   const allTickers = allRows.map(r => r.sym);
   const total = allTickers.length;
   const rows = [];
