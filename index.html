@@ -462,6 +462,39 @@
 [data-theme="white"] #themeSwatch button,
 [data-theme="white"] #themeSwatch button:not(.active){background:#fff;color:#000;border:1px solid #000;border-radius:0;padding:8px 15px;font-size:11px;font-weight:600;opacity:1}
 [data-theme="white"] #themeSwatch button.active{background:#000;color:#fff;border-color:#000;opacity:1}
+
+/* ── Mobile: shrink text + hide lower-value columns ──────────────────── */
+@media (max-width: 700px){
+  tbody td{padding:2px 3px}
+  thead th{padding:4px 3px 5px}
+  .sym{font-size:8.5px}
+  .name{font-size:7px; max-width:90px}
+  .price-cell{font-size:8.5px}
+  .num{font-size:8.5px}
+  .score{font-size:8.5px; padding:1px 4px}
+  .pill{font-size:8px}
+  .sec{font-size:6px}
+  .checks .chk{width:7px; height:10px}
+  thead th{font-size:8px}
+  thead th .sub{font-size:6.5px}
+  thead tr.grphdr th{font-size:6.5px}
+  td.ar-col, th.ar-col{font-size:7.5px; max-width:60px; width:60px}
+  td.txt .clamp{font-size:7.5px}
+  .earn-badge{font-size:6px}
+  .rescan-timer{font-size:7px}
+  .checks{gap:2px}
+  /* Hide: P/E 5yr (9), Catalysts (13), Beta (16), Rel Vol (17) */
+  thead tr:nth-child(2) th:nth-child(9),
+  thead tr:nth-child(2) th:nth-child(13),
+  thead tr:nth-child(2) th:nth-child(16),
+  thead tr:nth-child(2) th:nth-child(17),
+  tbody td:nth-child(9),
+  tbody td:nth-child(13),
+  tbody td:nth-child(16),
+  tbody td:nth-child(17){display:none}
+  /* Drop Momentum group header entirely */
+  thead tr.grphdr th:last-child{display:none}
+}
 [data-theme="white"] .net-link{color:#000;font-weight:600}
 [data-theme="white"] #usageChip,[data-theme="white"] #usageChip.ok,[data-theme="white"] #usageChip.warn,[data-theme="white"] #usageChip.capped{color:#000}
 [data-theme="white"] .rescan-timer{color:#000}
