@@ -41,8 +41,9 @@
     padding:8px 14px 8px;
     background:linear-gradient(var(--page) 72%, rgba(251,251,252,0));
     transition:opacity .2s ease;
-    display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap;
   }
+  header.bar > *:not(.rescan-wrap){margin-top:0}
   .brand{font-size:16px; font-weight:600; color:#4a525e; letter-spacing:.3px}
   .brand .dot{color:#7aa6c2}
   .grow{flex:1}
