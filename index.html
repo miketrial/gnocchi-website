@@ -765,7 +765,13 @@ let dragSrc = null;
 
 /* ---------- pins ---------- */
 let pinnedSyms = new Set(JSON.parse(localStorage.getItem('gn_pins')||'[]'));
-function savePins(){ try{localStorage.setItem('gn_pins',JSON.stringify([...pinnedSyms]));}catch(e){} }
+function savePins(){
+  // localStorage is the instant local cache + offline fallback…
+  try{localStorage.setItem('gn_pins',JSON.stringify([...pinnedSyms]));}catch(e){}
+  // …and the blob is the cross-device source of truth.
+  if(typeof API_LIVE!=='undefined' && API_LIVE)
+    api.send('/api/pins','PUT',{pins:[...pinnedSyms]}).catch(()=>{});
+}
 
 
 function saveWatchlistOrder(){
@@ -1175,6 +1181,20 @@ async function init(){
     if(Array.isArray(wl)&&wl.length) watchlist=applyOrder(wl);
     const nt=await api.get('/api/net').catch(()=>[]);
     if(Array.isArray(nt)&&nt.length) net=nt;
+    // Pins live server-side (cross-device). If the server has a record, it wins
+    // over the local cache; mirror it back to localStorage for offline use.
+    try{
+      const pr=await api.get('/api/pins');
+      if(pr&&Array.isArray(pr.pins)){
+        if(pr.pins.length===0 && pinnedSyms.size>0){
+          // Server has no record yet but we have local pins → migrate them up.
+          api.send('/api/pins','PUT',{pins:[...pinnedSyms]}).catch(()=>{});
+        }else{
+          pinnedSyms=new Set(pr.pins);
+          try{localStorage.setItem('gn_pins',JSON.stringify(pr.pins));}catch(e){}
+        }
+      }
+    }catch(e){/* keep localStorage pins */}
   }catch{ API_LIVE=false; /* offline / static open → keep seed data */ }
   try{
     const saved=JSON.parse(localStorage.getItem('gn_sort')||'null');

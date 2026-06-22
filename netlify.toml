@@ -27,6 +27,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/pins"
+  to = "/.netlify/functions/pins"
+  status = 200
+
+[[redirects]]
   from = "/api/jobs/*"
   to = "/.netlify/functions/jobs/:splat"
   status = 200

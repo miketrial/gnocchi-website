@@ -8,6 +8,7 @@ const fmpCacheStore    = () => getStore("fmp-cache");    // key = TICKER, TTL 24
 const layer2CacheStore = () => getStore("layer2-cache"); // key = TICKER, TTL 7d
 const lockStore        = () => getStore("locks");        // key = lock name
 const usageStore       = () => getStore("usage");        // key = haiku-<YYYY-MM-DD>
+const settingsStore    = () => getStore("settings");     // key = setting name
 
 /* ---------- FMP cache (24h TTL) ---------- */
 const FMP_TTL_MS = 24 * 60 * 60 * 1000;
@@ -73,6 +74,19 @@ export async function incrHaikuUsage() {
   const count = (cur?.count || 0) + 1;
   await usageStore().setJSON(k, { count, updated: Date.now() }).catch(() => {});
   return count;
+}
+
+/* ---------- Pinned tickers (server-side, shared across devices) ---------- */
+export async function getPins() {
+  const v = await settingsStore().get("pins", { type: "json" }).catch(() => null);
+  return Array.isArray(v?.pins) ? v.pins : [];
+}
+export async function setPins(pins) {
+  const clean = Array.isArray(pins)
+    ? [...new Set(pins.filter(s => typeof s === "string" && s).map(s => s.toUpperCase()))]
+    : [];
+  await settingsStore().setJSON("pins", { pins: clean, updated: Date.now() });
+  return clean;
 }
 
 /* ---------- Watchlist row schema validation / normalization ----------
