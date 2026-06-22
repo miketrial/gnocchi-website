@@ -181,7 +181,6 @@
 
   .idx{color:var(--ink-faint); width:26px; text-align:right}
   .sym{font-weight:700; color:#4a525e; font-size:10px}
-  .sym .mk{display:inline-block; width:4px; height:4px; border-radius:50%; background:#9fc0d6; margin-right:4px; vertical-align:middle}
   .name{color:var(--ink-soft); font-size:8.5px; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; margin-top:1px}
   .co-cell{max-width:130px; min-width:100px; padding-left:10px}
   .price-cell{font-size:10px;font-weight:600;color:#464d57;white-space:nowrap;text-align:right}
@@ -617,6 +616,9 @@
       <span><b style="background:var(--yel-bg);color:var(--yel-fg)">→</b><span style="color:var(--yel-fg);font-weight:600">Steady</span> · mixed or flat trajectory</span>
       <span><b style="background:var(--bad-bg);color:var(--bad-fg)">↓</b><span style="color:var(--bad-fg);font-weight:600">Downward</span> · declining metrics</span>
       <span><b style="background:var(--pur-bg);color:var(--pur-fg)">?</b><span style="color:var(--pur-fg);font-weight:600">Purple</span> · data unavailable — rescan to refresh</span>
+      <div class="ttl" style="margin-top:10px">Row markers</div>
+      <span><b style="background:transparent;color:#7aa6c2">★</b><span style="color:#7aa6c2;font-weight:600">Pinned</span> · kept at the top — right-click a row to pin/unpin</span>
+      <span><b style="background:var(--bad-bg);color:var(--bad-fg)">⚠</b><span style="color:var(--bad-fg);font-weight:600">Warning</span> · data looks suspicious this scan — hover it to see why</span>
     </div>
 
   <!-- ===== NET VIEW ===== -->
@@ -680,7 +682,7 @@
         <tr class="sc-g">
           <td class="idx">1.</td>
           <td class="co-cell">
-            <span class="sym"><span class="mk"></span>NVDA</span><span class="warn-badge" data-tw="integrity" style="opacity:.55">⚠</span><span class="sec sec-semi">Semis</span>
+            <span class="sym">NVDA</span><span class="warn-badge" data-tw="integrity" style="opacity:.55">⚠</span><span class="sec sec-semi">Semis</span>
             <span class="name">NVIDIA Corp</span>
             <div class="checked fresh">Example stock · Training Wheels</div>
           </td>
@@ -927,8 +929,8 @@ function renderWatchlist(){
     const betaStr=r.beta!=null?r.beta.toFixed(1):null;
     const betaClass=r.beta>=2?'mom-hi':r.beta>=1?'':'mom-lo';
     const coCell=r.scoring
-      ?`<td class="co-cell"><span class="sym" style="opacity:0.3"><span class="mk"></span>${r.sym}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
-      :`<td class="co-cell"><span class="sym"><span class="mk"></span>${r.sym}</span>${r.warnings&&r.warnings.length?`<span class="warn-badge" title="${escHtml('Data-integrity warning:\n• '+r.warnings.join('\n• '))}">⚠</span>`:''}${r.sector?`<span class="sec sec-${r.sector}">${SECTOR_LABEL[r.sector]||r.sector}</span>`:''} <span class="name">${escHtml((r.name||'').length>16?(r.name.slice(0,15)+'…'):r.name)}</span><div class="checked" data-since="${r.scored_at||''}"></div></td>`;
+      ?`<td class="co-cell"><span class="sym" style="opacity:0.3">${r.sym}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
+      :`<td class="co-cell"><span class="sym">${r.sym}</span>${r.warnings&&r.warnings.length?`<span class="warn-badge" title="${escHtml('Data-integrity warning:\n• '+r.warnings.join('\n• '))}">⚠</span>`:''}${r.sector?`<span class="sec sec-${r.sector}">${SECTOR_LABEL[r.sector]||r.sector}</span>`:''} <span class="name">${escHtml((r.name||'').length>16?(r.name.slice(0,15)+'…'):r.name)}</span><div class="checked" data-since="${r.scored_at||''}"></div></td>`;
     tr.innerHTML=`
       <td class="idx">${i+1}.</td>
       ${coCell}
