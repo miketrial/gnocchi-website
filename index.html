@@ -121,8 +121,8 @@
   tbody tr.drop-above td{border-top:2px solid #3b82f6!important}
   tbody tr.drop-below td{border-bottom:2px solid #3b82f6!important}
 
-  /* Pin divider — double rule (FT/ledger style) */
-  tr.pin-divider td{padding:0;height:6px;border:none;background:var(--bg)}
+  /* Pin divider — double rule (FT/ledger style), spans full row width */
+  tr.pin-divider{display:none}
   tbody tr.pin-last td{border-bottom:3px double #c0c4cc}
   tbody tr.pin-first td{border-top:none}
   [data-theme="dark"] tbody tr.pin-last td{border-bottom-color:#4a4f5c}
@@ -130,7 +130,7 @@
   [data-theme="white"] tbody tr.pin-last td{border-bottom:3px double #000}
 
   /* Pinned row indicator — star before sym */
-  tbody tr.pinned .sym::before{content:'★';color:#7aa6c2;margin-right:4px;font-size:9px;vertical-align:middle;line-height:1}
+  tbody tr.pinned .sym::before{content:'★';color:#e0a800;margin-right:4px;font-size:11px;vertical-align:middle;line-height:1}
 
   thead th:first-child, tbody td:first-child{padding-left:8px}
   thead th:nth-child(3), tbody td:nth-child(3){padding-left:12px}
@@ -143,10 +143,10 @@
   tbody tr:hover td:nth-child(2){background:#fafbfc}
 
   /* 3 — left score stripe via inset box-shadow on first sticky cell */
-  tbody tr.sc-g  td:nth-child(1){box-shadow:inset 3px 0 0 var(--good-fg)}
-  tbody tr.sc-y  td:nth-child(1){box-shadow:inset 3px 0 0 var(--yel-fg)}
-  tbody tr.sc-r  td:nth-child(1){box-shadow:inset 3px 0 0 var(--bad-fg)}
-  tbody tr.sc-na td:nth-child(1){box-shadow:inset 3px 0 0 var(--pur-fg)}
+  tbody tr.sc-g  td:nth-child(1){box-shadow:inset 5px 0 0 var(--good-fg)}
+  tbody tr.sc-y  td:nth-child(1){box-shadow:inset 5px 0 0 var(--yel-fg)}
+  tbody tr.sc-r  td:nth-child(1){box-shadow:inset 5px 0 0 var(--bad-fg)}
+  tbody tr.sc-na td:nth-child(1){box-shadow:inset 5px 0 0 var(--pur-fg)}
 
   /* 4 — right-align number columns */
   .num{text-align:right}
@@ -173,7 +173,7 @@
   /* 6 — group header row */
   thead tr.grphdr th{
     font-size:7.5px; font-weight:700; text-transform:uppercase; letter-spacing:.6px;
-    color:#b0b8c4; padding:8px 6px 3px; border-bottom:2px solid #dde2e8;
+    color:#b0b8c4; padding:8px 6px 3px; border-bottom:1px solid #dde2e8;
     background:var(--card);
   }
   thead tr.grphdr th:nth-child(1),
@@ -181,7 +181,7 @@
   thead tr.grphdr th:nth-child(1){left:0}
   thead tr.grphdr th:nth-child(2){left:32px}
   thead tr.grphdr th.grp{
-    border-bottom:2px solid #dde2e8; color:#8a95a3; padding-bottom:4px;
+    border-bottom:1px solid #dde2e8; color:#8a95a3; padding-bottom:4px;
     border-left:1px solid #e4e7eb;
   }
 
@@ -459,13 +459,12 @@
 [data-theme="white"] #acDrop{background:#fff;border:1px solid #000;border-radius:0}
 [data-theme="white"] .ac-item:hover,[data-theme="white"] .ac-item.sel{background:#f0f0f0}
 [data-theme="white"] #pipelineModal > div{background:#fff;border:1px solid #000;border-radius:0}
-[data-theme="white"] #themeSwatch button{background:#fff;color:#000;border:1px solid #000;border-radius:0;padding:8px 15px;font-size:11px;font-weight:600;opacity:1}
-[data-theme="white"] #themeSwatch button.active{background:#000;color:#fff;border-color:#000}
+[data-theme="white"] #themeSwatch button,
+[data-theme="white"] #themeSwatch button:not(.active){background:#fff;color:#000;border:1px solid #000;border-radius:0;padding:8px 15px;font-size:11px;font-weight:600;opacity:1}
+[data-theme="white"] #themeSwatch button.active{background:#000;color:#fff;border-color:#000;opacity:1}
 [data-theme="white"] .net-link{color:#000;font-weight:600}
 [data-theme="white"] #usageChip,[data-theme="white"] #usageChip.ok,[data-theme="white"] #usageChip.warn,[data-theme="white"] #usageChip.capped{color:#000}
 [data-theme="white"] .rescan-timer{color:#000}
-[data-theme="white"] tbody tr.pin-last td{box-shadow:0 4px 8px -2px rgba(0,0,0,0.12)}
-[data-theme="white"] tbody tr.pin-first td{box-shadow:0 -4px 8px -2px rgba(0,0,0,0.08)}
 
 
 /* ── theme swatch strip ───────────────────────────────────────────────── */
