@@ -71,6 +71,17 @@
   .rescan-wrap{display:flex; flex-direction:column; align-items:flex-start; gap:3px}
   .rescan-timer{font-size:8px; color:var(--ink-faint); font-variant-numeric:tabular-nums}
 
+  /* AI budget — plain text under the rescan timer; color via text only */
+  #usageChip{display:none}
+  #usageChip.ok{color:var(--good-fg)}
+  #usageChip.warn{color:var(--yel-fg)}
+  #usageChip.capped{color:var(--bad-fg)}
+
+  /* FMP health button states */
+  #healthBtn.healthy{background:var(--good-bg); color:var(--good-fg)}
+  #healthBtn.degraded{background:var(--yel-bg); color:var(--yel-fg)}
+  #healthBtn.flipping{background:var(--bad-bg); color:var(--bad-fg)}
+
   /* Net link */
   .net-link{
     background:#f3f4f6; border-radius:10px;
@@ -107,10 +118,14 @@
   tbody tr.drop-above td{border-top:2px solid #3b82f6!important}
   tbody tr.drop-below td{border-bottom:2px solid #3b82f6!important}
 
-  /* Pin divider row — solid accent-blue line */
-  tr.pin-divider td{padding:0;height:4px;border-top:2px solid rgba(122,166,194,0.4);background:transparent}
-  [data-theme="dark"] tr.pin-divider td{border-top-color:rgba(122,166,194,0.25)}
-  [data-theme="warm"] tr.pin-divider td{border-top-color:rgba(122,166,194,0.35)}
+  /* Pin divider — gap in page-background color; shadows on adjacent rows create depth */
+  tr.pin-divider td{padding:0;height:10px;border:none;background:var(--bg)}
+  tbody tr.pin-last td{box-shadow:0 4px 8px -2px rgba(0,0,0,0.12)}
+  tbody tr.pin-first td{box-shadow:0 -4px 8px -2px rgba(0,0,0,0.07)}
+  [data-theme="dark"] tbody tr.pin-last td{box-shadow:0 4px 10px -2px rgba(0,0,0,0.35)}
+  [data-theme="dark"] tbody tr.pin-first td{box-shadow:0 -4px 10px -2px rgba(0,0,0,0.2)}
+  [data-theme="warm"] tbody tr.pin-last td{box-shadow:0 4px 8px -2px rgba(0,0,0,0.14)}
+  [data-theme="warm"] tbody tr.pin-first td{box-shadow:0 -4px 8px -2px rgba(0,0,0,0.08)}
 
   /* Pinned row indicator — star before sym */
   tbody tr.pinned .sym::before{content:'★';color:#7aa6c2;margin-right:4px;font-size:9px;vertical-align:middle;line-height:1}
@@ -170,7 +185,6 @@
 
   .idx{color:var(--ink-faint); width:26px; text-align:right}
   .sym{font-weight:700; color:#4a525e; font-size:10px}
-  .sym .mk{display:inline-block; width:4px; height:4px; border-radius:50%; background:#9fc0d6; margin-right:4px; vertical-align:middle}
   .name{color:var(--ink-soft); font-size:8.5px; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; margin-top:1px}
   .co-cell{max-width:130px; min-width:100px; padding-left:10px}
   .price-cell{font-size:10px;font-weight:600;color:#464d57;white-space:nowrap;text-align:right}
@@ -178,6 +192,9 @@
   /* earnings countdown badge */
   .earn-badge{display:inline-block;font-size:7px;font-weight:700;padding:0 4px;border-radius:4px;margin-left:3px;vertical-align:middle;background:var(--yel-bg);color:var(--yel-fg);white-space:nowrap}
   .earn-badge.soon{background:var(--bad-bg);color:var(--bad-fg)}
+
+  /* data-integrity warning badge */
+  .warn-badge{display:inline-block;color:var(--bad-fg);font-size:10px;margin-left:4px;cursor:help;vertical-align:middle;line-height:1}
 
   /* momentum column values */
   .mom-hi{color:var(--bad-fg)}
@@ -279,6 +296,12 @@
   .ac-sym{font-weight:700; color:#4a525e; min-width:46px}
   .ac-name{color:var(--ink-faint); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .ac-exch{font-size:9px; color:#b0b8c4}
+  .ac-added{font-size:8.5px; font-weight:700; color:var(--good-fg); background:var(--good-bg); border-radius:4px; padding:1px 5px; white-space:nowrap}
+  .ac-item.added{opacity:.6; cursor:default}
+  .ac-item.added:hover,.ac-item.added.sel{background:transparent}
+  .ac-msg{padding:9px 12px; font-size:10px; color:var(--ink-faint)}
+  .ac-name b{color:var(--ink-soft); font-weight:700}
+  .ac-sym b{color:#2251cc}
 
   /* net page editable cells */
   .net td[contenteditable]{outline:none; min-width:46px}
@@ -421,7 +444,7 @@
         <button class="btn" id="twToggle">Training Wheels</button>
       </div>
       <div class="rescan-timer" id="rescanTimer"></div>
-      <div style="font-size:10px;color:#8a95a8;margin-top:2px">v4</div>
+      <div class="rescan-timer" id="usageChip" title="Today's AI research calls vs daily cap"></div>
     </div>
 
     <!-- Pipeline modal -->
@@ -555,6 +578,8 @@
       <button data-t="warm">Warm</button>
     </div>
 
+    <button id="healthBtn" class="btn" title="Probe FMP's data feed for a CDN sym-flip">♡ FMP health</button>
+
     <div class="net-link" id="navToggle">Net ↗</div>
   </header>
 
@@ -601,6 +626,9 @@
       <span><b style="background:var(--yel-bg);color:var(--yel-fg)">→</b><span style="color:var(--yel-fg);font-weight:600">Steady</span> · mixed or flat trajectory</span>
       <span><b style="background:var(--bad-bg);color:var(--bad-fg)">↓</b><span style="color:var(--bad-fg);font-weight:600">Downward</span> · declining metrics</span>
       <span><b style="background:var(--pur-bg);color:var(--pur-fg)">?</b><span style="color:var(--pur-fg);font-weight:600">Purple</span> · data unavailable — rescan to refresh</span>
+      <div class="ttl" style="margin-top:10px">Row markers</div>
+      <span><b style="background:transparent;color:#7aa6c2">★</b><span style="color:#7aa6c2;font-weight:600">Pinned</span> · kept at the top — right-click a row to pin/unpin</span>
+      <span><b style="background:var(--bad-bg);color:var(--bad-fg)">⚠</b><span style="color:var(--bad-fg);font-weight:600">Warning</span> · data looks suspicious this scan — hover it to see why</span>
     </div>
 
   <!-- ===== NET VIEW ===== -->
@@ -627,6 +655,7 @@
     <button class="btn" onclick="setView('watchlist')" style="margin-bottom:12px">↩ Back to Watchlist</button>
     <div class="tw-banner-title">Training Wheels</div>
     <div class="tw-banner-sub">A walkthrough of every data point using NVIDIA (NVDA) as a real example. Hover or click any value to learn what it means.</div>
+    <span class="tw-banner-hint" data-tw="health" style="cursor:pointer">♡ What is the FMP health check?</span>
   </div>
   <div class="card">
     <table>
@@ -663,7 +692,7 @@
         <tr class="sc-g">
           <td class="idx">1.</td>
           <td class="co-cell">
-            <span class="sym"><span class="mk"></span>NVDA</span><span class="sec sec-semi">Semis</span>
+            <span class="sym">NVDA</span><span class="warn-badge" data-tw="integrity" style="opacity:.55">⚠</span><span class="sec sec-semi">Semis</span>
             <span class="name">NVIDIA Corp</span>
             <div class="checked fresh">Example stock · Training Wheels</div>
           </td>
@@ -745,7 +774,13 @@ let dragSrc = null;
 
 /* ---------- pins ---------- */
 let pinnedSyms = new Set(JSON.parse(localStorage.getItem('gn_pins')||'[]'));
-function savePins(){ try{localStorage.setItem('gn_pins',JSON.stringify([...pinnedSyms]));}catch(e){} }
+function savePins(){
+  // localStorage is the instant local cache + offline fallback…
+  try{localStorage.setItem('gn_pins',JSON.stringify([...pinnedSyms]));}catch(e){}
+  // …and the blob is the cross-device source of truth.
+  if(typeof API_LIVE!=='undefined' && API_LIVE)
+    api.send('/api/pins','PUT',{pins:[...pinnedSyms]}).catch(()=>{});
+}
 
 
 function saveWatchlistOrder(){
@@ -889,6 +924,8 @@ function renderWatchlist(){
     const tr=document.createElement('tr');
     tr.dataset.sym=r.sym;
     if(pinnedSyms.has(r.sym)) tr.classList.add('pinned');
+    if(dividerAt>0 && i===dividerAt-1) tr.classList.add('pin-last');
+    if(dividerAt>0 && i===dividerAt) tr.classList.add('pin-first');
     if(r.scoring) tr.classList.add('scoring');
     else tr.classList.add(hasNA?'sc-na':'sc-'+scoreClass(r.score));
     const scoreEl=r.scoring
@@ -904,8 +941,8 @@ function renderWatchlist(){
     const betaStr=r.beta!=null?r.beta.toFixed(1):null;
     const betaClass=r.beta>=2?'mom-hi':r.beta>=1?'':'mom-lo';
     const coCell=r.scoring
-      ?`<td class="co-cell"><span class="sym" style="opacity:0.3"><span class="mk"></span>${r.sym}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
-      :`<td class="co-cell"><span class="sym"><span class="mk"></span>${r.sym}</span>${r.sector?`<span class="sec sec-${r.sector}">${SECTOR_LABEL[r.sector]||r.sector}</span>`:''} <span class="name">${escHtml((r.name||'').length>16?(r.name.slice(0,15)+'…'):r.name)}</span><div class="checked" data-since="${r.scored_at||''}"></div></td>`;
+      ?`<td class="co-cell"><span class="sym" style="opacity:0.3">${r.sym}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
+      :`<td class="co-cell"><span class="sym">${r.sym}</span>${r.warnings&&r.warnings.length?`<span class="warn-badge" title="${escHtml('Data-integrity warning:\n• '+r.warnings.join('\n• '))}">⚠</span>`:''}${r.sector?`<span class="sec sec-${r.sector}">${SECTOR_LABEL[r.sector]||r.sector}</span>`:''} <span class="name">${escHtml((r.name||'').length>16?(r.name.slice(0,15)+'…'):r.name)}</span><div class="checked" data-since="${r.scored_at||''}"></div></td>`;
     tr.innerHTML=`
       <td class="idx">${i+1}.</td>
       ${coCell}
@@ -922,8 +959,8 @@ function renderWatchlist(){
       <td class="txt"><div class="clamp">${daysUntil!=null&&daysUntil>0&&daysUntil<=90?`Earn ${daysUntil}d — `:''}${r.cat}</div></td>
       <td class="num grp-start">${r.ps}</td>
       <td class="ar-col">${(()=>{const parts=r.ar.split('\n');const consensus=parts[0]||r.ar;const raw=parts[1]||'';const counts=raw.replace(/([-+]?\d+)% PT/,(_,n)=>{const v=parseFloat(n);return`<span class="${v>=0?'ar-pt-pos':'ar-pt-neg'}">${v>=0?'+':''}${v}% PT</span>`;});return`<div class="ar-wrap"><span class="ar-consensus">${consensus}</span>${counts?`<span class="ar-counts">${counts}</span>`:''}`+(r.arGrades&&r.arGrades.length?`<div class="ar-tip"><div style="font-weight:700;margin-bottom:3px;font-size:9px">Recent analyst actions</div>${r.arGrades.map(g=>{const act=g.action==='upgrade'?'↑':g.action==='downgrade'?'↓':'→';const cls=g.action==='upgrade'?'ar-tip-up':g.action==='downgrade'?'ar-tip-dn':'ar-tip-nt';return`<div class="ar-tip-row"><span class="ar-tip-firm">${g.gradingCompany}</span><span class="ar-tip-grade ${cls}">${act} ${g.newGrade}</span></div>`;}).join('')}</div>`:'')+`</div>`;})()} </td>
-      <td class="num grp-start ${betaClass}">${betaStr??'—'}</td>
-      <td class="num ${rvClass}">${relVol??'—'}</td>`;
+      <td class="num grp-start ${betaClass}" data-tip="Beta — market sensitivity. How much the stock moves vs the overall market. 1.0 = moves with the market; above 1 = more volatile (bigger swings up and down); below 1 = steadier. Higher beta means higher risk and higher potential reward.">${betaStr??'—'}</td>
+      <td class="num ${rvClass}" data-tip="Relative Volume — today's trading volume vs its 20-day average. 1.0x = normal activity; above 1.5x = unusually active; above 2x = heavy interest, often around news or earnings. A spike can signal a catalyst worth checking.">${relVol??'—'}</td>`;
     // Drag and drop
     tr.setAttribute('draggable', 'true');
     tr.addEventListener('dragstart', e => {
@@ -975,9 +1012,9 @@ function renderWatchlist(){
 /* ---------------- check-square tooltip (fixed-position, escapes overflow) --- */
 const tipBox=document.getElementById('tipBox');
 document.getElementById('wlBody').addEventListener('mouseover',e=>{
-  const chk=e.target.closest('.chk[data-tip]');
-  if(!chk){tipBox.style.display='none';return;}
-  tipBox.textContent=chk.dataset.tip;
+  const el=e.target.closest('[data-tip]');
+  if(!el){tipBox.style.display='none';return;}
+  tipBox.textContent=el.dataset.tip;
   tipBox.style.display='block';
 });
 document.getElementById('wlBody').addEventListener('mousemove',e=>{
@@ -1155,6 +1192,20 @@ async function init(){
     if(Array.isArray(wl)&&wl.length) watchlist=applyOrder(wl);
     const nt=await api.get('/api/net').catch(()=>[]);
     if(Array.isArray(nt)&&nt.length) net=nt;
+    // Pins live server-side (cross-device). If the server has a record, it wins
+    // over the local cache; mirror it back to localStorage for offline use.
+    try{
+      const pr=await api.get('/api/pins');
+      if(pr&&Array.isArray(pr.pins)){
+        if(pr.pins.length===0 && pinnedSyms.size>0){
+          // Server has no record yet but we have local pins → migrate them up.
+          api.send('/api/pins','PUT',{pins:[...pinnedSyms]}).catch(()=>{});
+        }else{
+          pinnedSyms=new Set(pr.pins);
+          try{localStorage.setItem('gn_pins',JSON.stringify(pr.pins));}catch(e){}
+        }
+      }
+    }catch(e){/* keep localStorage pins */}
   }catch{ API_LIVE=false; /* offline / static open → keep seed data */ }
   try{
     const saved=JSON.parse(localStorage.getItem('gn_sort')||'null');
@@ -1165,15 +1216,50 @@ async function init(){
   }catch(e){}
   applySortHeaders();
   render();
+  refreshUsage();
 }
 init();
+
+/* ---------------- AI budget chip ---------------- */
+async function refreshUsage(){
+  const el=document.getElementById('usageChip'); if(!el) return;
+  try{
+    const u=await api.get('/api/usage');
+    if(u&&typeof u.used==='number'){
+      el.style.display='block';
+      el.textContent=`AI usage:${u.used}/${u.cap}`;
+      const pct=u.cap?u.used/u.cap:0;
+      el.className='rescan-timer '+(u.capped?'capped':pct>=0.8?'warn':'ok');
+      el.title=`Today's AI research calls: ${u.used} of ${u.cap} (≈ $${u.est_cost_usd}). ${u.capped?'Cap reached — Layer 2 paused until tomorrow.':u.remaining+' remaining.'}`;
+    }
+  }catch{ el.style.display='none'; }
+}
+// refresh after any rescan finishes so the count reflects the latest scan
+setInterval(refreshUsage, 60000);
+
+/* ---------------- FMP health probe ---------------- */
+document.getElementById('healthBtn').addEventListener('click',async()=>{
+  const btn=document.getElementById('healthBtn');
+  btn.className='btn'; btn.innerHTML='<span class="spin">⟳</span> Checking…';
+  try{
+    const h=await api.get('/api/health');
+    btn.classList.add(h.status);
+    const icon=h.status==='healthy'?'✓':h.status==='flipping'?'✕':'⚠';
+    btn.innerHTML=`${icon} FMP ${h.status}`;
+    const detail=(h.probes||[]).map(p=>`${p.sym}: ${p.ok?'✓ '+(p.name||''):'✕ '+(p.name||p.error||'?')}`).join('  ·  ');
+    showToast(`${h.message}\n${detail}`, 9000);
+  }catch{
+    btn.innerHTML='♡ FMP health';
+    showToast('Health check failed — could not reach /api/health.');
+  }
+});
 
 /* ---------------- toast banner ---------------- */
 function showToast(msg, durationMs=4500){
   let el=document.getElementById('toastBanner');
   if(!el){
     el=document.createElement('div'); el.id='toastBanner';
-    el.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:300;background:#2a2e36;color:#e8eaf0;font-size:11px;line-height:1.5;padding:9px 18px;border-radius:9px;box-shadow:0 4px 16px rgba(0,0,0,.22);pointer-events:none;opacity:0;transition:opacity .25s';
+    el.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:300;background:#2a2e36;color:#e8eaf0;font-size:11px;line-height:1.5;padding:9px 18px;border-radius:9px;box-shadow:0 4px 16px rgba(0,0,0,.22);pointer-events:none;opacity:0;transition:opacity .25s;white-space:pre-line;max-width:560px;text-align:center';
     document.body.appendChild(el);
   }
   el.textContent=msg; el.style.opacity='1';
@@ -1246,8 +1332,12 @@ function pollJob(jobId){
       if(j.status==='done'||j.status==='error'){
         clearInterval(t);
         _scanAnims.forEach((_,sym)=>stopCheckAnim(sym)); // stop any remaining
+        refreshUsage();
         rescanBtn.disabled=false;
-        if(j.status==='done'&&j.total===0){
+        if(j.status==='error'){
+          rescanBtn.innerHTML='⟳ Rescan';
+          showToast(j.error||'Rescan failed — try again.');
+        }else if(j.status==='done'&&j.total===0){
           rescanBtn.innerHTML='✓ All fresh';
           showToast('All tickers scored within 48 h — Shift+click ⟳ to force a full refresh, or right-click a row.');
           setTimeout(()=>{rescanBtn.innerHTML='⟳ Rescan';},3000);
@@ -1339,6 +1429,20 @@ const TW_DATA={
     why:'Disruption often shows up in the fundamentals 2–4 quarters after it begins. The goal is to identify the threat before it appears in margins — not after the damage is done.',
     good:'✓ No credible new entrants with comparable performance; open-source alternatives lack parity; the company\'s moat (patents, switching costs, ecosystem lock-in) is intact or widening.',
     bad:'✗ Well-funded competitor launching directly competing product; regulatory action targeting core business; open-source alternative reaching feature parity; key customer beginning to build in-house.'
+  },
+  health:{
+    title:'FMP Health Check ♡',nvda:'Click the "♡ FMP health" button (top-right) anytime to run it live.',
+    what:'A one-click probe of the data feed (Financial Modeling Prep). It requests the company profile for three unrelated tickers — NVDA, AAPL, and KO (Coca-Cola) — and confirms each returns its OWN correct company. The button turns green (healthy), yellow (degraded), or red (flipping) and a toast lists what each probe returned.',
+    why:'The data feed\'s CDN occasionally "sym-flips" — serving one company\'s financials for many different tickers, which silently poisons your watchlist. This used to take manual command-line debugging to diagnose. Now a single click answers "is the feed flipping right now?". This same probe also runs automatically as a safety gate before every full Rescan: if the feed is flipping, the rescan is blocked before it can overwrite good rows with poison (targeted right-click rescans skip the gate, since they\'re explicit and individually guarded).',
+    good:'✓ Green / "healthy" — all three probes returned distinct, correct companies. The feed is behaving; rescans will pull accurate data.',
+    bad:'✗ Red / "flipping" — two or more probes returned the SAME company, meaning the feed is actively serving wrong data. Do NOT force-rescan now (you\'d overwrite good rows with poison). Wait a few minutes and re-check; yellow / "degraded" means a partial problem — verify before bulk rescans.'
+  },
+  integrity:{
+    title:'Data-Integrity Warning ⚠',nvda:'No warning shown — NVDA passed all integrity checks this scan.',
+    what:'A ⚠ badge appears next to a ticker when the most recent scan produced data that looks suspicious. It does NOT mean the stock is bad — it means the underlying data may be wrong and worth a second look. Three checks run automatically after every scan: (1) another ticker came back with the same company name (a likely data-feed "sym-flip" where one company\'s data is served for many tickers), (2) the price moved more than 30% since the last scan, or (3) the 0–8 score swung by 4 or more points in a single scan.',
+    why:'The data feed occasionally serves one company\'s financials under the wrong ticker, which silently poisons the row. Previously you\'d only notice by eye, days later. This check surfaces the problem the moment it happens so you can force a re-scan and confirm the numbers before trusting them. Hover the ⚠ to see exactly which check tripped.',
+    good:'✓ No ⚠ badge — the row\'s name is unique, its price is stable vs the prior scan, and its score didn\'t lurch. The data is internally consistent and safe to act on.',
+    bad:'✗ A ⚠ badge is present. Hover it to read the reason. Most common fix: right-click the row → Force rescan to pull fresh data; if the warning persists across two scans, the data feed may still be flipped — wait and rescan later.'
   },
   insider:{
     title:'Insider Trading',nvda:'No open-market purchases or sales in the past 60 days — GOOD',
@@ -1505,17 +1609,31 @@ const acDrop=document.getElementById('acDrop');
 let acIdx=-1, acItems=[], acTimer=null;
 
 function acHide(){ acDrop.style.display='none'; acIdx=-1; acItems=[]; }
-function acShow(results){
+function acMessage(msg){
+  acItems=[]; acIdx=-1;
+  acDrop.innerHTML=`<div class="ac-msg">${msg}</div>`;
+  acDrop.style.display='block';
+}
+function acEsc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function acMark(text,q){
+  const t=acEsc(text); if(!q) return t;
+  const i=text.toLowerCase().indexOf(q.toLowerCase());
+  if(i<0) return t;
+  return acEsc(text.slice(0,i))+'<b>'+acEsc(text.slice(i,i+q.length))+'</b>'+acEsc(text.slice(i+q.length));
+}
+function acShow(results,q){
   acItems=results;
   acIdx=-1;
-  acDrop.innerHTML=results.map((r,i)=>
-    `<div class="ac-item" data-i="${i}">
-       <span class="ac-sym">${r.symbol}</span>
-       <span class="ac-name">${r.name}</span>
-       <span class="ac-exch">${r.exchange}</span>
-     </div>`
-  ).join('');
-  acDrop.style.display=results.length?'block':'none';
+  if(!results.length){ acMessage('No matching US-listed tickers'); return; }
+  acDrop.innerHTML=results.map((r,i)=>{
+    const have=watchlist.some(w=>w.sym&&w.sym.toUpperCase()===r.symbol);
+    return `<div class="ac-item${have?' added':''}" data-i="${i}">
+       <span class="ac-sym">${acMark(r.symbol,q)}</span>
+       <span class="ac-name">${acMark(r.name,q)}</span>
+       ${have?'<span class="ac-added">✓ added</span>':`<span class="ac-exch">${acEsc(r.exchange)}</span>`}
+     </div>`;
+  }).join('');
+  acDrop.style.display='block';
   acDrop.querySelectorAll('.ac-item').forEach(el=>{
     el.addEventListener('mousedown',ev=>{
       ev.preventDefault();
@@ -1528,22 +1646,29 @@ function acHighlight(i){
 }
 function pickAc(i){
   const r=acItems[i]; if(!r) return;
+  if(watchlist.some(w=>w.sym&&w.sym.toUpperCase()===r.symbol)){
+    acHide(); addInput.value=''; showToast(`${r.symbol} is already in your watchlist.`); return;
+  }
   addInput.value=r.symbol;
   acHide();
   addInput.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
 }
 
+let acReq=0;
 addInput.addEventListener('input',()=>{
   clearTimeout(acTimer);
   const q=addInput.value.trim();
   if(q.length<1){ acHide(); return; }
+  acMessage('Searching…');
+  const myReq=++acReq;
   acTimer=setTimeout(async()=>{
     try{
       const res=await fetch('/api/search?q='+encodeURIComponent(q));
       const data=await res.json();
-      acShow(data);
-    }catch{ acHide(); }
-  },150);
+      if(myReq!==acReq) return; // a newer keystroke superseded this response
+      acShow(data,q);
+    }catch{ if(myReq===acReq) acMessage('Search failed — type a ticker and press Enter'); }
+  },180);
 });
 
 addInput.addEventListener('keydown',async e=>{
@@ -1664,11 +1789,12 @@ document.getElementById('ctxRescan').onclick=async()=>{
           if(fresh.name&&fresh.sym&&fresh.sym.toUpperCase()!==sym.toUpperCase()) row.name=origName;
         }
         row.scoring=false; clearInterval(t);
-        renderWatchlist(); flash(sym);
+        renderWatchlist(); flash(sym); refreshUsage();
         showToast(`${sym} rescored — ${row.score} (score updated)`);
       } else if(j.status==='error'){
         stopCheckAnim(sym);
         row.scoring=false; clearInterval(t); renderWatchlist();
+        showToast(j.error||`${sym} rescan failed.`);
       }
     },3000);
   }else{

@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getFmpCache, putFmpCache, deleteFmpCache, getLayer2Cache, putLayer2Cache, deleteLayer2Cache } from "./store.mjs";
+import { getFmpCache, putFmpCache, deleteFmpCache, getLayer2Cache, putLayer2Cache, deleteLayer2Cache, getHaikuUsage, incrHaikuUsage, haikuCap } from "./store.mjs";
 
 // Haiku only — used for the 3 event columns that require live web search.
 const GATHER_MODEL = "claude-haiku-4-5";
@@ -396,6 +396,21 @@ async function layer1a(ticker, { knownName, skipCache } = {}) {
    Contracts (Col D), Departures (Col F), Disruption (Col H) require live web search.
    Haiku returns verdicts + summaries so JS scoring can consume them directly. */
 async function gatherLayer2(client, ticker, companyName, runDate) {
+  // Spend circuit-breaker: hard daily cap on paid Haiku web-search calls.
+  // Once the cap is hit, return safe defaults instead of calling the API so a
+  // runaway scan loop can never blow past the daily ceiling. Reflects col_D=BAD
+  // (no verified contracts) and departures/disruption=GOOD (no evidence of harm).
+  const used = await getHaikuUsage().catch(() => 0);
+  if (used >= haikuCap()) {
+    const note = "Skipped — daily AI research cap reached";
+    return {
+      contracts:  { summary: note, verdict: "BAD"  },
+      departures: { summary: note, verdict: "GOOD" },
+      disruption: { summary: note, verdict: "GOOD" },
+    };
+  }
+  await incrHaikuUsage().catch(() => {});
+
   const prompt = `Today is ${runDate}. Research ${ticker} (${companyName}).
 Return ONLY this JSON object:
 {

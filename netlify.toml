@@ -17,6 +17,21 @@
   status = 200
 
 [[redirects]]
+  from = "/api/usage"
+  to = "/.netlify/functions/usage"
+  status = 200
+
+[[redirects]]
+  from = "/api/health"
+  to = "/.netlify/functions/health"
+  status = 200
+
+[[redirects]]
+  from = "/api/pins"
+  to = "/.netlify/functions/pins"
+  status = 200
+
+[[redirects]]
   from = "/api/jobs/*"
   to = "/.netlify/functions/jobs/:splat"
   status = 200
