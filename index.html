@@ -292,6 +292,12 @@
   .ac-sym{font-weight:700; color:#4a525e; min-width:46px}
   .ac-name{color:var(--ink-faint); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .ac-exch{font-size:9px; color:#b0b8c4}
+  .ac-added{font-size:8.5px; font-weight:700; color:var(--good-fg); background:var(--good-bg); border-radius:4px; padding:1px 5px; white-space:nowrap}
+  .ac-item.added{opacity:.6; cursor:default}
+  .ac-item.added:hover,.ac-item.added.sel{background:transparent}
+  .ac-msg{padding:9px 12px; font-size:10px; color:var(--ink-faint)}
+  .ac-name b{color:var(--ink-soft); font-weight:700}
+  .ac-sym b{color:#2251cc}
 
   /* net page editable cells */
   .net td[contenteditable]{outline:none; min-width:46px}
@@ -1597,17 +1603,31 @@ const acDrop=document.getElementById('acDrop');
 let acIdx=-1, acItems=[], acTimer=null;
 
 function acHide(){ acDrop.style.display='none'; acIdx=-1; acItems=[]; }
-function acShow(results){
+function acMessage(msg){
+  acItems=[]; acIdx=-1;
+  acDrop.innerHTML=`<div class="ac-msg">${msg}</div>`;
+  acDrop.style.display='block';
+}
+function acEsc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function acMark(text,q){
+  const t=acEsc(text); if(!q) return t;
+  const i=text.toLowerCase().indexOf(q.toLowerCase());
+  if(i<0) return t;
+  return acEsc(text.slice(0,i))+'<b>'+acEsc(text.slice(i,i+q.length))+'</b>'+acEsc(text.slice(i+q.length));
+}
+function acShow(results,q){
   acItems=results;
   acIdx=-1;
-  acDrop.innerHTML=results.map((r,i)=>
-    `<div class="ac-item" data-i="${i}">
-       <span class="ac-sym">${r.symbol}</span>
-       <span class="ac-name">${r.name}</span>
-       <span class="ac-exch">${r.exchange}</span>
-     </div>`
-  ).join('');
-  acDrop.style.display=results.length?'block':'none';
+  if(!results.length){ acMessage('No matching US-listed tickers'); return; }
+  acDrop.innerHTML=results.map((r,i)=>{
+    const have=watchlist.some(w=>w.sym&&w.sym.toUpperCase()===r.symbol);
+    return `<div class="ac-item${have?' added':''}" data-i="${i}">
+       <span class="ac-sym">${acMark(r.symbol,q)}</span>
+       <span class="ac-name">${acMark(r.name,q)}</span>
+       ${have?'<span class="ac-added">✓ added</span>':`<span class="ac-exch">${acEsc(r.exchange)}</span>`}
+     </div>`;
+  }).join('');
+  acDrop.style.display='block';
   acDrop.querySelectorAll('.ac-item').forEach(el=>{
     el.addEventListener('mousedown',ev=>{
       ev.preventDefault();
@@ -1620,22 +1640,29 @@ function acHighlight(i){
 }
 function pickAc(i){
   const r=acItems[i]; if(!r) return;
+  if(watchlist.some(w=>w.sym&&w.sym.toUpperCase()===r.symbol)){
+    acHide(); addInput.value=''; showToast(`${r.symbol} is already in your watchlist.`); return;
+  }
   addInput.value=r.symbol;
   acHide();
   addInput.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
 }
 
+let acReq=0;
 addInput.addEventListener('input',()=>{
   clearTimeout(acTimer);
   const q=addInput.value.trim();
   if(q.length<1){ acHide(); return; }
+  acMessage('Searching…');
+  const myReq=++acReq;
   acTimer=setTimeout(async()=>{
     try{
       const res=await fetch('/api/search?q='+encodeURIComponent(q));
       const data=await res.json();
-      acShow(data);
-    }catch{ acHide(); }
-  },150);
+      if(myReq!==acReq) return; // a newer keystroke superseded this response
+      acShow(data,q);
+    }catch{ if(myReq===acReq) acMessage('Search failed — type a ticker and press Enter'); }
+  },180);
 });
 
 addInput.addEventListener('keydown',async e=>{
