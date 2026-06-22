@@ -496,6 +496,47 @@
   /* Drop Momentum group header entirely */
   thead tr.grphdr th:last-child{display:none}
 }
+
+/* ── Very narrow phones: hide more columns ───────────────────────────── */
+@media (max-width: 500px){
+  /* Also hide: P/E ttm (8), P/S (14), Analyst (15) */
+  thead tr:nth-child(2) th:nth-child(8),
+  thead tr:nth-child(2) th:nth-child(14),
+  thead tr:nth-child(2) th:nth-child(15),
+  tbody td:nth-child(8),
+  tbody td:nth-child(14),
+  tbody td:nth-child(15){display:none}
+  /* Ratings group becomes empty — hide its header */
+  thead tr.grphdr th:nth-last-child(2){display:none}
+}
+
+/* ── Touch devices: bigger tap targets (Apple HIG ≥36px) ─────────────── */
+@media (pointer: coarse){
+  .btn, .net-link{min-height:36px; padding:9px 16px; display:inline-flex; align-items:center}
+  #themeSwatch button{min-height:36px; padding:9px 14px}
+  .search{min-height:36px; padding:9px 12px 9px 30px}
+  .search input{font-size:13px}
+  .chk{min-width:14px; min-height:18px}
+  .score{min-height:22px; padding:3px 7px; display:inline-flex; align-items:center; justify-content:center}
+  tbody td{padding:6px 4px}
+  /* Context menu items need fingers, not pixels */
+  #ctx > div{padding:10px 14px; font-size:12px}
+}
+
+/* ── Mobile: full-screen modals & bottom-sheet tooltips ──────────────── */
+@media (max-width: 700px){
+  #pipelineModal > div{
+    width:100% !important; max-width:100% !important; height:100vh; max-height:100vh !important;
+    border-radius:0 !important; padding:16px;
+  }
+  #twTip{
+    position:fixed; left:0 !important; right:0 !important; bottom:0 !important; top:auto !important;
+    width:100% !important; max-width:100% !important;
+    border-radius:14px 14px 0 0; padding:18px 18px 24px;
+    box-shadow:0 -4px 24px rgba(0,0,0,.2);
+  }
+  #twTipClose{top:14px; right:16px; font-size:22px; padding:6px}
+}
 [data-theme="white"] .net-link{color:#000;font-weight:600}
 [data-theme="white"] #usageChip,[data-theme="white"] #usageChip.ok,[data-theme="white"] #usageChip.warn,[data-theme="white"] #usageChip.capped{color:#000}
 [data-theme="white"] .rescan-timer{color:#000}
