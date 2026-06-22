@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gnocchi · Watchlist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root{
     /* verdict palette (from SKILL.md) */
@@ -322,7 +325,7 @@
   /* Typing pipeline animation for scanning rows */
   tbody tr.scoring td{opacity:0.35;pointer-events:none}
   tbody tr.scoring .co-cell{opacity:1;position:relative;overflow:visible}
-  .typing-overlay{position:absolute;left:calc(50vw - 32px);top:50%;transform:translate(-50%,-50%);white-space:nowrap;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:11px;color:#378ADD;pointer-events:none;display:flex;align-items:center;gap:2px}
+  .typing-overlay{position:absolute;left:calc(50vw - 32px);top:50%;transform:translate(-50%,-50%);white-space:nowrap;font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:11px;color:#378ADD;pointer-events:none;display:flex;align-items:center;gap:2px}
   .typing-cursor{animation:blink .8s step-end infinite}
   @keyframes blink{50%{opacity:0}}
 
@@ -418,6 +421,49 @@
 [data-theme="warm"] .price-cell{color:#1e1510}
 [data-theme="warm"] .legend span b{background:#e4ddd4;color:#584e44}
 [data-theme="warm"] #themeSwatch button{background:#e4ddd4;color:var(--ink);border-color:#ccc4b8}
+
+/* ── White (sharp B&W technical) ──────────────────────────────────────── */
+[data-theme="white"]{
+  --ink:#000; --ink-soft:#000; --ink-faint:#222;
+  --page:#fff; --card:#fff;
+  --good-bg:#f0f0f0; --good-fg:#054a1e;
+  --bad-bg:#f0f0f0;  --bad-fg:#700a0a;
+  --yel-bg:#f0f0f0;  --yel-fg:#3a2e00;
+  --neu-bg:#f0f0f0;  --neu-fg:#062456;
+  --gray-bg:#f0f0f0; --gray-fg:#000;
+  --pur-bg:#f0f0f0;  --pur-fg:#2c0a56;
+}
+[data-theme="white"] body{background:var(--page);color:var(--ink);font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+[data-theme="white"] .brand,[data-theme="white"] .btn,[data-theme="white"] .name,[data-theme="white"] .sym,[data-theme="white"] .num,[data-theme="white"] .txt,[data-theme="white"] .score,[data-theme="white"] .pill,[data-theme="white"] .legend{font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+[data-theme="white"] header.bar{background:linear-gradient(var(--page) 72%,transparent)}
+[data-theme="white"] .btn,[data-theme="white"] .net-link{background:#fff;color:#000;border:1px solid #000;border-radius:0}
+[data-theme="white"] .search{background:#fff;border:1px solid #000;border-radius:0}
+[data-theme="white"] .search input{color:#000}
+[data-theme="white"] tbody td{border-top-color:#e5e5e5}
+[data-theme="white"] tbody tr:hover{background:#f5f5f5}
+[data-theme="white"] tbody tr:hover td:nth-child(1),
+[data-theme="white"] tbody tr:hover td:nth-child(2){background:#f5f5f5}
+[data-theme="white"] tbody tr.flash{background:#eaeaea}
+[data-theme="white"] thead tr.grphdr th{border-bottom:1px solid #000;background:#fff}
+[data-theme="white"] thead tr:nth-child(2) th{border-bottom:1px solid #000}
+[data-theme="white"] thead tr:nth-child(2) th.grp-start,
+[data-theme="white"] tbody td.grp-start{border-left-color:#000}
+[data-theme="white"] thead th:nth-child(1),[data-theme="white"] tbody td:nth-child(1),
+[data-theme="white"] thead th:nth-child(2),[data-theme="white"] tbody td:nth-child(2){background:#fff}
+[data-theme="white"] .num{color:#000}
+[data-theme="white"] .sym{color:#000;font-weight:700}
+[data-theme="white"] .price-cell{color:#000}
+[data-theme="white"] .legend span b{background:#fff;color:#000;border:1px solid #000;border-radius:0}
+[data-theme="white"] .pill{border-radius:0 !important}
+[data-theme="white"] #ctx{background:#fff;border:1px solid #000;border-radius:0;color:#000}
+[data-theme="white"] #scoreHist{background:#fff;border:1px solid #000}
+[data-theme="white"] #acDrop{background:#fff;border:1px solid #000;border-radius:0}
+[data-theme="white"] .ac-item:hover,[data-theme="white"] .ac-item.sel{background:#f0f0f0}
+[data-theme="white"] #pipelineModal > div{background:#fff;border:1px solid #000;border-radius:0}
+[data-theme="white"] #themeSwatch button{background:#fff;color:#000;border:1px solid #000;border-radius:0}
+[data-theme="white"] #themeSwatch button.active{background:#000;color:#fff;border-color:#000}
+[data-theme="white"] tbody tr.pin-last td{box-shadow:0 4px 8px -2px rgba(0,0,0,0.12)}
+[data-theme="white"] tbody tr.pin-first td{box-shadow:0 -4px 8px -2px rgba(0,0,0,0.08)}
 
 
 /* ── theme swatch strip ───────────────────────────────────────────────── */
@@ -576,6 +622,7 @@
     <div id="themeSwatch">
       <button data-t="dark">Dark</button>
       <button data-t="warm">Warm</button>
+      <button data-t="white">White</button>
     </div>
 
     <button id="healthBtn" class="btn" title="Probe FMP's data feed for a CDN sym-flip">♡ FMP health</button>
