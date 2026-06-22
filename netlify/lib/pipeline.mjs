@@ -428,7 +428,7 @@ When borderline, default to BAD. JSON only, no prose.`;
     const res = await createWithRetry(client, {
       model: GATHER_MODEL,
       max_tokens: 350,
-      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 1 }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 1 }],
       messages: [{ role: "user", content: prompt }],
     });
     const text = res.content.filter(b => b.type === "text").map(b => b.text).join("\n");
