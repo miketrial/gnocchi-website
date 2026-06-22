@@ -427,14 +427,19 @@ When borderline, default to BAD. JSON only, no prose.`;
   try {
     const res = await createWithRetry(client, {
       model: GATHER_MODEL,
-      max_tokens: 350,
+      max_tokens: 600,
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 1 }],
       messages: [{ role: "user", content: prompt }],
     });
     const text = res.content.filter(b => b.type === "text").map(b => b.text).join("\n");
     const m = text.match(/\{[\s\S]*\}/);
-    if (m) return JSON.parse(m[0]);
-  } catch { /* fall through to defaults */ }
+    if (m) {
+      try { return JSON.parse(m[0]); }
+      catch (e) { console.error(`[layer2 ${ticker}] JSON parse failed; stop_reason=${res.stop_reason}; text=${text.slice(0,300)}`); }
+    } else {
+      console.error(`[layer2 ${ticker}] no JSON in response; stop_reason=${res.stop_reason}; text=${text.slice(0,300)}`);
+    }
+  } catch (e) { console.error(`[layer2 ${ticker}] API call threw:`, e?.message || e); }
 
   // Safe defaults on error: unknown event data → BAD for Col D (contracts always unknown without search).
   return {
