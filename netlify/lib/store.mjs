@@ -9,6 +9,9 @@ const layer2CacheStore = () => getStore("layer2-cache"); // key = TICKER, TTL 7d
 const lockStore        = () => getStore("locks");        // key = lock name
 const usageStore       = () => getStore("usage");        // key = haiku-<YYYY-MM-DD>
 const settingsStore    = () => getStore("settings");     // key = setting name
+const shortRowStore    = () => getStore("short-rows");   // key = TICKER, per-ticker short-pipeline score blob
+const shortFmpStore    = () => getStore("short-fmp");    // key = TICKER, per-ticker raw FMP fan-out cache (24h TTL)
+const epsSnapStore     = () => getStore("eps-snapshots");// key = TICKER (object: {YYYY-MM-DD: fwdEps})
 
 /* ---------- FMP cache (24h TTL) ---------- */
 const FMP_TTL_MS = 24 * 60 * 60 * 1000;
@@ -203,4 +206,53 @@ export async function putJob(jobId, job) {
 }
 export async function getJob(jobId) {
   return jobsStore().get(jobId, { type: "json" });
+}
+
+/* ---------- Short Term: per-ticker score blobs ---------- */
+export async function listShortRows() {
+  const s = shortRowStore();
+  const { blobs } = await s.list();
+  const rows = await Promise.all(blobs.map(b => s.get(b.key, { type: "json" }).catch(() => null)));
+  return rows.filter(Boolean);
+}
+export async function getShortRow(ticker) {
+  return shortRowStore().get(ticker.toUpperCase(), { type: "json" }).catch(() => null);
+}
+export async function putShortRow(ticker, row) {
+  await shortRowStore().setJSON(ticker.toUpperCase(), row);
+}
+export async function deleteShortRow(ticker) {
+  await shortRowStore().delete(ticker.toUpperCase()).catch(() => {});
+}
+
+/* ---------- Short Term: raw FMP fan-out cache (separate from basics) ---------- */
+const SHORT_FMP_TTL_MS = 24 * 60 * 60 * 1000;
+export async function getShortFmpCache(ticker) {
+  const entry = await shortFmpStore().get(ticker.toUpperCase(), { type: "json" }).catch(() => null);
+  if (!entry || !entry.ts || Date.now() - entry.ts > SHORT_FMP_TTL_MS) return null;
+  return entry.data;
+}
+export async function putShortFmpCache(ticker, data) {
+  await shortFmpStore().setJSON(ticker.toUpperCase(), { ts: Date.now(), data });
+}
+export async function deleteShortFmpCache(ticker) {
+  await shortFmpStore().delete(ticker.toUpperCase()).catch(() => {});
+}
+
+/* ---------- EPS estimate snapshots (for 30-day revision detection) ----------
+   Stored as { "YYYY-MM-DD": fwdEpsNumber, ... } per ticker. On each scan, we
+   write today's value and look back ~30 days to detect direction of change. */
+export async function getEpsSnapshot(ticker) {
+  return (await epsSnapStore().get(ticker.toUpperCase(), { type: "json" }).catch(() => null)) || {};
+}
+export async function recordEpsSnapshot(ticker, fwdEps) {
+  if (fwdEps == null || !isFinite(fwdEps)) return;
+  const t = ticker.toUpperCase();
+  const today = new Date().toISOString().slice(0, 10);
+  const cur = await getEpsSnapshot(t);
+  cur[today] = fwdEps;
+  // Trim anything older than 120 days — we only need ~30-day lookback
+  const cutoff = new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10);
+  const cleaned = Object.fromEntries(Object.entries(cur).filter(([d]) => d >= cutoff));
+  await epsSnapStore().setJSON(t, cleaned);
 }

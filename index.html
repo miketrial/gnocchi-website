@@ -542,6 +542,33 @@
 [data-theme="white"] .rescan-timer{color:#000}
 
 
+/* ── view switch (Basic | Short Term) — 70s overlapping-tab pill ──────── */
+#viewSwitch{
+  display:inline-flex; position:relative; align-items:center;
+  margin-right:4px;
+}
+#viewSwitch button{
+  font-size:11px; font-weight:600; cursor:pointer;
+  padding:8px 14px; background:var(--card,#fff); color:var(--ink,#222);
+  border:1.5px solid var(--ink-faint,#b0b8c4); border-radius:10px;
+  transition:transform .15s, box-shadow .15s, opacity .15s, z-index 0s;
+  position:relative; z-index:1; opacity:.7;
+  white-space:nowrap;
+}
+#viewSwitch button + button{ margin-left:-6px } /* slight overlap */
+#viewSwitch button.active{
+  z-index:2; opacity:1;
+  transform:scale(1.05) translateY(-1px);
+  box-shadow:2px 2px 0 0 var(--ink-faint,#b0b8c4);
+  border-color:var(--ink,#222);
+}
+/* Active button shouldn't steal clicks from the inactive one's exposed area.
+   The inactive button raises z-index on hover so the cursor can always reach it. */
+#viewSwitch button:not(.active):hover{ z-index:3 }
+#viewSwitch button:hover{ opacity:1 }
+[data-theme="white"] #viewSwitch button{ border-radius:0; border-color:#000; background:#fff; color:#000 }
+[data-theme="white"] #viewSwitch button.active{ background:#000; color:#fff; box-shadow:3px 3px 0 0 #000 }
+
 /* ── theme swatch strip ───────────────────────────────────────────────── */
 #themeSwatch{display:flex;align-items:center;gap:6px}
 #themeSwatch button{
@@ -559,6 +586,10 @@
 <!-- ================= APP ================= -->
 <div id="app">
   <header class="bar" id="bar">
+    <div id="viewSwitch" title="Switch between Basic (full screener) and Short Term (1wk-3mo swing setups)">
+      <button data-v="basic">Basic</button>
+      <button data-v="short">Short Term</button>
+    </div>
     <div class="rescan-wrap" id="wlLeft">
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn" id="rescan">Rescan</button>
@@ -769,6 +800,48 @@
       </table>
       <button class="btn addrow" id="addNetRow">+ Add holding</button>
     </div>
+  </div>
+</div>
+
+<!-- ===== SHORT TERM VIEW (FMP-only, swing trading 1wk-3mo) ===== -->
+<div id="shortView" class="hidden">
+  <div class="card">
+    <table>
+      <thead>
+        <tr class="grphdr">
+          <th colspan="3"></th>
+          <th colspan="2" class="grp">Setup</th>
+          <th colspan="2" class="grp">Momentum &amp; Liquidity</th>
+          <th colspan="2" class="grp">Fundamentals</th>
+          <th colspan="2" class="grp">Catalyst</th>
+        </tr>
+        <tr>
+          <th></th>
+          <th class="sortable" data-sort="name">Company<span class="sub">(ticker)</span></th>
+          <th class="num sortable" data-sort="price">Price<span class="sub">live</span></th>
+          <th class="grp-start"><div class="chkhdr"><span><span class="hl">Trend</span></span><span><span class="hl">3M Mom</span></span><span><span class="hl">Near Hi</span></span><span><span class="hl">Liquid</span></span><span><span class="hl">EPS Rev</span></span><span><span class="hl">Value</span></span><span><span class="hl">Quality</span></span><span><span class="hl">Leverage</span></span><span><span class="hl">Catalyst</span></span><span><span class="hl">Squeeze</span></span></div></th>
+          <th class="sortable" data-sort="score">Score<span class="sub">of 10</span></th>
+          <th class="grp-start">Trend<span class="sub">price &amp; DMA</span></th>
+          <th>3M Return<span class="sub">vs 0</span></th>
+          <th class="grp-start">Fwd P/E<span class="sub">vs sector</span></th>
+          <th>EPS Rev<span class="sub">30d</span></th>
+          <th class="grp-start">FCF / ROE<span class="sub">TTM</span></th>
+          <th>Leverage<span class="sub">net debt/EBITDA</span></th>
+          <th class="grp-start">Earnings<span class="sub">days out</span></th>
+          <th>Short<span class="sub">% float / d2c</span></th>
+        </tr>
+      </thead>
+      <tbody id="stBody"></tbody>
+    </table>
+  </div>
+
+  <div class="legend">
+    <div class="ttl">Short Term scoring &nbsp;·&nbsp; 10 factors tuned for 1wk-3mo swing trades</div>
+    <span><b style="background:var(--good-bg);color:var(--good-fg)">●</b><span style="color:var(--good-fg);font-weight:600">Green</span> · factor passes</span>
+    <span><b style="background:var(--bad-bg);color:var(--bad-fg)">●</b><span style="color:var(--bad-fg);font-weight:600">Red</span> · factor fails</span>
+    <span><b style="background:var(--pur-bg);color:var(--pur-fg)">●</b><span style="color:var(--pur-fg);font-weight:600">Purple</span> · data not yet available (e.g. EPS Rev needs 30 days of history)</span>
+    <div class="ttl" style="margin-top:10px">Tip</div>
+    <span style="color:var(--ink-soft)">Hover any chip to read what it measures, why it matters, the pass rule, and your computed value.</span>
   </div>
 </div>
 
@@ -1478,18 +1551,48 @@ function pollJob(jobId){
 let currentView='watchlist';
 function setView(v){
   currentView=v;
-  document.getElementById('watchlistView').classList.toggle('hidden',v!=='watchlist');
+  document.getElementById('watchlistView').classList.toggle('hidden',!(v==='watchlist'||v==='net'));
   document.getElementById('netView').classList.toggle('hidden',v!=='net');
   document.getElementById('twView').classList.toggle('hidden',v!=='tw');
-  const isWL=v==='watchlist';
-  document.getElementById('wlControls').style.display=isWL?'flex':'none';
-  document.getElementById('wlLeft').style.display=isWL?'flex':'none';
-  document.getElementById('navToggle').textContent=v==='net'?'Watchlist':'Net';
-  document.getElementById('twToggle').textContent=v==='tw'?'↩ Watchlist':'Training Wheels';
+  const shortEl=document.getElementById('shortView');
+  if(shortEl) shortEl.classList.toggle('hidden',v!=='short');
+  const isWL=v==='watchlist'||v==='net';
+  const isShort=v==='short';
+  document.getElementById('wlControls').style.display=(isWL||isShort)?'flex':'none';
+  document.getElementById('wlLeft').style.display=(isWL||isShort)?'flex':'none';
+  // Hide Basics-only buttons on Short Term view
+  const pipeBtn=document.getElementById('pipelineBtn');
+  const twBtn=document.getElementById('twToggle');
+  if(pipeBtn) pipeBtn.style.display=isShort?'none':'';
+  if(twBtn)   twBtn.style.display  =isShort?'none':'';
+  const navTog=document.getElementById('navToggle');
+  if(navTog){
+    navTog.style.display=isShort?'none':'';
+    navTog.textContent=v==='net'?'Watchlist':'Net';
+  }
+  if(twBtn) twBtn.textContent=v==='tw'?'↩ Watchlist':'Training Wheels';
+  // Reflect current view in the segmented pill (Basic | Short Term)
+  document.querySelectorAll('#viewSwitch button').forEach(b=>{
+    const target=b.dataset.v;
+    const active=(target==='short'&&isShort)||(target==='basic'&&!isShort&&v!=='tw');
+    b.classList.toggle('active',active);
+  });
+  // Per-view rescan timer & render
+  updateRescanTimer();
+  if(isShort) renderShortWatchlist();
   window.scrollTo(0,0);
 }
 document.getElementById('navToggle').onclick=()=>setView(currentView==='net'?'watchlist':'net');
 document.getElementById('twToggle').onclick=()=>setView(currentView==='tw'?'watchlist':'tw');
+document.querySelectorAll('#viewSwitch button').forEach(b=>{
+  b.addEventListener('click',()=>{
+    const v=b.dataset.v;
+    if(v==='basic') setView('watchlist');
+    else if(v==='short'){ setView('short'); ensureShortDataLoaded(); }
+  });
+});
+// Sync segmented pill + view chrome with the initial state ('watchlist').
+setView('watchlist');
 
 /* ---------------- Training Wheels content ---------------- */
 const TW_DATA={
@@ -1826,6 +1929,8 @@ addInput.addEventListener('keydown',async e=>{
 const rescanBtn=document.getElementById('rescan');
 rescanBtn.title='Click: refresh stale rows only (>2 days). Shift+click: force full rescan.';
 rescanBtn.onclick=async(e)=>{
+  // Route to the appropriate scanner based on the active view
+  if(currentView==='short'){ return rescanShort(e); }
   const force=e.shiftKey;
   localStorage.setItem('gn_last_rescan', Date.now()); updateRescanTimer();
   rescanBtn.disabled=true;
@@ -1855,10 +1960,12 @@ rescanBtn.onclick=async(e)=>{
   }
 };
 
-/* "Last rescan" timer below the button — counts up: minutes → hours → days. */
+/* "Last rescan" timer below the button — counts up: minutes → hours → days.
+   Per-view: 'gn_last_rescan' for basics, 'gn_st_last_rescan' for short term. */
 function updateRescanTimer(){
   const el=document.getElementById('rescanTimer'); if(!el) return;
-  const ts=Number(localStorage.getItem('gn_last_rescan'));
+  const key=currentView==='short'?'gn_st_last_rescan':'gn_last_rescan';
+  const ts=Number(localStorage.getItem(key));
   if(!ts){el.textContent='Last rescan:never'; return;}
   const s=Math.floor((Date.now()-ts)/1000);
   let v;
@@ -1964,6 +2071,190 @@ window.addEventListener('scroll',()=>{
   applyTheme(saved);
   btns.forEach(b=>b.addEventListener('click',()=>applyTheme(b.dataset.t)));
 })();
+
+/* ================================================================== *
+ *  Short Term view (FMP-only, swing trading 1wk-3mo)                 *
+ * ================================================================== */
+
+// Tooltip text for each of the 10 chips (factor, why it matters, rule).
+// "Your value:" gets appended at render time from the per-row computed value.
+const SHORT_LABELS = [
+  { name: "Trend",          why: "An uptrend (price above both its 50-day and 200-day moving averages, with 50 above 200) is the single strongest predictor that recent strength will continue over the next 2-12 weeks.", rule: "Price > 50-day MA > 200-day MA" },
+  { name: "3-Month Momentum", why: "Stocks that have outperformed over the past 3 months tend to keep outperforming over the next 2-12 weeks. This is the bedrock factor for swing trading.", rule: "3-month return is positive and ≥ +5%" },
+  { name: "Near 52-Week High", why: "Stocks within 15% of their 52-week high are in established uptrends. Names more than 20% off their highs usually mean the trend is broken — avoid catching falling knives.", rule: "Within 15% of 52-week high" },
+  { name: "Liquidity",      why: "Thin stocks gap on small flows, slippage eats your edge, and you can get trapped on exit. A liquidity floor is the cheapest risk control.", rule: "20-day average dollar volume ≥ $20 million" },
+  { name: "EPS Revisions",  why: "When analysts raise their forward EPS estimates, the stock usually drifts up over the next few weeks as the new numbers diffuse through the market (the academic name is 'post-earnings-announcement drift'). The most underrated factor at this horizon.", rule: "Forward EPS estimate today is higher than the snapshot from ~30 days ago" },
+  { name: "Valuation",      why: "We don't screen for cheap (which often signals something broken at this horizon) — we screen out 'egregiously expensive' so multiple compression doesn't blow up your momentum trade.", rule: "Forward P/E ≤ sector 75th percentile" },
+  { name: "Quality",        why: "Positive free cash flow and a returns-on-equity above sector median keeps you out of value traps and meme blow-ups. Quality companies pull back less when momentum reverses.", rule: "TTM FCF > 0 AND ROE > sector median" },
+  { name: "Leverage",       why: "Over-levered names are most fragile when rates move or sentiment shifts — the kind of single-day -15% gap you can't trade out of.", rule: "Net debt / EBITDA < 3x (or net cash position)" },
+  { name: "Catalyst",       why: "Swing trades work best when there's a known event within the holding window that will re-rate the stock — most commonly the next earnings release.", rule: "Earnings between 7 and 90 days from today" },
+  { name: "Short Squeeze",  why: "Moderate short interest combined with slow-to-cover (high days-to-cover) is the classic squeeze setup — limited supply, persistent buy pressure. Heavy shorting alone is risky, not a setup; very light shorting has no squeeze fuel.", rule: "Short interest 5-25% of float AND days-to-cover ≥ 3" },
+];
+
+// Newbie tooltip text built from the label + actual computed value
+function tipForChip(idx, reason){
+  const l = SHORT_LABELS[idx];
+  if (!l) return reason || '';
+  const head = `${l.name} — ${l.why}`;
+  const pass = `Pass: ${l.rule}.`;
+  const yours = reason ? `Your value: ${reason}` : '';
+  return [head, pass, yours].filter(Boolean).join('\n\n');
+}
+
+// In-memory short-term rows mirror: { sym: row }
+let shortRowsBySym = Object.create(null);
+let shortLoaded = false;
+
+async function ensureShortDataLoaded(){
+  if (shortLoaded) { renderShortWatchlist(); return; }
+  shortLoaded = true;
+  if (!API_LIVE) { renderShortWatchlist(); return; }
+  try {
+    const rows = await api.get('/api/short/watchlist');
+    if (Array.isArray(rows)) rows.forEach(r => { if (r && r.sym) shortRowsBySym[r.sym.toUpperCase()] = r; });
+  } catch(e) { /* leave empty, render placeholders */ }
+  renderShortWatchlist();
+}
+
+function shortScoreClass(s){
+  const n = parseInt((s||'').toString());
+  if (isNaN(n)) return 'r';
+  if (n >= 7) return 'g';
+  if (n >= 4) return 'y';
+  return 'r';
+}
+
+function renderShortWatchlist(){
+  const tb = document.getElementById('stBody');
+  if (!tb) return;
+  tb.innerHTML = '';
+  const pinned   = watchlist.filter(r => pinnedSyms.has(r.sym));
+  const unpinned = watchlist.filter(r => !pinnedSyms.has(r.sym));
+  const ordered  = [...pinned, ...unpinned];
+  const dividerAt = pinned.length > 0 && unpinned.length > 0 ? pinned.length : -1;
+
+  ordered.forEach((wl, i) => {
+    if (i === dividerAt) {
+      const div = document.createElement('tr'); div.className = 'pin-divider';
+      const numCols = document.querySelectorAll('#shortView thead th').length || 13;
+      div.innerHTML = `<td colspan="${numCols}"></td>`;
+      tb.appendChild(div);
+    }
+    const sym = (wl.sym || '').toUpperCase();
+    const r   = shortRowsBySym[sym] || { sym, scoring: !!wl.shortScoring };
+    const verdicts = r.verdicts || (r.v || []).map(b => b ? 'good' : 'bad');
+    const reasons  = r.reasons  || [];
+    const checks = SHORT_LABELS.map((_, k) => {
+      const v = verdicts[k] || 'na';
+      const cls = v === 'good' ? 'good' : v === 'bad' ? 'bad' : 'na';
+      return `<div class="chk ${cls}" data-tip="${escHtml(tipForChip(k, reasons[k]))}"></div>`;
+    }).join('');
+
+    const score = r.score || '—/10';
+    const cls = r.scoring ? '' : 'sc-' + shortScoreClass(score);
+    const tr = document.createElement('tr');
+    tr.dataset.sym = sym;
+    if (pinnedSyms.has(sym)) tr.classList.add('pinned');
+    if (dividerAt > 0 && i === dividerAt - 1) tr.classList.add('pin-last');
+    if (dividerAt > 0 && i === dividerAt)     tr.classList.add('pin-first');
+    if (r.scoring) tr.classList.add('scoring'); else tr.classList.add(cls);
+
+    const name = r.name || wl.name || sym;
+    const price = (r.price != null) ? r.price : wl.price;
+
+    // Short Term display cells (the columns to the right of the chips)
+    const raw = r.raw || [];
+    const trendVal = raw[0] && raw[0].sma50 != null
+      ? `$${raw[0].price.toFixed(0)} > 50DMA $${raw[0].sma50.toFixed(0)}`
+      : '—';
+    const mom = raw[1] != null ? `${(raw[1] * 100).toFixed(1)}%` : '—';
+    const momCls = (raw[1] != null && raw[1] > 0) ? 'mom-hi' : (raw[1] != null && raw[1] < 0) ? 'mom-lo' : '';
+    const fwdPe = raw[5] && raw[5].fwdPe != null ? `${raw[5].fwdPe.toFixed(1)}x` : '—';
+    const epsRev = (() => {
+      const v = raw[4];
+      if (!v) return '—';
+      if (v && v.current != null && v.snapshot != null) {
+        const d = v.current - v.snapshot;
+        return (d > 0 ? '↑' : d < 0 ? '↓' : '→') + ` $${v.current.toFixed(2)}`;
+      }
+      return v && v.toFixed ? `$${v.toFixed(2)}` : '—';
+    })();
+    const qual = raw[6] && raw[6].roe != null ? `ROE ${(raw[6].roe * 100).toFixed(0)}%` : '—';
+    const lev = raw[7] && raw[7].ratio != null ? `${raw[7].ratio.toFixed(1)}x` : (raw[7] && raw[7].netDebt < 0 ? 'net cash' : '—');
+    const cat = raw[8] && raw[8].daysUntil != null ? `${raw[8].daysUntil}d` : '—';
+    const sqVal = raw[9];
+    const sq = sqVal && sqVal.siPct != null
+      ? `${(sqVal.siPct * 100).toFixed(1)}%${sqVal.dtc != null ? ` / ${sqVal.dtc.toFixed(1)}d` : ''}`
+      : '—';
+
+    tr.innerHTML = `
+      <td class="idx">${i + 1}.</td>
+      <td class="co-cell"><span class="sym">${sym}</span> <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>
+      <td class="num price-cell">${price != null ? '$' + (+price).toFixed(2) : '—'}</td>
+      <td class="grp-start"><div class="checks">${checks}</div></td>
+      <td><span class="score ${shortScoreClass(score)}">${score}</span></td>
+      <td class="grp-start num">${trendVal}</td>
+      <td class="num ${momCls}">${mom}</td>
+      <td class="grp-start num">${fwdPe}</td>
+      <td class="num">${epsRev}</td>
+      <td class="grp-start num">${qual}</td>
+      <td class="num">${lev}</td>
+      <td class="grp-start num">${cat}</td>
+      <td class="num">${sq}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+/* ---------------- Short Term rescan ---------------- */
+async function rescanShort(e){
+  const force = !!(e && e.shiftKey);
+  localStorage.setItem('gn_st_last_rescan', Date.now()); updateRescanTimer();
+  const btn = document.getElementById('rescan');
+  btn.disabled = true;
+  btn.innerHTML = (force ? 'Full rescan…' : 'Refreshing…');
+  // mark scoring state for animation
+  watchlist.forEach(w => { w.shortScoring = true; });
+  renderShortWatchlist();
+  if (!API_LIVE) {
+    setTimeout(() => {
+      watchlist.forEach(w => { w.shortScoring = false; });
+      btn.disabled = false; btn.innerHTML = 'Rescan';
+      renderShortWatchlist();
+    }, 800);
+    return;
+  }
+  try {
+    const jobId = crypto.randomUUID();
+    await api.send('/api/short/rescan', 'POST', {
+      jobId, force,
+      clientTickers: watchlist.map(r => r.sym),
+    }).catch(() => {});
+    // Poll the job for completion
+    const t = setInterval(async () => {
+      const j = await api.get('/api/jobs/' + jobId).catch(() => null);
+      if (!j) return;
+      if (j.rows && j.rows.length) {
+        j.rows.forEach(row => {
+          if (row && row.sym && !row.error) shortRowsBySym[row.sym.toUpperCase()] = row;
+        });
+        renderShortWatchlist();
+      }
+      if (j.status === 'done' || j.status === 'error') {
+        clearInterval(t);
+        watchlist.forEach(w => { w.shortScoring = false; });
+        btn.disabled = false;
+        btn.innerHTML = 'Rescan';
+        renderShortWatchlist();
+        if (j.status === 'error') showToast(j.error || 'Short rescan failed.');
+        else if (j.rows) showToast(`Short Term: rescored ${j.rows.filter(r => !r.error && r.score).length} ticker(s).`);
+      }
+    }, 3000);
+  } catch (err) {
+    watchlist.forEach(w => { w.shortScoring = false; });
+    btn.disabled = false; btn.innerHTML = 'Rescan';
+    showToast('Short rescan failed — try again.');
+  }
+}
 </script>
 </body>
 </html>
