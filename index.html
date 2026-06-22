@@ -947,8 +947,8 @@ function renderWatchlist(){
       <td class="txt"><div class="clamp">${daysUntil!=null&&daysUntil>0&&daysUntil<=90?`Earn ${daysUntil}d — `:''}${r.cat}</div></td>
       <td class="num grp-start">${r.ps}</td>
       <td class="ar-col">${(()=>{const parts=r.ar.split('\n');const consensus=parts[0]||r.ar;const raw=parts[1]||'';const counts=raw.replace(/([-+]?\d+)% PT/,(_,n)=>{const v=parseFloat(n);return`<span class="${v>=0?'ar-pt-pos':'ar-pt-neg'}">${v>=0?'+':''}${v}% PT</span>`;});return`<div class="ar-wrap"><span class="ar-consensus">${consensus}</span>${counts?`<span class="ar-counts">${counts}</span>`:''}`+(r.arGrades&&r.arGrades.length?`<div class="ar-tip"><div style="font-weight:700;margin-bottom:3px;font-size:9px">Recent analyst actions</div>${r.arGrades.map(g=>{const act=g.action==='upgrade'?'↑':g.action==='downgrade'?'↓':'→';const cls=g.action==='upgrade'?'ar-tip-up':g.action==='downgrade'?'ar-tip-dn':'ar-tip-nt';return`<div class="ar-tip-row"><span class="ar-tip-firm">${g.gradingCompany}</span><span class="ar-tip-grade ${cls}">${act} ${g.newGrade}</span></div>`;}).join('')}</div>`:'')+`</div>`;})()} </td>
-      <td class="num grp-start ${betaClass}">${betaStr??'—'}</td>
-      <td class="num ${rvClass}">${relVol??'—'}</td>`;
+      <td class="num grp-start ${betaClass}" data-tip="Beta — market sensitivity. How much the stock moves vs the overall market. 1.0 = moves with the market; above 1 = more volatile (bigger swings up and down); below 1 = steadier. Higher beta means higher risk and higher potential reward.">${betaStr??'—'}</td>
+      <td class="num ${rvClass}" data-tip="Relative Volume — today's trading volume vs its 20-day average. 1.0x = normal activity; above 1.5x = unusually active; above 2x = heavy interest, often around news or earnings. A spike can signal a catalyst worth checking.">${relVol??'—'}</td>`;
     // Drag and drop
     tr.setAttribute('draggable', 'true');
     tr.addEventListener('dragstart', e => {
@@ -1000,9 +1000,9 @@ function renderWatchlist(){
 /* ---------------- check-square tooltip (fixed-position, escapes overflow) --- */
 const tipBox=document.getElementById('tipBox');
 document.getElementById('wlBody').addEventListener('mouseover',e=>{
-  const chk=e.target.closest('.chk[data-tip]');
-  if(!chk){tipBox.style.display='none';return;}
-  tipBox.textContent=chk.dataset.tip;
+  const el=e.target.closest('[data-tip]');
+  if(!el){tipBox.style.display='none';return;}
+  tipBox.textContent=el.dataset.tip;
   tipBox.style.display='block';
 });
 document.getElementById('wlBody').addEventListener('mousemove',e=>{
