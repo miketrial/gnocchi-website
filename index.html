@@ -121,14 +121,13 @@
   tbody tr.drop-above td{border-top:2px solid #3b82f6!important}
   tbody tr.drop-below td{border-bottom:2px solid #3b82f6!important}
 
-  /* Pin divider — gap in page-background color; shadows on adjacent rows create depth */
-  tr.pin-divider td{padding:0;height:10px;border:none;background:var(--bg)}
-  tbody tr.pin-last td{box-shadow:0 4px 8px -2px rgba(0,0,0,0.12)}
-  tbody tr.pin-first td{box-shadow:0 -4px 8px -2px rgba(0,0,0,0.07)}
-  [data-theme="dark"] tbody tr.pin-last td{box-shadow:0 4px 10px -2px rgba(0,0,0,0.35)}
-  [data-theme="dark"] tbody tr.pin-first td{box-shadow:0 -4px 10px -2px rgba(0,0,0,0.2)}
-  [data-theme="warm"] tbody tr.pin-last td{box-shadow:0 4px 8px -2px rgba(0,0,0,0.14)}
-  [data-theme="warm"] tbody tr.pin-first td{box-shadow:0 -4px 8px -2px rgba(0,0,0,0.08)}
+  /* Pin divider — double rule (FT/ledger style) */
+  tr.pin-divider td{padding:0;height:6px;border:none;background:var(--bg)}
+  tbody tr.pin-last td{border-bottom:3px double #c0c4cc}
+  tbody tr.pin-first td{border-top:none}
+  [data-theme="dark"] tbody tr.pin-last td{border-bottom-color:#4a4f5c}
+  [data-theme="warm"] tbody tr.pin-last td{border-bottom-color:#a89e90}
+  [data-theme="white"] tbody tr.pin-last td{border-bottom:3px double #000}
 
   /* Pinned row indicator — star before sym */
   tbody tr.pinned .sym::before{content:'★';color:#7aa6c2;margin-right:4px;font-size:9px;vertical-align:middle;line-height:1}
@@ -628,9 +627,9 @@
       <button data-t="white">White</button>
     </div>
 
-    <button id="healthBtn" class="btn" title="Probe FMP's data feed for a CDN sym-flip">♡ FMP health</button>
+    <button id="healthBtn" class="btn" title="Probe FMP's data feed for a CDN sym-flip">FMP health</button>
 
-    <div class="net-link" id="navToggle">Net ↗</div>
+    <div class="net-link" id="navToggle">Net</div>
   </header>
 
   <!-- ===== WATCHLIST VIEW ===== -->
@@ -1299,7 +1298,7 @@ document.getElementById('healthBtn').addEventListener('click',async()=>{
     const detail=(h.probes||[]).map(p=>`${p.sym}: ${p.ok?'✓ '+(p.name||''):'✕ '+(p.name||p.error||'?')}`).join('  ·  ');
     showToast(`${h.message}\n${detail}`, 9000);
   }catch{
-    btn.innerHTML='♡ FMP health';
+    btn.innerHTML='FMP health';
     showToast('Health check failed — could not reach /api/health.');
   }
 });
@@ -1322,18 +1321,14 @@ const _scanAnims=new Map(); // sym → {msgIdx, charIdx, text, id}
 
 function startCheckAnim(sym){
   if(_scanAnims.has(sym)) clearInterval(_scanAnims.get(sym).id);
-  const msgs=[`> scoring ${sym}`,'fetching ratios','checking momentum','computing P/E','vs sector data','analyst grades','running model','finalizing…'];
-  const state={msgIdx:0,charIdx:0,text:'',id:null};
+  const frames=['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
+  const state={frame:0,text:'',id:null};
   _scanAnims.set(sym,state);
   state.id=setInterval(()=>{
-    const msg=msgs[state.msgIdx%msgs.length];
-    if(state.charIdx<msg.length){
-      state.text=msg.slice(0,++state.charIdx);
-    }else{
-      state.msgIdx++; state.charIdx=0; state.text='';
-    }
+    state.text=frames[state.frame%frames.length]+' Scoring';
+    state.frame++;
     syncCheckAnim(sym);
-  },45);
+  },80);
 }
 
 function stopCheckAnim(sym){
@@ -1385,14 +1380,14 @@ function pollJob(jobId){
         refreshUsage();
         rescanBtn.disabled=false;
         if(j.status==='error'){
-          rescanBtn.innerHTML='⟳ Rescan';
+          rescanBtn.innerHTML='Rescan';
           showToast(j.error||'Rescan failed — try again.');
         }else if(j.status==='done'&&j.total===0){
           rescanBtn.innerHTML='✓ All fresh';
           showToast('All tickers scored within 48 h — Shift+click ⟳ to force a full refresh, or right-click a row.');
-          setTimeout(()=>{rescanBtn.innerHTML='⟳ Rescan';},3000);
+          setTimeout(()=>{rescanBtn.innerHTML='Rescan';},3000);
         }else{
-          rescanBtn.innerHTML='⟳ Rescan';
+          rescanBtn.innerHTML='Rescan';
           if(j.rows&&j.rows.filter(r=>!r.error).length>0)
             showToast(`Rescored ${j.rows.filter(r=>!r.error).length} ticker(s) — scores updated.`);
         }
@@ -1415,7 +1410,7 @@ function setView(v){
   const isWL=v==='watchlist';
   document.getElementById('wlControls').style.display=isWL?'flex':'none';
   document.getElementById('wlLeft').style.display=isWL?'flex':'none';
-  document.getElementById('navToggle').textContent=v==='net'?'↩ Watchlist':'Net ↗';
+  document.getElementById('navToggle').textContent=v==='net'?'Watchlist':'Net';
   document.getElementById('twToggle').textContent=v==='tw'?'↩ Watchlist':'Training Wheels';
   window.scrollTo(0,0);
 }
@@ -1781,7 +1776,7 @@ rescanBtn.onclick=async(e)=>{
       if(i<scanning.length){
         const sym=scanning[i].sym;
         scanning[i].scoring=false; stopCheckAnim(sym); renderWatchlist(); flash(sym); i++;
-      }else{clearInterval(t);rescanBtn.disabled=false;rescanBtn.innerHTML='⟳ Rescan';}
+      }else{clearInterval(t);rescanBtn.disabled=false;rescanBtn.innerHTML='Rescan';}
     },1200);
   }
 };
