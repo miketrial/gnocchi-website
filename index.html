@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gnocchi · Watchlist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root{
     /* verdict palette (from SKILL.md) */
@@ -118,14 +121,13 @@
   tbody tr.drop-above td{border-top:2px solid #3b82f6!important}
   tbody tr.drop-below td{border-bottom:2px solid #3b82f6!important}
 
-  /* Pin divider — gap in page-background color; shadows on adjacent rows create depth */
-  tr.pin-divider td{padding:0;height:10px;border:none;background:var(--bg)}
-  tbody tr.pin-last td{box-shadow:0 4px 8px -2px rgba(0,0,0,0.12)}
-  tbody tr.pin-first td{box-shadow:0 -4px 8px -2px rgba(0,0,0,0.07)}
-  [data-theme="dark"] tbody tr.pin-last td{box-shadow:0 4px 10px -2px rgba(0,0,0,0.35)}
-  [data-theme="dark"] tbody tr.pin-first td{box-shadow:0 -4px 10px -2px rgba(0,0,0,0.2)}
-  [data-theme="warm"] tbody tr.pin-last td{box-shadow:0 4px 8px -2px rgba(0,0,0,0.14)}
-  [data-theme="warm"] tbody tr.pin-first td{box-shadow:0 -4px 8px -2px rgba(0,0,0,0.08)}
+  /* Pin divider — double rule (FT/ledger style) */
+  tr.pin-divider td{padding:0;height:6px;border:none;background:var(--bg)}
+  tbody tr.pin-last td{border-bottom:3px double #c0c4cc}
+  tbody tr.pin-first td{border-top:none}
+  [data-theme="dark"] tbody tr.pin-last td{border-bottom-color:#4a4f5c}
+  [data-theme="warm"] tbody tr.pin-last td{border-bottom-color:#a89e90}
+  [data-theme="white"] tbody tr.pin-last td{border-bottom:3px double #000}
 
   /* Pinned row indicator — star before sym */
   tbody tr.pinned .sym::before{content:'★';color:#7aa6c2;margin-right:4px;font-size:9px;vertical-align:middle;line-height:1}
@@ -322,7 +324,7 @@
   /* Typing pipeline animation for scanning rows */
   tbody tr.scoring td{opacity:0.35;pointer-events:none}
   tbody tr.scoring .co-cell{opacity:1;position:relative;overflow:visible}
-  .typing-overlay{position:absolute;left:calc(50vw - 32px);top:50%;transform:translate(-50%,-50%);white-space:nowrap;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:11px;color:#378ADD;pointer-events:none;display:flex;align-items:center;gap:2px}
+  .typing-overlay{position:absolute;left:calc(50vw - 32px);top:50%;transform:translate(-50%,-50%);white-space:nowrap;font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:11px;color:#378ADD;pointer-events:none;display:flex;align-items:center;gap:2px}
   .typing-cursor{animation:blink .8s step-end infinite}
   @keyframes blink{50%{opacity:0}}
 
@@ -418,6 +420,52 @@
 [data-theme="warm"] .price-cell{color:#1e1510}
 [data-theme="warm"] .legend span b{background:#e4ddd4;color:#584e44}
 [data-theme="warm"] #themeSwatch button{background:#e4ddd4;color:var(--ink);border-color:#ccc4b8}
+
+/* ── White (sharp B&W technical) ──────────────────────────────────────── */
+[data-theme="white"]{
+  --ink:#000; --ink-soft:#000; --ink-faint:#222;
+  --page:#fff; --card:#fff;
+  --good-bg:#D5F5E3; --good-fg:#0a5128;
+  --bad-bg:#FADBD8;  --bad-fg:#7a1a12;
+  --yel-bg:#FEF9E7;  --yel-fg:#5a4400;
+  --neu-bg:#D6EAF8;  --neu-fg:#0a2e5c;
+  --gray-bg:#ececec; --gray-fg:#000;
+  --pur-bg:#E8DAEF;  --pur-fg:#3a1060;
+}
+[data-theme="white"] body{background:var(--page);color:var(--ink);font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+[data-theme="white"] .brand,[data-theme="white"] .btn,[data-theme="white"] .name,[data-theme="white"] .sym,[data-theme="white"] .num,[data-theme="white"] .txt,[data-theme="white"] .score,[data-theme="white"] .pill,[data-theme="white"] .legend{font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+[data-theme="white"] header.bar{background:linear-gradient(var(--page) 72%,transparent)}
+[data-theme="white"] .btn,[data-theme="white"] .net-link{background:#fff;color:#000;border:1px solid #000;border-radius:0}
+[data-theme="white"] .search{background:#fff;border:1px solid #000;border-radius:0}
+[data-theme="white"] .search input{color:#000}
+[data-theme="white"] tbody td{border-top-color:#e5e5e5}
+[data-theme="white"] tbody tr:hover{background:#f5f5f5}
+[data-theme="white"] tbody tr:hover td:nth-child(1),
+[data-theme="white"] tbody tr:hover td:nth-child(2){background:#f5f5f5}
+[data-theme="white"] tbody tr.flash{background:#eaeaea}
+[data-theme="white"] thead tr.grphdr th{border-bottom:1px solid #000;background:#fff}
+[data-theme="white"] thead tr:nth-child(2) th{border-bottom:1px solid #000}
+[data-theme="white"] thead tr:nth-child(2) th.grp-start,
+[data-theme="white"] tbody td.grp-start{border-left-color:#000}
+[data-theme="white"] thead th:nth-child(1),[data-theme="white"] tbody td:nth-child(1),
+[data-theme="white"] thead th:nth-child(2),[data-theme="white"] tbody td:nth-child(2){background:#fff}
+[data-theme="white"] .num{color:#000}
+[data-theme="white"] .sym{color:#000;font-weight:700}
+[data-theme="white"] .price-cell{color:#000}
+[data-theme="white"] .legend span b{background:#fff;color:#000;border:1px solid #000;border-radius:0}
+[data-theme="white"] .pill{border-radius:0 !important}
+[data-theme="white"] #ctx{background:#fff;border:1px solid #000;border-radius:0;color:#000}
+[data-theme="white"] #scoreHist{background:#fff;border:1px solid #000}
+[data-theme="white"] #acDrop{background:#fff;border:1px solid #000;border-radius:0}
+[data-theme="white"] .ac-item:hover,[data-theme="white"] .ac-item.sel{background:#f0f0f0}
+[data-theme="white"] #pipelineModal > div{background:#fff;border:1px solid #000;border-radius:0}
+[data-theme="white"] #themeSwatch button{background:#fff;color:#000;border:1px solid #000;border-radius:0;padding:8px 15px;font-size:11px;font-weight:600;opacity:1}
+[data-theme="white"] #themeSwatch button.active{background:#000;color:#fff;border-color:#000}
+[data-theme="white"] .net-link{color:#000;font-weight:600}
+[data-theme="white"] #usageChip,[data-theme="white"] #usageChip.ok,[data-theme="white"] #usageChip.warn,[data-theme="white"] #usageChip.capped{color:#000}
+[data-theme="white"] .rescan-timer{color:#000}
+[data-theme="white"] tbody tr.pin-last td{box-shadow:0 4px 8px -2px rgba(0,0,0,0.12)}
+[data-theme="white"] tbody tr.pin-first td{box-shadow:0 -4px 8px -2px rgba(0,0,0,0.08)}
 
 
 /* ── theme swatch strip ───────────────────────────────────────────────── */
@@ -576,11 +624,12 @@
     <div id="themeSwatch">
       <button data-t="dark">Dark</button>
       <button data-t="warm">Warm</button>
+      <button data-t="white">White</button>
     </div>
 
-    <button id="healthBtn" class="btn" title="Probe FMP's data feed for a CDN sym-flip">♡ FMP health</button>
+    <button id="healthBtn" class="btn" title="Probe FMP's data feed for a CDN sym-flip">FMP health</button>
 
-    <div class="net-link" id="navToggle">Net ↗</div>
+    <div class="net-link" id="navToggle">Net</div>
   </header>
 
   <!-- ===== WATCHLIST VIEW ===== -->
@@ -1249,7 +1298,7 @@ document.getElementById('healthBtn').addEventListener('click',async()=>{
     const detail=(h.probes||[]).map(p=>`${p.sym}: ${p.ok?'✓ '+(p.name||''):'✕ '+(p.name||p.error||'?')}`).join('  ·  ');
     showToast(`${h.message}\n${detail}`, 9000);
   }catch{
-    btn.innerHTML='♡ FMP health';
+    btn.innerHTML='FMP health';
     showToast('Health check failed — could not reach /api/health.');
   }
 });
@@ -1272,18 +1321,14 @@ const _scanAnims=new Map(); // sym → {msgIdx, charIdx, text, id}
 
 function startCheckAnim(sym){
   if(_scanAnims.has(sym)) clearInterval(_scanAnims.get(sym).id);
-  const msgs=[`> scoring ${sym}`,'fetching ratios','checking momentum','computing P/E','vs sector data','analyst grades','running model','finalizing…'];
-  const state={msgIdx:0,charIdx:0,text:'',id:null};
+  const frames=['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
+  const state={frame:0,text:'',id:null};
   _scanAnims.set(sym,state);
   state.id=setInterval(()=>{
-    const msg=msgs[state.msgIdx%msgs.length];
-    if(state.charIdx<msg.length){
-      state.text=msg.slice(0,++state.charIdx);
-    }else{
-      state.msgIdx++; state.charIdx=0; state.text='';
-    }
+    state.text=frames[state.frame%frames.length]+' Scoring';
+    state.frame++;
     syncCheckAnim(sym);
-  },45);
+  },80);
 }
 
 function stopCheckAnim(sym){
@@ -1335,14 +1380,14 @@ function pollJob(jobId){
         refreshUsage();
         rescanBtn.disabled=false;
         if(j.status==='error'){
-          rescanBtn.innerHTML='⟳ Rescan';
+          rescanBtn.innerHTML='Rescan';
           showToast(j.error||'Rescan failed — try again.');
         }else if(j.status==='done'&&j.total===0){
           rescanBtn.innerHTML='✓ All fresh';
           showToast('All tickers scored within 48 h — Shift+click ⟳ to force a full refresh, or right-click a row.');
-          setTimeout(()=>{rescanBtn.innerHTML='⟳ Rescan';},3000);
+          setTimeout(()=>{rescanBtn.innerHTML='Rescan';},3000);
         }else{
-          rescanBtn.innerHTML='⟳ Rescan';
+          rescanBtn.innerHTML='Rescan';
           if(j.rows&&j.rows.filter(r=>!r.error).length>0)
             showToast(`Rescored ${j.rows.filter(r=>!r.error).length} ticker(s) — scores updated.`);
         }
@@ -1365,7 +1410,7 @@ function setView(v){
   const isWL=v==='watchlist';
   document.getElementById('wlControls').style.display=isWL?'flex':'none';
   document.getElementById('wlLeft').style.display=isWL?'flex':'none';
-  document.getElementById('navToggle').textContent=v==='net'?'↩ Watchlist':'Net ↗';
+  document.getElementById('navToggle').textContent=v==='net'?'Watchlist':'Net';
   document.getElementById('twToggle').textContent=v==='tw'?'↩ Watchlist':'Training Wheels';
   window.scrollTo(0,0);
 }
@@ -1731,7 +1776,7 @@ rescanBtn.onclick=async(e)=>{
       if(i<scanning.length){
         const sym=scanning[i].sym;
         scanning[i].scoring=false; stopCheckAnim(sym); renderWatchlist(); flash(sym); i++;
-      }else{clearInterval(t);rescanBtn.disabled=false;rescanBtn.innerHTML='⟳ Rescan';}
+      }else{clearInterval(t);rescanBtn.disabled=false;rescanBtn.innerHTML='Rescan';}
     },1200);
   }
 };
