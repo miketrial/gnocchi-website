@@ -59,9 +59,9 @@ export async function releaseRescanLock(jobId) {
 
 /* ---------- Anthropic spend circuit-breaker ----------
    Hard daily ceiling on Haiku web-search calls (the only paid Anthropic usage).
-   Each Layer-2 call ≈ $0.12, so the default cap of 50 bounds the worst case to
-   roughly $6/day no matter how many rescans fire. Override via HAIKU_DAILY_CAP. */
-const HAIKU_DAILY_CAP = Number(process.env.HAIKU_DAILY_CAP || 50);
+   Each Layer-2 call ≈ $0.12, so the default cap of 150 bounds the worst case to
+   roughly $18/day no matter how many rescans fire. Override via HAIKU_DAILY_CAP. */
+const HAIKU_DAILY_CAP = Number(process.env.HAIKU_DAILY_CAP || 150);
 const haikuKey = () => "haiku-" + new Date().toISOString().slice(0, 10);
 export function haikuCap() { return HAIKU_DAILY_CAP; }
 export async function getHaikuUsage() {
