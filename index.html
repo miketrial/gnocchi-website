@@ -71,12 +71,11 @@
   .rescan-wrap{display:flex; flex-direction:column; align-items:flex-start; gap:3px}
   .rescan-timer{font-size:8px; color:var(--ink-faint); font-variant-numeric:tabular-nums}
 
-  /* AI budget chip */
-  #usageChip{font-size:9px; font-weight:600; padding:4px 9px; border-radius:8px; white-space:nowrap;
-    background:#f3f4f6; color:var(--ink-faint); font-variant-numeric:tabular-nums; display:none}
-  #usageChip.ok{color:#1E8449}
-  #usageChip.warn{background:var(--yel-bg); color:var(--yel-fg)}
-  #usageChip.capped{background:var(--bad-bg); color:var(--bad-fg)}
+  /* AI budget — plain text under the rescan timer; color via text only */
+  #usageChip{display:none}
+  #usageChip.ok{color:var(--good-fg)}
+  #usageChip.warn{color:var(--yel-fg)}
+  #usageChip.capped{color:var(--bad-fg)}
 
   /* FMP health button states */
   #healthBtn.healthy{background:var(--good-bg); color:var(--good-fg)}
@@ -436,7 +435,7 @@
         <button class="btn" id="twToggle">Training Wheels</button>
       </div>
       <div class="rescan-timer" id="rescanTimer"></div>
-      <div style="font-size:10px;color:#8a95a8;margin-top:2px">v4</div>
+      <div class="rescan-timer" id="usageChip" title="Today's AI research calls vs daily cap"></div>
     </div>
 
     <!-- Pipeline modal -->
@@ -569,8 +568,6 @@
       <button data-t="dark">Dark</button>
       <button data-t="warm">Warm</button>
     </div>
-
-    <div id="usageChip" title="Today's AI research calls vs daily cap"></div>
 
     <button id="healthBtn" class="btn" title="Probe FMP's data feed for a CDN sym-flip">♡ FMP health</button>
 
@@ -1216,9 +1213,9 @@ async function refreshUsage(){
     const u=await api.get('/api/usage');
     if(u&&typeof u.used==='number'){
       el.style.display='block';
-      el.textContent=`AI ${u.used}/${u.cap}`;
+      el.textContent=`AI usage:${u.used}/${u.cap}`;
       const pct=u.cap?u.used/u.cap:0;
-      el.className=u.capped?'capped':pct>=0.8?'warn':'ok';
+      el.className='rescan-timer '+(u.capped?'capped':pct>=0.8?'warn':'ok');
       el.title=`Today's AI research calls: ${u.used} of ${u.cap} (≈ $${u.est_cost_usd}). ${u.capped?'Cap reached — Layer 2 paused until tomorrow.':u.remaining+' remaining.'}`;
     }
   }catch{ el.style.display='none'; }
