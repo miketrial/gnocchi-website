@@ -234,11 +234,12 @@ function checkValuation(price, fwdEps, industry) {
   };
 }
 
-// 7. Quality: TTM FCF > 0 AND (ROE > sector median)
-function checkQuality(cf, ratios, industry) {
+// 7. Quality: TTM FCF > 0 AND (ROE > sector median).
+// FMP keeps `returnOnEquity` on /key-metrics, NOT /ratios.
+function checkQuality(cf, keyMetrics, industry) {
   const cfTTM = (cf || []).slice(0, 4).reduce((s, q) => s + (q.freeCashFlow ?? 0), 0);
-  const r0 = (ratios || [])[0];
-  const roe = r0?.returnOnEquity;
+  const km0 = (keyMetrics || [])[0];
+  const roe = km0?.returnOnEquity;
   const median = sectorRoeMedian(industry);
   if (!cf || cf.length < 1 || roe == null) {
     return { verdict: "na", summary: "Missing FCF or ROE data", value: null };
@@ -306,27 +307,28 @@ function checkCatalyst(earningsHist) {
   };
 }
 
-// 10. Short Squeeze: SI% float 5-25% AND days-to-cover ≥ 3
-function checkSqueeze(shortInfo) {
-  const s0 = (shortInfo || [])[0];
-  if (!s0) return { verdict: "na", summary: "No short interest report", value: null };
-  const siPct = s0.shortPercentOfFloat ?? s0.shortPercentOfSharesOutstanding;
-  const dtc = s0.daysToCover;
-  if (siPct == null) return { verdict: "na", summary: "Short interest percentage missing", value: null };
-  const inRange = siPct >= 0.05 && siPct <= 0.25;
-  const hasDtc = dtc != null && dtc >= 3;
-  // Pass if real squeeze setup: meaningful short interest + slow to unwind
-  const pass = inRange && hasDtc;
+// 10. Volume Surge: today's volume ≥ 1.5× the 20-day average.
+// (Replaces the original Short-Squeeze chip — FMP's /short-interest endpoint
+//  returns no data on the current plan tier. Volume surge is a stronger
+//  leading indicator for swing-trade timing anyway: unusual volume nearly
+//  always precedes a meaningful price move.)
+function checkVolumeSurge(quote, hist) {
+  const q0 = (quote || [])[0];
+  const todayVol = q0?.volume;
+  if (todayVol == null) return { verdict: "na", summary: "No current volume reading", value: null };
+  if (!hist || hist.length < 20) return { verdict: "na", summary: "Need 20 days of volume history", value: null };
+  // Skip today's bar (often the same as `quote.volume`) so we get a true comparison baseline
+  const vols = hist.slice(1, 21).map(d => d.volume).filter(v => v != null && v > 0);
+  if (vols.length < 15) return { verdict: "na", summary: "Volume history too sparse", value: null };
+  const avg20 = vols.reduce((s, x) => s + x, 0) / vols.length;
+  const rv = todayVol / avg20;
+  const pass = rv >= 1.5;
   return {
     verdict: pass ? "good" : "bad",
     summary: pass
-      ? `Squeeze setup: ${(siPct * 100).toFixed(1)}% short, ${dtc.toFixed(1)} days-to-cover`
-      : siPct > 0.25
-        ? `Heavy short ${(siPct * 100).toFixed(1)}% (> 25%) — risky, not a clean squeeze setup`
-        : siPct < 0.05
-          ? `Light short ${(siPct * 100).toFixed(1)}% (< 5%) — no squeeze fuel`
-          : `Short ${(siPct * 100).toFixed(1)}% but ${dtc != null ? `only ${dtc.toFixed(1)} d2c` : "d2c missing"} — too easy to unwind`,
-    value: { siPct, dtc },
+      ? `Volume ${rv.toFixed(2)}× the 20-day avg — unusual activity, often precedes a move`
+      : `Volume only ${rv.toFixed(2)}× the 20-day avg — no surge`,
+    value: { rv, todayVol, avg20 },
   };
 }
 
@@ -345,13 +347,12 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   }
 
   // Fetch FMP data (sequential with small delay to stay under rate limits)
-  let hist, quote, ratios, estimates, sh, cf, bs, inc, profile, earningsHist;
+  let hist, quote, keyMetrics, estimates, cf, bs, inc, profile, earningsHist;
   try {
     hist          = await safe("historical-price-eod/light", sym, "&limit=260"); await delay(200);
     quote         = await safe("quote", sym);                                     await delay(200);
-    ratios        = await safe("ratios", sym, "&period=annual&limit=2");          await delay(200);
+    keyMetrics    = await safe("key-metrics", sym, "&period=annual&limit=2");     await delay(200);
     estimates     = await safe("analyst-estimates", sym, "&period=annual&limit=3"); await delay(200);
-    sh            = await safe("short-interest", sym, "&limit=1");                await delay(200);
     cf            = await safe("cash-flow-statement", sym, "&period=quarter&limit=4"); await delay(200);
     bs            = await safe("balance-sheet-statement", sym, "&period=quarter&limit=1"); await delay(200);
     inc           = await safe("income-statement", sym, "&period=quarter&limit=4"); await delay(200);
@@ -367,9 +368,12 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   const price = q0.price ?? p0.price ?? null;
   const industry = p0.industry || null;
   const sector = p0.sector || null;
-  const fwdEps = (estimates || []).find(e => e.estimatedEpsAvg != null)?.estimatedEpsAvg
-              ?? (estimates || [])[0]?.estimatedEpsAvg
-              ?? null;
+  // Forward EPS — analyst-estimates returns rows with field `epsAvg`
+  // (FMP's own naming, NOT estimatedEpsAvg). Take the nearest future row.
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const future = (estimates || []).filter(e => e.date && e.date >= todayStr)
+                                  .sort((a, b) => a.date.localeCompare(b.date));
+  const fwdEps = future[0]?.epsAvg ?? (estimates || [])[0]?.epsAvg ?? null;
 
   // Record snapshot for next time
   await recordEpsSnapshot(sym, fwdEps).catch(() => {});
@@ -377,16 +381,16 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
 
   // Run all 10 checks
   const checks = [
-    checkTrend(hist),                           // 1
-    check3MMomentum(hist),                      // 2
-    checkNearHigh(hist),                        // 3
-    checkLiquidity(hist, quote),                // 4
-    checkEpsRevisions(fwdEps, snapshot),        // 5
-    checkValuation(price, fwdEps, industry),    // 6
-    checkQuality(cf, ratios, industry),         // 7
-    checkLeverage(bs, inc),                     // 8
-    checkCatalyst(earningsHist),                // 9
-    checkSqueeze(sh),                           // 10
+    checkTrend(hist),                              // 1
+    check3MMomentum(hist),                         // 2
+    checkNearHigh(hist),                           // 3
+    checkLiquidity(hist, quote),                   // 4
+    checkEpsRevisions(fwdEps, snapshot),           // 5
+    checkValuation(price, fwdEps, industry),       // 6
+    checkQuality(cf, keyMetrics, industry),        // 7
+    checkLeverage(bs, inc),                        // 8
+    checkCatalyst(earningsHist),                   // 9
+    checkVolumeSurge(quote, hist),                 // 10 (was Short Squeeze — no data on plan)
   ];
 
   const score = checks.filter(c => c.verdict === "good").length;
