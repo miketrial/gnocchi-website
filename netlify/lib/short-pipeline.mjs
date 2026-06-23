@@ -28,6 +28,63 @@ async function safe(endpoint, ticker, extra = "") {
 
 const delay = ms => new Promise(r => setTimeout(r, ms));
 
+/* ---------- Sanity range gates — reject implausible FMP values before they
+   reach a chip. A swing trader acts on these numbers fast, so a garbage
+   value must show as "data unavailable" (purple), never a confident red/green. */
+const SHORT_SANITY = {
+  ret3m:     { min: -0.95, max: 10.0 },   // -95% to +1000% over 3 months
+  fwdPe:     { min: 0.2,   max: 1000 },   // sub-0.2x or 1000x+ fwd P/E = bad data
+  roe:       { min: -3.0,  max: 5.0  },   // -300% to +500% ROE
+  levRatio:  { min: -50,   max: 50   },   // net debt / EBITDA
+  volRv:     { min: 0,     max: 50   },   // today vs 20-day avg volume
+};
+function shortSane(value, field) {
+  if (value == null || !isFinite(value)) return null;
+  const r = SHORT_SANITY[field];
+  if (!r) return value;
+  return (value >= r.min && value <= r.max) ? value : null;
+}
+
+/* ---------- 3-step data-integrity check ----------
+   Run BEFORE scoring. Catches the failure modes that would feed a swing
+   trader wrong numbers:
+     1. Symbol integrity — every endpoint must report the ticker we asked for
+        (FMP/CDN occasionally serves another company's data under a sym-flip).
+     2. Price cross-check — quote, profile, and latest EOD close must agree
+        within 6% (they're all "today's price" via different CDN paths; a wide
+        gap means one feed is stale or wrong).
+     3. Freshness — the newest historical bar must be recent (≤ 6 calendar
+        days old) so momentum/trend aren't computed on a frozen series.
+   Returns { ok, warnings[] }. */
+function validateShortData(sym, { quote, profile, hist, inc }) {
+  const warnings = [];
+  const want = sym.toUpperCase();
+
+  // Step 1 — symbol integrity across every endpoint that carries a symbol
+  const symOf = (arr) => arr?.[0]?.symbol?.toUpperCase();
+  const checks = { quote: symOf(quote), profile: symOf(profile), hist: symOf(hist), income: symOf(inc) };
+  for (const [ep, s] of Object.entries(checks)) {
+    if (s && s !== want) warnings.push(`sym-flip: ${ep} returned ${s}, expected ${want}`);
+  }
+
+  // Step 2 — price cross-check (quote vs profile vs latest EOD close)
+  const prices = [quote?.[0]?.price, profile?.[0]?.price, hist?.[0]?.price]
+    .filter(p => typeof p === "number" && p > 0);
+  if (prices.length >= 2) {
+    const lo = Math.min(...prices), hi = Math.max(...prices);
+    if (hi / lo > 1.06) warnings.push(`price divergence: feeds disagree ${lo} vs ${hi} (>6%)`);
+  }
+
+  // Step 3 — freshness of the price series
+  const lastBar = hist?.[0]?.date;
+  if (lastBar) {
+    const ageDays = (Date.now() - new Date(lastBar).getTime()) / 86400000;
+    if (ageDays > 6) warnings.push(`stale price series: newest bar ${lastBar} is ${Math.round(ageDays)}d old`);
+  }
+
+  return { ok: warnings.length === 0, warnings };
+}
+
 /* ---------- Sector ROE/ROIC medians (rough, FMP-derived) ----------
    Static lookup avoids per-rescan fan-out. Numbers are approximate sector
    medians; treat as veto thresholds, not precise benchmarks. */
@@ -142,7 +199,8 @@ function check3MMomentum(hist) {
   const now = closes[0];
   const then = closes[62]; // ~63 trading days ≈ 3 months
   if (!then || then <= 0) return { verdict: "na", summary: "Bad reference price", value: null };
-  const ret = (now / then) - 1;
+  const ret = shortSane((now / then) - 1, "ret3m");
+  if (ret == null) return { verdict: "na", summary: "3-month return out of plausible range — data suspect", value: null };
   const pass = ret >= 0.05;
   return {
     verdict: pass ? "good" : "bad",
@@ -199,9 +257,12 @@ function checkLiquidity(hist, quote) {
 function checkAnalystRevisions(ptSummary, grades) {
   const s = (ptSummary || [])[0] || null;
   const g = Array.isArray(grades) ? grades : [];
-  const ptNow = s?.lastMonthAvgPriceTarget;
+  // Only use PT signal when there are actual recent price-target updates.
+  // lastMonthAvgPriceTarget=0 means no PTs filed that month, not a price target of $0.
+  const ptCount = s?.lastMonthCount ?? 0;
+  const ptNow  = ptCount >= 1 ? s?.lastMonthAvgPriceTarget  : null;
   const ptThen = s?.lastQuarterAvgPriceTarget;
-  const havePT = ptNow != null && ptThen != null && ptThen > 0;
+  const havePT = ptNow != null && ptNow > 0 && ptThen != null && ptThen > 0;
 
   // Grades are newest-first. Compute buy ratio = (StrongBuy+Buy) / total.
   function buyRatio(row) {
@@ -248,7 +309,10 @@ function checkValuation(price, fwdEps, industry) {
   if (!price || !fwdEps || fwdEps <= 0) {
     return { verdict: "na", summary: "No forward P/E (negative or missing fwd EPS)", value: null };
   }
-  const fwdPe = price / fwdEps;
+  const fwdPe = shortSane(price / fwdEps, "fwdPe");
+  if (fwdPe == null) {
+    return { verdict: "na", summary: "Forward P/E out of plausible range — data suspect", value: null };
+  }
   const threshold = sectorPe75th(industry);
   const pass = fwdPe <= threshold;
   return {
@@ -265,10 +329,10 @@ function checkValuation(price, fwdEps, industry) {
 function checkQuality(cf, keyMetrics, industry) {
   const cfTTM = (cf || []).slice(0, 4).reduce((s, q) => s + (q.freeCashFlow ?? 0), 0);
   const km0 = (keyMetrics || [])[0];
-  const roe = km0?.returnOnEquity;
+  const roe = shortSane(km0?.returnOnEquity, "roe");
   const median = sectorRoeMedian(industry);
   if (!cf || cf.length < 1 || roe == null) {
-    return { verdict: "na", summary: "Missing FCF or ROE data", value: null };
+    return { verdict: "na", summary: "Missing FCF or ROE data (or ROE out of plausible range)", value: null };
   }
   const fcfOk = cfTTM > 0;
   const roeOk = roe > median;
@@ -300,7 +364,8 @@ function checkLeverage(bs, inc) {
     }
     return { verdict: "good", summary: `Net cash position $${(-netDebt / 1e9).toFixed(2)}B (EBITDA negative but no debt burden)`, value: { netDebt, ebitda } };
   }
-  const ratio = netDebt / ebitda;
+  const ratio = shortSane(netDebt / ebitda, "levRatio");
+  if (ratio == null) return { verdict: "na", summary: "Leverage ratio out of plausible range — data suspect", value: null };
   const pass = ratio < 3;
   return {
     verdict: pass ? "good" : "bad",
@@ -347,7 +412,8 @@ function checkVolumeSurge(quote, hist) {
   const vols = hist.slice(1, 21).map(d => d.volume).filter(v => v != null && v > 0);
   if (vols.length < 15) return { verdict: "na", summary: "Volume history too sparse", value: null };
   const avg20 = vols.reduce((s, x) => s + x, 0) / vols.length;
-  const rv = todayVol / avg20;
+  const rv = shortSane(todayVol / avg20, "volRv");
+  if (rv == null) return { verdict: "na", summary: "Volume ratio out of plausible range — data suspect", value: null };
   const pass = rv >= 1.5;
   return {
     verdict: pass ? "good" : "bad",
@@ -365,30 +431,62 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   // Cache check
   if (!skipCache) {
     const cached = await getShortFmpCache(sym);
-    if (cached && cached._v === 1) {
+    if (cached && cached._v === 3) {
       return cached.row;
     }
   } else {
     await deleteShortFmpCache(sym).catch(() => {});
   }
 
-  // Fetch FMP data (sequential with small delay to stay under rate limits)
+  // Fetch FMP data (sequential with small delay to stay under rate limits).
+  // Wrapped in a closure so the 3-step integrity check can retry it once.
+  const runFmp = async () => {
+    const d = {};
+    d.hist          = await safe("historical-price-eod/light", sym, "&limit=260"); await delay(200);
+    d.quote         = await safe("quote", sym);                                     await delay(200);
+    d.keyMetrics    = await safe("key-metrics", sym, "&period=annual&limit=2");     await delay(200);
+    d.estimates     = await safe("analyst-estimates", sym, "&period=annual&limit=3"); await delay(200);
+    d.cf            = await safe("cash-flow-statement", sym, "&period=quarter&limit=4"); await delay(200);
+    d.bs            = await safe("balance-sheet-statement", sym, "&period=quarter&limit=1"); await delay(200);
+    d.inc           = await safe("income-statement", sym, "&period=quarter&limit=4"); await delay(200);
+    d.profile       = await safe("profile", sym);                                   await delay(200);
+    d.earningsHist  = await safe("earnings", sym, "&limit=6");                     await delay(200);
+    d.ptSummary     = await safe("price-target-summary", sym);                     await delay(200);
+    d.grades        = await safe("grades-historical", sym, "&limit=6");
+    return d;
+  };
+
   let hist, quote, keyMetrics, estimates, cf, bs, inc, profile, earningsHist, ptSummary, grades;
+  let warnings = [];
   try {
-    hist          = await safe("historical-price-eod/light", sym, "&limit=260"); await delay(200);
-    quote         = await safe("quote", sym);                                     await delay(200);
-    keyMetrics    = await safe("key-metrics", sym, "&period=annual&limit=2");     await delay(200);
-    estimates     = await safe("analyst-estimates", sym, "&period=annual&limit=3"); await delay(200);
-    cf            = await safe("cash-flow-statement", sym, "&period=quarter&limit=4"); await delay(200);
-    bs            = await safe("balance-sheet-statement", sym, "&period=quarter&limit=1"); await delay(200);
-    inc           = await safe("income-statement", sym, "&period=quarter&limit=4"); await delay(200);
-    profile       = await safe("profile", sym);                                   await delay(200);
-    earningsHist  = await safe("earnings", sym, "&limit=6");                     await delay(200);
-    ptSummary     = await safe("price-target-summary", sym);                     await delay(200);
-    grades        = await safe("grades-historical", sym, "&limit=6");
+    let data = await runFmp();
+    // 3-step integrity check — symbol / price / freshness
+    let v = validateShortData(sym, data);
+    if (!v.ok) {
+      // One retry after a pause — transient CDN sym-flips usually heal quickly
+      await delay(3000);
+      const retry = await runFmp();
+      const v2 = validateShortData(sym, retry);
+      if (v2.ok) { data = retry; v = v2; }
+      else {
+        // Still bad — surface the warning and blank the company-identity feeds
+        // so identity-dependent chips go purple (na) rather than show wrong data.
+        warnings = v2.warnings;
+        const symBad = v2.warnings.some(w => w.startsWith("sym-flip") || w.startsWith("price divergence"));
+        if (symBad) {
+          data = { ...retry, hist: [], quote: [], inc: [], bs: [], cf: [],
+                   keyMetrics: [], estimates: [], profile: [], earningsHist: [],
+                   ptSummary: [], grades: [] };
+        } else {
+          data = retry; // freshness-only warning: keep data, just flag it
+        }
+      }
+    }
+    ({ hist, quote, keyMetrics, estimates, cf, bs, inc, profile, earningsHist, ptSummary, grades } = data);
   } catch (e) {
     console.error(`[short] ${sym} fetch error:`, e?.message || e);
   }
+  if (warnings.length) console.warn(`[short] ${sym} integrity warnings:`, warnings.join("; "));
 
   const p0 = profile?.[0] || {};
   const q0 = quote?.[0] || {};
@@ -431,9 +529,10 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     reasons: checks.map(c => c.summary),
     raw: checks.map(c => c.value),
     verdicts: checks.map(c => c.verdict), // exposes 'na' to frontend for purple chips
+    warnings, // 3-step integrity check findings (empty when data is clean)
     scored_at: new Date().toISOString(),
   };
 
-  await putShortFmpCache(sym, { _v: 1, row }).catch(() => {});
+  await putShortFmpCache(sym, { _v: 3, row }).catch(() => {});
   return row;
 }
