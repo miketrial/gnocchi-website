@@ -331,6 +331,21 @@
   .typing-cursor{animation:blink .8s step-end infinite}
   @keyframes blink{50%{opacity:0}}
 
+  /* Legacy-data hazard — row has stale data, awaiting fresh Rescan fetch */
+  tbody tr.legacy td:not(.co-cell):not(:first-child){
+    filter:blur(3.5px);opacity:0.25;
+    transition:filter .25s,opacity .25s;pointer-events:none;
+  }
+  tbody tr.legacy .co-cell{position:relative;overflow:visible}
+  .legacy-badge{
+    display:inline-flex;align-items:center;gap:3px;
+    background:#fff3cd;color:#856404;
+    border:1px solid #ffc107;
+    border-radius:5px;padding:1px 5px;
+    font-size:8px;font-weight:700;
+    white-space:nowrap;vertical-align:middle;margin-left:5px;
+  }
+
   /* ── Training Wheels ─────────────────────────────────────────────────── */
   .tw-banner{padding:18px 20px 14px}
   .tw-banner-title{font-size:15px;font-weight:700;color:var(--ink);margin-bottom:3px}
@@ -2215,7 +2230,9 @@ function renderShortWatchlist(){
       tb.appendChild(div);
     }
     const sym = (wl.sym || '').toUpperCase();
-    const r   = shortRowsBySym[sym] || { sym, scoring: !!wl.shortScoring };
+    const isLegacy  = !!wl.legacy;
+    const isScoring = !!wl.shortScoring;
+    const r   = shortRowsBySym[sym] || { sym, scoring: isScoring };
     const verdicts = r.verdicts || (r.v || []).map(b => b ? 'good' : 'bad');
     const reasons  = r.reasons  || [];
     const checks = SHORT_LABELS.map((_, k) => {
@@ -2225,13 +2242,15 @@ function renderShortWatchlist(){
     }).join('');
 
     const score = r.score || '—/10';
-    const cls = r.scoring ? '' : 'sc-' + shortScoreClass(score);
+    const cls = (isScoring || isLegacy) ? '' : 'sc-' + shortScoreClass(score);
     const tr = document.createElement('tr');
     tr.dataset.sym = sym;
     if (pinnedSyms.has(sym)) tr.classList.add('pinned');
     if (dividerAt > 0 && i === dividerAt - 1) tr.classList.add('pin-last');
     if (dividerAt > 0 && i === dividerAt)     tr.classList.add('pin-first');
-    if (r.scoring) tr.classList.add('scoring'); else tr.classList.add(cls);
+    if (isScoring) tr.classList.add('scoring');
+    else if (isLegacy) tr.classList.add('legacy');
+    else tr.classList.add(cls);
 
     const name = r.name || wl.name || sym;
     const price = (r.price != null) ? r.price : wl.price;
@@ -2270,9 +2289,11 @@ function renderShortWatchlist(){
     const warnBadge = (r.warnings && r.warnings.length)
       ? `<span class="warn-badge" data-tip="${escHtml('Data-integrity check flagged this row:\n• '+r.warnings.join('\n• ')+'\n\nAffected factors show as purple until a clean rescan. Right-click → Force rescan to retry.')}">⚠</span>`
       : '';
-    const coCell = r.scoring
+    const coCell = isScoring
       ? `<td class="co-cell"><span class="sym" style="opacity:0.3">${sym}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
-      : `<td class="co-cell"><span class="sym">${sym}</span>${warnBadge} <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`;
+      : isLegacy
+        ? `<td class="co-cell"><span class="sym">${sym}</span><span class="legacy-badge">🚧 Legacy</span> <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`
+        : `<td class="co-cell"><span class="sym">${sym}</span>${warnBadge} <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`;
 
     tr.innerHTML = `
       <td class="idx">${i + 1}.</td>
@@ -2289,26 +2310,25 @@ function renderShortWatchlist(){
       <td class="grp-start num" data-tip="${tipFor(8)}">${cat}</td>
       <td class="num ${vsCls}" data-tip="${tipFor(9)}">${vs}</td>`;
     tb.appendChild(tr);
-    if (r.scoring) syncCheckAnim(sym);
+    if (isScoring) syncCheckAnim(sym);
   });
 }
 
 /* ---------------- Short Term rescan ---------------- */
 async function rescanShort(e){
-  // Force on shift+click OR when called from the Force Rescan button (which
-  // synthesizes an event with shiftKey:true). Regular click uses cache.
-  const force = !!(e && e.shiftKey);
+  // Always force-fetch fresh FMP data — never serve cached blobs on Rescan.
+  const force = true;
   localStorage.setItem('gn_st_last_rescan', Date.now()); updateRescanTimer();
   const btn = document.getElementById('rescan');
   btn.disabled = true;
-  btn.innerHTML = (force ? 'Full rescan…' : 'Refreshing…');
-  // mark scoring + start spinner animation on every row
-  watchlist.forEach(w => { w.shortScoring = true; });
+  btn.innerHTML = 'Rescanning…';
+  // Mark ALL rows as legacy immediately — their displayed data is now stale.
+  // The hazard badge + blur shows until each row's fresh data comes back.
+  watchlist.forEach(w => { w.legacy = true; w.shortScoring = false; });
   renderShortWatchlist();
-  watchlist.forEach(w => startCheckAnim(w.sym));
   if (!API_LIVE) {
     setTimeout(() => {
-      watchlist.forEach(w => { w.shortScoring = false; stopCheckAnim(w.sym); });
+      watchlist.forEach(w => { w.legacy = false; });
       btn.disabled = false; btn.innerHTML = 'Rescan';
       renderShortWatchlist();
     }, 800);
@@ -2320,7 +2340,7 @@ async function rescanShort(e){
       jobId, force,
       clientTickers: watchlist.map(r => r.sym),
     }).catch(() => {});
-    // Poll the job — stop each row's animation as its result lands
+    // Poll — as each fresh result lands, clear that row's legacy flag
     const t = setInterval(async () => {
       const j = await api.get('/api/jobs/' + jobId).catch(() => null);
       if (!j) return;
@@ -2330,15 +2350,14 @@ async function rescanShort(e){
             const up = row.sym.toUpperCase();
             shortRowsBySym[up] = row;
             const wl = watchlist.find(w => w.sym === up);
-            if (wl) { wl.shortScoring = false; stopCheckAnim(up); }
+            if (wl) { wl.legacy = false; wl.shortScoring = false; }
           }
         });
         renderShortWatchlist();
-        syncCheckAnims();
       }
       if (j.status === 'done' || j.status === 'error') {
         clearInterval(t);
-        watchlist.forEach(w => { w.shortScoring = false; stopCheckAnim(w.sym); });
+        watchlist.forEach(w => { w.legacy = false; w.shortScoring = false; });
         btn.disabled = false;
         btn.innerHTML = 'Rescan';
         renderShortWatchlist();
@@ -2347,7 +2366,7 @@ async function rescanShort(e){
       }
     }, 3000);
   } catch (err) {
-    watchlist.forEach(w => { w.shortScoring = false; stopCheckAnim(w.sym); });
+    watchlist.forEach(w => { w.legacy = false; w.shortScoring = false; });
     btn.disabled = false; btn.innerHTML = 'Rescan';
     showToast('Short rescan failed — try again.');
   }
