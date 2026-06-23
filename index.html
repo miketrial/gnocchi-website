@@ -556,11 +556,17 @@
   #shortView thead tr.grphdr th:nth-child(5){  /* Quality */ display:none }
 }
 
-/* ── Wide screens: let the table breathe — give text/num cells room to spread ── */
+/* ── Short Term column spacing — looser than Basic so chips & numbers breathe ── */
+#shortView tbody td, #shortView thead th{ padding:5px 12px; }
+#shortView .checks{ gap:6px }
+#shortView .chk{ width:24px; height:18px }
+#shortView .co-cell{ min-width:130px }
+#shortView .num{ min-width:64px }
 @media (min-width: 1400px){
   #shortView table{ width:100%; }
-  #shortView tbody td, #shortView thead th{ padding:5px 10px; }
-  #shortView .co-cell{ min-width:140px; }
+  #shortView tbody td, #shortView thead th{ padding:6px 16px; }
+  #shortView .co-cell{ min-width:160px; }
+  #shortView .checks{ gap:8px }
 }
 [data-theme="white"] .net-link{color:#000;font-weight:600}
 [data-theme="white"] #usageChip,[data-theme="white"] #usageChip.ok,[data-theme="white"] #usageChip.warn,[data-theme="white"] #usageChip.capped{color:#000}
@@ -1600,9 +1606,9 @@ function setView(v){
   const twBtn=document.getElementById('twToggle');
   if(pipeBtn) pipeBtn.style.display=isShort?'none':'';
   if(twBtn)   twBtn.style.display  =isShort?'none':'';
-  // Short Term rescan always re-pulls everything, so Force Rescan is redundant there
+  // Force Rescan is available on both views — bypasses the per-ticker cache
   const fr=document.getElementById('forceRescan');
-  if(fr) fr.style.display=isShort?'none':'';
+  if(fr) fr.style.display='';
   const navTog=document.getElementById('navToggle');
   if(navTog){
     navTog.style.display=isShort?'none':'';
@@ -2026,15 +2032,40 @@ function flash(sym){
 }
 
 /* ---------------- right-click delete ---------------- */
-const ctx=document.getElementById('ctx'); let ctxSym=null;
-document.getElementById('wlBody').addEventListener('contextmenu',e=>{
+const ctx=document.getElementById('ctx'); let ctxSym=null; let ctxFromView='watchlist';
+function openCtxMenu(e, fromView){
   const tr=e.target.closest('tr'); if(!tr||tr.classList.contains('pin-divider')) return;
-  e.preventDefault(); ctxSym=tr.dataset.sym;
+  e.preventDefault(); ctxSym=tr.dataset.sym; ctxFromView=fromView;
   document.getElementById('ctxPin').textContent=pinnedSyms.has(ctxSym)?'Unpin':'Pin to top';
   ctx.style.display='block'; ctx.style.left=e.clientX+'px'; ctx.style.top=e.clientY+'px';
-});
+}
+document.getElementById('wlBody').addEventListener('contextmenu',e=>openCtxMenu(e,'watchlist'));
+const stBody=document.getElementById('stBody');
+if(stBody) stBody.addEventListener('contextmenu',e=>openCtxMenu(e,'short'));
 document.getElementById('ctxRescan').onclick=async()=>{
   const sym=ctxSym; ctx.style.display='none';
+  // Short Term per-row rescan — single FMP fan-out, bypasses the per-ticker cache
+  if(ctxFromView==='short'){
+    const wl=watchlist.find(r=>r.sym===sym); if(wl) wl.shortScoring=true;
+    renderShortWatchlist();
+    if(!API_LIVE){ setTimeout(()=>{ if(wl) wl.shortScoring=false; renderShortWatchlist(); },800); return; }
+    const jobId='jrs-'+Date.now();
+    await api.send('/api/short/rescan','POST',{jobId,force:true,tickers:[sym],clientTickers:[sym]}).catch(()=>{});
+    const t=setInterval(async()=>{
+      const j=await api.get('/api/jobs/'+jobId).catch(()=>null);
+      if(!j) return;
+      if(j.rows&&j.rows.length){
+        j.rows.forEach(row=>{ if(row&&row.sym&&!row.error) shortRowsBySym[row.sym.toUpperCase()]=row; });
+      }
+      if(j.status==='done'||j.status==='error'){
+        clearInterval(t);
+        if(wl) wl.shortScoring=false;
+        renderShortWatchlist(); flash(sym);
+        showToast(j.status==='error'?(j.error||`${sym} rescan failed.`):`${sym} rescored.`);
+      }
+    },3000);
+    return;
+  }
   const row=watchlist.find(r=>r.sym===sym); if(!row) return;
   row.scoring=true; renderWatchlist();
   startCheckAnim(sym);
@@ -2256,9 +2287,9 @@ function renderShortWatchlist(){
 
 /* ---------------- Short Term rescan ---------------- */
 async function rescanShort(e){
-  // Short Term scans are cheap (pure FMP, no Anthropic) and users expect
-  // "Rescan = fresh data" — always bypass the per-ticker blob cache.
-  const force = true;
+  // Force on shift+click OR when called from the Force Rescan button (which
+  // synthesizes an event with shiftKey:true). Regular click uses cache.
+  const force = !!(e && e.shiftKey);
   localStorage.setItem('gn_st_last_rescan', Date.now()); updateRescanTimer();
   const btn = document.getElementById('rescan');
   btn.disabled = true;
