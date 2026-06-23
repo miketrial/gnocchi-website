@@ -2267,9 +2267,12 @@ function renderShortWatchlist(){
     // Per-row hover tips combine the static factor explanation with the live computed value
     const tipFor = (idx) => escHtml(tipForChip(idx, reasons[idx]));
 
+    const warnBadge = (r.warnings && r.warnings.length)
+      ? `<span class="warn-badge" data-tip="${escHtml('Data-integrity check flagged this row:\n• '+r.warnings.join('\n• ')+'\n\nAffected factors show as purple until a clean rescan. Right-click → Force rescan to retry.')}">⚠</span>`
+      : '';
     const coCell = r.scoring
       ? `<td class="co-cell"><span class="sym" style="opacity:0.3">${sym}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
-      : `<td class="co-cell"><span class="sym">${sym}</span> <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`;
+      : `<td class="co-cell"><span class="sym">${sym}</span>${warnBadge} <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`;
 
     tr.innerHTML = `
       <td class="idx">${i + 1}.</td>
