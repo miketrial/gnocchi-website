@@ -199,9 +199,12 @@ function checkLiquidity(hist, quote) {
 function checkAnalystRevisions(ptSummary, grades) {
   const s = (ptSummary || [])[0] || null;
   const g = Array.isArray(grades) ? grades : [];
-  const ptNow = s?.lastMonthAvgPriceTarget;
+  // Only use PT signal when there are actual recent price-target updates.
+  // lastMonthAvgPriceTarget=0 means no PTs filed that month, not a price target of $0.
+  const ptCount = s?.lastMonthCount ?? 0;
+  const ptNow  = ptCount >= 1 ? s?.lastMonthAvgPriceTarget  : null;
   const ptThen = s?.lastQuarterAvgPriceTarget;
-  const havePT = ptNow != null && ptThen != null && ptThen > 0;
+  const havePT = ptNow != null && ptNow > 0 && ptThen != null && ptThen > 0;
 
   // Grades are newest-first. Compute buy ratio = (StrongBuy+Buy) / total.
   function buyRatio(row) {
@@ -365,7 +368,7 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   // Cache check
   if (!skipCache) {
     const cached = await getShortFmpCache(sym);
-    if (cached && cached._v === 1) {
+    if (cached && cached._v === 2) {
       return cached.row;
     }
   } else {
@@ -434,6 +437,6 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     scored_at: new Date().toISOString(),
   };
 
-  await putShortFmpCache(sym, { _v: 1, row }).catch(() => {});
+  await putShortFmpCache(sym, { _v: 2, row }).catch(() => {});
   return row;
 }
