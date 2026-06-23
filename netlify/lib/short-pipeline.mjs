@@ -6,7 +6,7 @@
    - good/bad → green/red chip
    - na → purple chip (only when underlying data couldn't be fetched)
 */
-import { getShortFmpCache, putShortFmpCache, deleteShortFmpCache, getEpsSnapshot, recordEpsSnapshot } from "./store.mjs";
+import { getShortFmpCache, putShortFmpCache, deleteShortFmpCache } from "./store.mjs";
 
 const FMP = "https://financialmodelingprep.com/stable";
 
@@ -190,30 +190,56 @@ function checkLiquidity(hist, quote) {
   };
 }
 
-// 5. EPS Revisions: forward EPS up vs 30 days ago (snapshot pattern)
-function checkEpsRevisions(currentFwdEps, snapshot) {
-  if (currentFwdEps == null || !isFinite(currentFwdEps)) {
-    return { verdict: "na", summary: "No forward EPS estimate available", value: null };
+// 5. Analyst Revisions — uses FMP's price-target-summary + grades-historical,
+//    both available immediately for every covered ticker (no snapshot warm-up).
+//    Two signals, averaged:
+//      a) Price-target drift: lastMonth avg PT vs lastQuarter avg PT
+//      b) Rating drift:       latest month buy ratio vs ~3 months ago buy ratio
+//    Pass if the average of the two normalized deltas is positive.
+function checkAnalystRevisions(ptSummary, grades) {
+  const s = (ptSummary || [])[0] || null;
+  const g = Array.isArray(grades) ? grades : [];
+  const ptNow = s?.lastMonthAvgPriceTarget;
+  const ptThen = s?.lastQuarterAvgPriceTarget;
+  const havePT = ptNow != null && ptThen != null && ptThen > 0;
+
+  // Grades are newest-first. Compute buy ratio = (StrongBuy+Buy) / total.
+  function buyRatio(row) {
+    if (!row) return null;
+    const sb = row.analystRatingsStrongBuy ?? 0;
+    const b  = row.analystRatingsBuy ?? 0;
+    const h  = row.analystRatingsHold ?? 0;
+    const se = row.analystRatingsSell ?? 0;
+    const ss = row.analystRatingsStrongSell ?? 0;
+    const tot = sb + b + h + se + ss;
+    return tot > 0 ? (sb + b) / tot : null;
   }
-  // Find nearest snapshot 25-35 days ago
-  const target = new Date(Date.now() - 30 * 86400000);
-  let bestDate = null, bestVal = null, bestDiff = Infinity;
-  for (const [d, v] of Object.entries(snapshot || {})) {
-    const days = Math.abs((new Date(d) - target) / 86400000);
-    if (days <= 10 && days < bestDiff) { bestDiff = days; bestDate = d; bestVal = v; }
+  const brNow = buyRatio(g[0]);
+  const brThen = buyRatio(g[3]); // ~3 months back (monthly snapshots)
+  const haveBR = brNow != null && brThen != null;
+
+  if (!havePT && !haveBR) {
+    return { verdict: "na", summary: "No analyst coverage data (price targets or rating history)", value: null };
   }
-  if (bestVal == null) {
-    return { verdict: "na", summary: `No snapshot from ~30 days ago (today's fwd EPS: $${currentFwdEps.toFixed(2)} — warming up history)`, value: currentFwdEps };
-  }
-  const delta = currentFwdEps - bestVal;
-  const pctChg = bestVal !== 0 ? (delta / Math.abs(bestVal)) * 100 : null;
-  const pass = delta > 0;
+
+  const ptDelta = havePT ? (ptNow - ptThen) / ptThen : null;       // fractional change
+  const brDelta = haveBR ? (brNow - brThen) : null;                  // pp change
+  // Combine: average available signals (PT delta and BR delta on similar scale already)
+  const signals = [];
+  if (ptDelta != null) signals.push(ptDelta);
+  if (brDelta != null) signals.push(brDelta);
+  const composite = signals.reduce((a, b) => a + b, 0) / signals.length;
+  const pass = composite > 0;
+
+  const parts = [];
+  if (havePT) parts.push(`PT $${ptThen.toFixed(0)}→$${ptNow.toFixed(0)} (${ptDelta >= 0 ? "+" : ""}${(ptDelta * 100).toFixed(1)}%)`);
+  if (haveBR) parts.push(`Buy ratio ${(brThen * 100).toFixed(0)}%→${(brNow * 100).toFixed(0)}%`);
   return {
     verdict: pass ? "good" : "bad",
     summary: pass
-      ? `Fwd EPS ↑ from $${bestVal.toFixed(2)} to $${currentFwdEps.toFixed(2)}${pctChg != null ? ` (+${pctChg.toFixed(1)}%)` : ""} since ${bestDate}`
-      : `Fwd EPS ↓ from $${bestVal.toFixed(2)} to $${currentFwdEps.toFixed(2)}${pctChg != null ? ` (${pctChg.toFixed(1)}%)` : ""} since ${bestDate}`,
-    value: { current: currentFwdEps, snapshot: bestVal, since: bestDate },
+      ? `Analysts more bullish: ${parts.join(" · ")}`
+      : `Analysts cooling: ${parts.join(" · ")}`,
+    value: { ptNow, ptThen, brNow, brThen, composite },
   };
 }
 
@@ -347,7 +373,7 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   }
 
   // Fetch FMP data (sequential with small delay to stay under rate limits)
-  let hist, quote, keyMetrics, estimates, cf, bs, inc, profile, earningsHist;
+  let hist, quote, keyMetrics, estimates, cf, bs, inc, profile, earningsHist, ptSummary, grades;
   try {
     hist          = await safe("historical-price-eod/light", sym, "&limit=260"); await delay(200);
     quote         = await safe("quote", sym);                                     await delay(200);
@@ -357,7 +383,9 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     bs            = await safe("balance-sheet-statement", sym, "&period=quarter&limit=1"); await delay(200);
     inc           = await safe("income-statement", sym, "&period=quarter&limit=4"); await delay(200);
     profile       = await safe("profile", sym);                                   await delay(200);
-    earningsHist  = await safe("earnings", sym, "&limit=6");
+    earningsHist  = await safe("earnings", sym, "&limit=6");                     await delay(200);
+    ptSummary     = await safe("price-target-summary", sym);                     await delay(200);
+    grades        = await safe("grades-historical", sym, "&limit=6");
   } catch (e) {
     console.error(`[short] ${sym} fetch error:`, e?.message || e);
   }
@@ -375,17 +403,13 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
                                   .sort((a, b) => a.date.localeCompare(b.date));
   const fwdEps = future[0]?.epsAvg ?? (estimates || [])[0]?.epsAvg ?? null;
 
-  // Record snapshot for next time
-  await recordEpsSnapshot(sym, fwdEps).catch(() => {});
-  const snapshot = await getEpsSnapshot(sym).catch(() => ({}));
-
   // Run all 10 checks
   const checks = [
     checkTrend(hist),                              // 1
     check3MMomentum(hist),                         // 2
     checkNearHigh(hist),                           // 3
     checkLiquidity(hist, quote),                   // 4
-    checkEpsRevisions(fwdEps, snapshot),           // 5
+    checkAnalystRevisions(ptSummary, grades),      // 5
     checkValuation(price, fwdEps, industry),       // 6
     checkQuality(cf, keyMetrics, industry),        // 7
     checkLeverage(bs, inc),                        // 8

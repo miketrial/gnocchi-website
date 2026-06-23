@@ -538,7 +538,7 @@
   #twTipClose{top:14px; right:16px; font-size:22px; padding:6px}
   /* Short Term table: drop the noisier text columns under 700px */
   /* Columns visible: idx, Company, Price, chips, Score, Fwd P/E, Earnings, Vol Surge */
-  /* Columns hidden:  Trend(6), 3M Return(7), EPS Rev(9), FCF/ROE(10), Leverage(11) */
+  /* Columns hidden:  Trend(6), 3M Return(7), Anlyst Rev(9), FCF/ROE(10), Leverage(11) */
   #shortView thead tr:nth-child(2) th:nth-child(6),
   #shortView thead tr:nth-child(2) th:nth-child(7),
   #shortView thead tr:nth-child(2) th:nth-child(9),
@@ -848,12 +848,12 @@
           <th></th>
           <th class="sortable" data-sort="name">Company<span class="sub">(ticker)</span></th>
           <th class="num sortable" data-sort="price">Price<span class="sub">live</span></th>
-          <th class="grp-start"><div class="chkhdr"><span><span class="hl">Trend</span></span><span><span class="hl">3M Mom</span></span><span><span class="hl">Near Hi</span></span><span><span class="hl">Liquid</span></span><span><span class="hl">EPS Rev</span></span><span><span class="hl">Value</span></span><span><span class="hl">Quality</span></span><span><span class="hl">Leverage</span></span><span><span class="hl">Catalyst</span></span><span><span class="hl">Vol Surge</span></span></div></th>
+          <th class="grp-start"><div class="chkhdr"><span><span class="hl">Trend</span></span><span><span class="hl">3M Mom</span></span><span><span class="hl">Near Hi</span></span><span><span class="hl">Liquid</span></span><span><span class="hl">Anlyst Rev</span></span><span><span class="hl">Value</span></span><span><span class="hl">Quality</span></span><span><span class="hl">Leverage</span></span><span><span class="hl">Catalyst</span></span><span><span class="hl">Vol Surge</span></span></div></th>
           <th class="sortable" data-sort="score">Score<span class="sub">of 10</span></th>
           <th class="grp-start" data-tip="Trend test — current price vs its 50-day moving average. A stock above its 50DMA, with the 50DMA itself above the 200DMA, is in a confirmed uptrend (the strongest predictor of continued strength over 2-12 weeks).">Trend<span class="sub">price &amp; DMA</span></th>
           <th data-tip="3-month price return. Positive ≥5% earns the green Momentum chip. Stocks that outperformed over the past quarter tend to keep outperforming through the next swing-trade window.">3M Return<span class="sub">vs 0</span></th>
           <th class="grp-start" data-tip="Forward P/E (price ÷ next-year consensus EPS). The Value chip passes when this is below the sector 75th percentile — we don't screen for cheap, just rule out 'egregiously expensive' to avoid multiple compression.">Fwd P/E<span class="sub">vs sector</span></th>
-          <th data-tip="Direction of the forward EPS estimate vs the snapshot from ~30 days ago. ↑ means analysts raised numbers (post-earnings-announcement drift powers the EPS Rev chip). First scan per ticker shows '—' until 30 days of snapshots accumulate.">EPS Rev<span class="sub">30d</span></th>
+          <th data-tip="Analyst sentiment drift: average of (a) last-month avg price target vs last-quarter avg, and (b) % of analysts rating Buy/Strong Buy now vs ~3 months ago. Positive = analysts getting more bullish. Available immediately — no warm-up.">Anlyst Rev<span class="sub">PT &amp; ratings</span></th>
           <th class="grp-start" data-tip="Return on Equity from FMP key-metrics. The Quality chip passes when TTM free cash flow is positive AND ROE exceeds the sector median — together they screen out value traps and meme blow-ups.">FCF / ROE<span class="sub">TTM</span></th>
           <th data-tip="Net debt divided by trailing EBITDA. Under 3× is healthy; over 3× means the balance sheet amplifies any sentiment shift or rate move — exactly the kind of single-day -15% gap a swing trader can't escape.">Leverage<span class="sub">net debt/EBITDA</span></th>
           <th class="grp-start" data-tip="Days until the next earnings release. Catalyst chip passes when this falls between 7 and 90 days — the sweet spot for swing trades, where the event re-rates the stock inside your holding window.">Earnings<span class="sub">days out</span></th>
@@ -868,7 +868,7 @@
     <div class="ttl">Short Term scoring &nbsp;·&nbsp; 10 factors tuned for 1wk-3mo swing trades</div>
     <span><b style="background:var(--good-bg);color:var(--good-fg)">●</b><span style="color:var(--good-fg);font-weight:600">Green</span> · factor passes</span>
     <span><b style="background:var(--bad-bg);color:var(--bad-fg)">●</b><span style="color:var(--bad-fg);font-weight:600">Red</span> · factor fails</span>
-    <span><b style="background:var(--pur-bg);color:var(--pur-fg)">●</b><span style="color:var(--pur-fg);font-weight:600">Purple</span> · data not yet available (e.g. EPS Rev needs 30 days of history)</span>
+    <span><b style="background:var(--pur-bg);color:var(--pur-fg)">●</b><span style="color:var(--pur-fg);font-weight:600">Purple</span> · data not available from FMP for this ticker</span>
     <div class="ttl" style="margin-top:10px">Tip</div>
     <span style="color:var(--ink-soft)">Hover any chip to read what it measures, why it matters, the pass rule, and your computed value.</span>
   </div>
@@ -2112,7 +2112,7 @@ const SHORT_LABELS = [
   { name: "3-Month Momentum", why: "Stocks that have outperformed over the past 3 months tend to keep outperforming over the next 2-12 weeks. This is the bedrock factor for swing trading.", rule: "3-month return is positive and ≥ +5%" },
   { name: "Near 52-Week High", why: "Stocks within 15% of their 52-week high are in established uptrends. Names more than 20% off their highs usually mean the trend is broken — avoid catching falling knives.", rule: "Within 15% of 52-week high" },
   { name: "Liquidity",      why: "Thin stocks gap on small flows, slippage eats your edge, and you can get trapped on exit. A liquidity floor is the cheapest risk control.", rule: "20-day average dollar volume ≥ $20 million" },
-  { name: "EPS Revisions",  why: "When analysts raise their forward EPS estimates, the stock usually drifts up over the next few weeks as the new numbers diffuse through the market (the academic name is 'post-earnings-announcement drift'). The most underrated factor at this horizon.", rule: "Forward EPS estimate today is higher than the snapshot from ~30 days ago" },
+  { name: "Analyst Revisions", why: "When sell-side analysts raise their price targets and shift their ratings toward Buy, the stock usually drifts up over the next few weeks as the new numbers diffuse through the market (academic name: 'post-earnings-announcement drift'). The most underrated factor at this horizon.", rule: "Average of two trends is positive: (a) last-month avg price target vs last-quarter avg, and (b) Buy-rating share now vs ~3 months ago" },
   { name: "Valuation",      why: "We don't screen for cheap (which often signals something broken at this horizon) — we screen out 'egregiously expensive' so multiple compression doesn't blow up your momentum trade.", rule: "Forward P/E ≤ sector 75th percentile" },
   { name: "Quality",        why: "Positive free cash flow and a returns-on-equity above sector median keeps you out of value traps and meme blow-ups. Quality companies pull back less when momentum reverses.", rule: "TTM FCF > 0 AND ROE > sector median" },
   { name: "Leverage",       why: "Over-levered names are most fragile when rates move or sentiment shifts — the kind of single-day -15% gap you can't trade out of.", rule: "Net debt / EBITDA < 3x (or net cash position)" },
@@ -2202,11 +2202,15 @@ function renderShortWatchlist(){
     const epsRev = (() => {
       const v = raw[4];
       if (!v) return '—';
-      if (v && v.current != null && v.snapshot != null) {
-        const d = v.current - v.snapshot;
-        return (d > 0 ? '↑' : d < 0 ? '↓' : '→') + ` $${v.current.toFixed(2)}`;
+      if (v.ptNow != null && v.ptThen != null && v.ptThen > 0) {
+        const d = (v.ptNow - v.ptThen) / v.ptThen;
+        return (d > 0 ? '↑' : d < 0 ? '↓' : '→') + ` ${(d * 100).toFixed(1)}%`;
       }
-      return v && v.toFixed ? `$${v.toFixed(2)}` : '—';
+      if (v.brNow != null && v.brThen != null) {
+        const d = v.brNow - v.brThen;
+        return (d > 0 ? '↑' : d < 0 ? '↓' : '→') + ` ${(v.brNow * 100).toFixed(0)}%`;
+      }
+      return '—';
     })();
     const qual = raw[6] && raw[6].roe != null ? `ROE ${(raw[6].roe * 100).toFixed(0)}%` : '—';
     const lev = raw[7] && raw[7].ratio != null ? `${raw[7].ratio.toFixed(1)}x` : (raw[7] && raw[7].netDebt < 0 ? 'net cash' : '—');
