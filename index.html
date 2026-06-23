@@ -43,6 +43,8 @@
     transition:opacity .2s ease;
     display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap;
   }
+  /* Extra breathing room between the view-switch pill and the Rescan cluster */
+  #viewSwitch{ margin-right:18px }
   header.bar > *:not(.rescan-wrap){margin-top:0}
   .brand{font-size:16px; font-weight:600; color:#4a525e; letter-spacing:.3px}
   .brand .dot{color:#7aa6c2}
@@ -536,11 +538,66 @@
     box-shadow:0 -4px 24px rgba(0,0,0,.2);
   }
   #twTipClose{top:14px; right:16px; font-size:22px; padding:6px}
+  /* Short Term table: drop the noisier text columns under 700px */
+  /* Columns visible: idx, Company, Price, chips, Score, Fwd P/E, Earnings, Vol Surge */
+  /* Columns hidden:  Trend(6), 3M Return(7), Anlyst Rev(9), FCF/ROE(10), Leverage(11) */
+  #shortView thead tr:nth-child(2) th:nth-child(6),
+  #shortView thead tr:nth-child(2) th:nth-child(7),
+  #shortView thead tr:nth-child(2) th:nth-child(9),
+  #shortView thead tr:nth-child(2) th:nth-child(10),
+  #shortView thead tr:nth-child(2) th:nth-child(11),
+  #shortView tbody td:nth-child(6),
+  #shortView tbody td:nth-child(7),
+  #shortView tbody td:nth-child(9),
+  #shortView tbody td:nth-child(10),
+  #shortView tbody td:nth-child(11){display:none}
+  /* Hide the group headers whose cells all collapsed */
+  #shortView thead tr.grphdr th:nth-child(3),  /* Momentum */
+  #shortView thead tr.grphdr th:nth-child(5){  /* Quality */ display:none }
+}
+
+/* ── Wide screens: let the table breathe — give text/num cells room to spread ── */
+@media (min-width: 1400px){
+  #shortView table{ width:100%; }
+  #shortView tbody td, #shortView thead th{ padding:5px 10px; }
+  #shortView .co-cell{ min-width:140px; }
 }
 [data-theme="white"] .net-link{color:#000;font-weight:600}
 [data-theme="white"] #usageChip,[data-theme="white"] #usageChip.ok,[data-theme="white"] #usageChip.warn,[data-theme="white"] #usageChip.capped{color:#000}
 [data-theme="white"] .rescan-timer{color:#000}
 
+
+/* ── view switch (Basic | Short Term) — 70s overlapping-tab pill ──────── */
+#viewSwitch{
+  display:inline-flex; position:relative; align-items:center;
+  margin-right:4px;
+}
+#viewSwitch button{
+  font-size:11px; font-weight:600; cursor:pointer;
+  padding:8px 14px; background:var(--card,#fff); color:var(--ink,#222);
+  border:1.5px solid var(--ink-faint,#b0b8c4); border-radius:10px;
+  transition:transform .15s, box-shadow .15s, opacity .15s, z-index 0s;
+  position:relative; z-index:1; opacity:.7;
+  white-space:nowrap;
+}
+#viewSwitch button + button{ margin-left:-6px } /* slight overlap */
+#viewSwitch button.active{
+  z-index:2; opacity:1;
+  transform:scale(1.05) translateY(-1px);
+  box-shadow:2px 2px 0 0 var(--ink-faint,#b0b8c4);
+  border-color:var(--ink,#222);
+}
+/* Active button shouldn't steal clicks from the inactive one's exposed area.
+   The inactive button raises z-index on hover so the cursor can always reach it. */
+#viewSwitch button:not(.active):hover{ z-index:3 }
+#viewSwitch button:hover{ opacity:1 }
+[data-theme="white"] #viewSwitch button{ border-radius:0; border:1px solid #000; background:#fff; color:#000 }
+[data-theme="white"] #viewSwitch button.active{
+  background:#fff; color:#000;
+  border:2px solid #000;
+  font-weight:800; letter-spacing:.3px;
+  box-shadow:3px 3px 0 0 #000;
+}
 
 /* ── theme swatch strip ───────────────────────────────────────────────── */
 #themeSwatch{display:flex;align-items:center;gap:6px}
@@ -559,9 +616,14 @@
 <!-- ================= APP ================= -->
 <div id="app">
   <header class="bar" id="bar">
+    <div id="viewSwitch" title="Switch between Basic (full screener) and Short Term (1wk-3mo swing setups)">
+      <button data-v="basic">Basic</button>
+      <button data-v="short">Short Term</button>
+    </div>
     <div class="rescan-wrap" id="wlLeft">
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn" id="rescan">Rescan</button>
+        <button class="btn" id="forceRescan" title="Force a full rescan of every row — bypasses the 'fresh rows' shortcut and re-pulls FMP for everything. Same as Shift+click on Rescan.">Force Rescan</button>
         <button class="btn" id="pipelineBtn" onclick="document.getElementById('pipelineModal').style.display='flex'">Scoring Pipeline</button>
         <button class="btn" id="twToggle">Training Wheels</button>
       </div>
@@ -721,22 +783,23 @@
           </tr>
           <tr>
             <th></th>
-            <th class="sortable" data-sort="name">Company<span class="sub">(ticker)</span></th>
-            <th class="num sortable" data-sort="price">Price<span class="sub">live</span></th>
-            <th class="grp-start"><div class="chkhdr"><span><span class="hl">Revenue</span></span><span><span class="hl">Margin</span></span><span><span class="hl">Contract</span></span><span><span class="hl">Debt</span></span><span><span class="hl">Departures</span></span><span><span class="hl">Forecast</span></span><span><span class="hl">Disruption</span></span><span><span class="hl">Insider</span></span></div></th>
-            <th class="sortable" data-sort="score">Score<span class="sub">of 8</span></th>
-            <th class="grp-start sortable" data-sort="vs">vs Sector<span class="sub">P/E</span></th>
-            <th class="num sortable" data-sort="fwd">P/E<span class="sub">fwd</span></th>
-            <th class="num sortable" data-sort="ttm">P/E<span class="sub">ttm</span></th>
-            <th class="num sortable" data-sort="yr5">P/E<span class="sub">5yr avg</span></th>
-            <th>FWD vs TTM<span class="sub">&nbsp;</span></th>
-            <th class="grp-start">Trend<span class="sub">direction</span></th>
-            <th>Expectations<span class="sub">priced-in</span></th>
-            <th>Catalysts<span class="sub">forward</span></th>
-            <th class="num grp-start sortable" data-sort="ps">P/S<span class="sub">ratio</span></th>
-            <th class="num ar-col">Analyst<span class="sub">&nbsp;</span></th>
-            <th class="num grp-start">Beta<span class="sub">market sens.</span></th>
-            <th class="num">Rel Vol<span class="sub">vs 20d avg</span></th>
+            <th class="sortable" data-sort="name" data-tip="Company name and ticker symbol. Click the header to sort A→Z. Right-click any row for Force rescan / Pin / Delete.">Company<span class="sub">(ticker)</span></th>
+            <th class="num sortable" data-sort="price" data-tip="Latest trade price from FMP's /quote endpoint. Refreshes whenever the row is rescanned.">Price<span class="sub">live</span></th>
+            <th class="grp-start" data-tip="The eight scoring chips: Revenue growth, Margin trend, Contract/backlog, Debt level, Executive Departures, Forecast/guidance, Disruption risk, and Insider activity. Green = pass, red = fail, purple = data missing. Hover an individual chip for its specific reason.">
+              <div class="chkhdr"><span><span class="hl">Revenue</span></span><span><span class="hl">Margin</span></span><span><span class="hl">Contract</span></span><span><span class="hl">Debt</span></span><span><span class="hl">Departures</span></span><span><span class="hl">Forecast</span></span><span><span class="hl">Disruption</span></span><span><span class="hl">Insider</span></span></div></th>
+            <th class="sortable" data-sort="score" data-tip="Composite score: count of the eight chips that passed. 6+/8 is strong, 4-5 is mixed, 3 or fewer is weak. Use as a rank, not a buy signal on its own.">Score<span class="sub">of 8</span></th>
+            <th class="grp-start sortable" data-sort="vs" data-tip="Forward P/E relative to the sector median (from the static SECTOR_PE_MAP). −20% means the stock trades 20% cheaper than peers on forward earnings. Negative = cheaper than sector.">vs Sector<span class="sub">P/E</span></th>
+            <th class="num sortable" data-sort="fwd" data-tip="Forward P/E = price ÷ next-year consensus EPS (FMP analyst-estimates). The headline valuation number for momentum / growth-at-a-reasonable-price work.">P/E<span class="sub">fwd</span></th>
+            <th class="num sortable" data-sort="ttm" data-tip="Trailing-twelve-month P/E = price ÷ last 4 reported quarters' EPS. Reflects what shareholders actually paid for past earnings.">P/E<span class="sub">ttm</span></th>
+            <th class="num sortable" data-sort="yr5" data-tip="Five-year average P/E. Useful for spotting multiple expansion / compression vs the stock's own history — a P/E far above its 5yr avg means the market is paying up for a new narrative.">P/E<span class="sub">5yr avg</span></th>
+            <th data-tip="Compares forward P/E to TTM P/E. ↓ means analysts expect earnings to grow (multiple shrinks as E rises); ↑ means estimates are falling. ↓ is the bullish direction.">FWD vs TTM<span class="sub">&nbsp;</span></th>
+            <th class="grp-start" data-tip="Multi-year direction of margins, growth, or returns — pulled from the Layer-2 Haiku analysis. ↑ improving, → flat, ↓ deteriorating. Drives the qualitative read of the business trajectory.">Trend<span class="sub">direction</span></th>
+            <th data-tip="What the current multiple is asking the business to deliver — e.g. 'priced for 20% revenue growth and stable margins.' Helps you judge whether the stock can clear the bar that's already baked in.">Expectations<span class="sub">priced-in</span></th>
+            <th data-tip="Specific upcoming events that could re-rate the stock: earnings dates, product launches, FDA decisions, contract awards. Pulled from analyst summaries and FMP earnings calendar.">Catalysts<span class="sub">forward</span></th>
+            <th class="num grp-start sortable" data-sort="ps" data-tip="Price / Sales ratio. Most useful for unprofitable or early-stage names where P/E is meaningless. Compare to peers in the same industry, not across sectors.">P/S<span class="sub">ratio</span></th>
+            <th class="num ar-col" data-tip="Analyst rating distribution: Strong Buy / Buy / Hold / Sell counts from FMP's /grades-historical. Skew toward Buy means sell-side is bullish; lots of Holds is a 'show me' name.">Analyst<span class="sub">&nbsp;</span></th>
+            <th class="num grp-start" data-tip="Market beta from FMP's /profile. Beta &gt; 1 means the stock moves more than the S&amp;P 500; &lt; 1 means it dampens index moves. High beta amplifies returns and drawdowns.">Beta<span class="sub">market sens.</span></th>
+            <th class="num" data-tip="Today's volume ÷ 20-day average volume. ≥ 1.5× = unusual activity, which often precedes a meaningful move — institutional accumulation or distribution leaves a footprint here first.">Rel Vol<span class="sub">vs 20d avg</span></th>
           </tr>
         </thead>
         <tbody id="wlBody"></tbody>
@@ -769,6 +832,49 @@
       </table>
       <button class="btn addrow" id="addNetRow">+ Add holding</button>
     </div>
+  </div>
+</div>
+
+<!-- ===== SHORT TERM VIEW (FMP-only, swing trading 1wk-3mo) ===== -->
+<div id="shortView" class="hidden">
+  <div class="card">
+    <table>
+      <thead>
+        <tr class="grphdr">
+          <th colspan="3"></th>
+          <th colspan="2" class="grp">Setup</th>
+          <th colspan="2" class="grp">Momentum</th>
+          <th colspan="2" class="grp">Valuation</th>
+          <th colspan="2" class="grp">Quality</th>
+          <th colspan="2" class="grp">Catalyst</th>
+        </tr>
+        <tr>
+          <th></th>
+          <th class="sortable" data-sort="name">Company<span class="sub">(ticker)</span></th>
+          <th class="num sortable" data-sort="price">Price<span class="sub">live</span></th>
+          <th class="grp-start"><div class="chkhdr"><span><span class="hl">Trend</span></span><span><span class="hl">3M Mom</span></span><span><span class="hl">Near Hi</span></span><span><span class="hl">Liquid</span></span><span><span class="hl">Anlyst Rev</span></span><span><span class="hl">Value</span></span><span><span class="hl">Quality</span></span><span><span class="hl">Leverage</span></span><span><span class="hl">Catalyst</span></span><span><span class="hl">Vol Surge</span></span></div></th>
+          <th class="sortable" data-sort="score">Score<span class="sub">of 10</span></th>
+          <th class="grp-start" data-tip="Trend test — current price vs its 50-day moving average. A stock above its 50DMA, with the 50DMA itself above the 200DMA, is in a confirmed uptrend (the strongest predictor of continued strength over 2-12 weeks).">Trend<span class="sub">price &amp; DMA</span></th>
+          <th data-tip="3-month price return. Positive ≥5% earns the green Momentum chip. Stocks that outperformed over the past quarter tend to keep outperforming through the next swing-trade window.">3M Return<span class="sub">vs 0</span></th>
+          <th class="grp-start" data-tip="Forward P/E (price ÷ next-year consensus EPS). The Value chip passes when this is below the sector 75th percentile — we don't screen for cheap, just rule out 'egregiously expensive' to avoid multiple compression.">Fwd P/E<span class="sub">vs sector</span></th>
+          <th data-tip="Analyst sentiment drift: average of (a) last-month avg price target vs last-quarter avg, and (b) % of analysts rating Buy/Strong Buy now vs ~3 months ago. Positive = analysts getting more bullish. Available immediately — no warm-up.">Anlyst Rev<span class="sub">PT &amp; ratings</span></th>
+          <th class="grp-start" data-tip="Return on Equity from FMP key-metrics. The Quality chip passes when TTM free cash flow is positive AND ROE exceeds the sector median — together they screen out value traps and meme blow-ups.">FCF / ROE<span class="sub">TTM</span></th>
+          <th data-tip="Net debt divided by trailing EBITDA. Under 3× is healthy; over 3× means the balance sheet amplifies any sentiment shift or rate move — exactly the kind of single-day -15% gap a swing trader can't escape.">Leverage<span class="sub">net debt/EBITDA</span></th>
+          <th class="grp-start" data-tip="Days until the next earnings release. Catalyst chip passes when this falls between 7 and 90 days — the sweet spot for swing trades, where the event re-rates the stock inside your holding window.">Earnings<span class="sub">days out</span></th>
+          <th data-tip="Today's trading volume divided by the 20-day average. ≥1.5× = unusual activity, which almost always precedes a meaningful move (replaces Short Squeeze — FMP short-interest data is unavailable on the current plan).">Vol Surge<span class="sub">today / 20d avg</span></th>
+        </tr>
+      </thead>
+      <tbody id="stBody"></tbody>
+    </table>
+  </div>
+
+  <div class="legend">
+    <div class="ttl">Short Term scoring &nbsp;·&nbsp; 10 factors tuned for 1wk-3mo swing trades</div>
+    <span><b style="background:var(--good-bg);color:var(--good-fg)">●</b><span style="color:var(--good-fg);font-weight:600">Green</span> · factor passes</span>
+    <span><b style="background:var(--bad-bg);color:var(--bad-fg)">●</b><span style="color:var(--bad-fg);font-weight:600">Red</span> · factor fails</span>
+    <span><b style="background:var(--pur-bg);color:var(--pur-fg)">●</b><span style="color:var(--pur-fg);font-weight:600">Purple</span> · data not available from FMP for this ticker</span>
+    <div class="ttl" style="margin-top:10px">Tip</div>
+    <span style="color:var(--ink-soft)">Hover any chip to read what it measures, why it matters, the pass rule, and your computed value.</span>
   </div>
 </div>
 
@@ -1134,18 +1240,20 @@ function renderWatchlist(){
 
 /* ---------------- check-square tooltip (fixed-position, escapes overflow) --- */
 const tipBox=document.getElementById('tipBox');
-document.getElementById('wlBody').addEventListener('mouseover',e=>{
+// Delegate from document so the tooltip works for both <thead> cells
+// (column descriptors) and <tbody> chips/cells across every view.
+document.addEventListener('mouseover',e=>{
   const el=e.target.closest('[data-tip]');
   if(!el){tipBox.style.display='none';return;}
   tipBox.textContent=el.dataset.tip;
   tipBox.style.display='block';
 });
-document.getElementById('wlBody').addEventListener('mousemove',e=>{
+document.addEventListener('mousemove',e=>{
   if(tipBox.style.display==='none') return;
   tipBox.style.left=(e.clientX+14)+'px';
   tipBox.style.top =(e.clientY-38)+'px';
 });
-document.getElementById('wlBody').addEventListener('mouseleave',()=>{tipBox.style.display='none';});
+document.addEventListener('mouseleave',()=>{tipBox.style.display='none';});
 
 /* ---------------- score history popover (click) ---------------- */
 const scoreHist=document.getElementById('scoreHist');
@@ -1478,18 +1586,51 @@ function pollJob(jobId){
 let currentView='watchlist';
 function setView(v){
   currentView=v;
-  document.getElementById('watchlistView').classList.toggle('hidden',v!=='watchlist');
+  document.getElementById('watchlistView').classList.toggle('hidden',!(v==='watchlist'||v==='net'));
   document.getElementById('netView').classList.toggle('hidden',v!=='net');
   document.getElementById('twView').classList.toggle('hidden',v!=='tw');
-  const isWL=v==='watchlist';
-  document.getElementById('wlControls').style.display=isWL?'flex':'none';
-  document.getElementById('wlLeft').style.display=isWL?'flex':'none';
-  document.getElementById('navToggle').textContent=v==='net'?'Watchlist':'Net';
-  document.getElementById('twToggle').textContent=v==='tw'?'↩ Watchlist':'Training Wheels';
+  const shortEl=document.getElementById('shortView');
+  if(shortEl) shortEl.classList.toggle('hidden',v!=='short');
+  const isWL=v==='watchlist'||v==='net';
+  const isShort=v==='short';
+  document.getElementById('wlControls').style.display=(isWL||isShort)?'flex':'none';
+  document.getElementById('wlLeft').style.display=(isWL||isShort)?'flex':'none';
+  // Hide Basics-only buttons on Short Term view
+  const pipeBtn=document.getElementById('pipelineBtn');
+  const twBtn=document.getElementById('twToggle');
+  if(pipeBtn) pipeBtn.style.display=isShort?'none':'';
+  if(twBtn)   twBtn.style.display  =isShort?'none':'';
+  // Short Term rescan always re-pulls everything, so Force Rescan is redundant there
+  const fr=document.getElementById('forceRescan');
+  if(fr) fr.style.display=isShort?'none':'';
+  const navTog=document.getElementById('navToggle');
+  if(navTog){
+    navTog.style.display=isShort?'none':'';
+    navTog.textContent=v==='net'?'Watchlist':'Net';
+  }
+  if(twBtn) twBtn.textContent=v==='tw'?'↩ Watchlist':'Training Wheels';
+  // Reflect current view in the segmented pill (Basic | Short Term)
+  document.querySelectorAll('#viewSwitch button').forEach(b=>{
+    const target=b.dataset.v;
+    const active=(target==='short'&&isShort)||(target==='basic'&&!isShort&&v!=='tw');
+    b.classList.toggle('active',active);
+  });
+  // Per-view rescan timer & render
+  updateRescanTimer();
+  if(isShort) renderShortWatchlist();
   window.scrollTo(0,0);
 }
 document.getElementById('navToggle').onclick=()=>setView(currentView==='net'?'watchlist':'net');
 document.getElementById('twToggle').onclick=()=>setView(currentView==='tw'?'watchlist':'tw');
+document.querySelectorAll('#viewSwitch button').forEach(b=>{
+  b.addEventListener('click',()=>{
+    const v=b.dataset.v;
+    if(v==='basic') setView('watchlist');
+    else if(v==='short'){ setView('short'); ensureShortDataLoaded(); }
+  });
+});
+// Sync segmented pill + view chrome with the initial state ('watchlist').
+setView('watchlist');
 
 /* ---------------- Training Wheels content ---------------- */
 const TW_DATA={
@@ -1825,7 +1966,14 @@ addInput.addEventListener('keydown',async e=>{
    Shift+click  = force a full rescan of every row. */
 const rescanBtn=document.getElementById('rescan');
 rescanBtn.title='Click: refresh stale rows only (>2 days). Shift+click: force full rescan.';
+// Visible Force Rescan button — same path as Shift+click on Rescan
+const forceRescanBtn=document.getElementById('forceRescan');
+if(forceRescanBtn){
+  forceRescanBtn.onclick=(e)=>{ rescanBtn.onclick({ shiftKey:true, target:rescanBtn }); };
+}
 rescanBtn.onclick=async(e)=>{
+  // Route to the appropriate scanner based on the active view
+  if(currentView==='short'){ return rescanShort(e); }
   const force=e.shiftKey;
   localStorage.setItem('gn_last_rescan', Date.now()); updateRescanTimer();
   rescanBtn.disabled=true;
@@ -1855,10 +2003,12 @@ rescanBtn.onclick=async(e)=>{
   }
 };
 
-/* "Last rescan" timer below the button — counts up: minutes → hours → days. */
+/* "Last rescan" timer below the button — counts up: minutes → hours → days.
+   Per-view: 'gn_last_rescan' for basics, 'gn_st_last_rescan' for short term. */
 function updateRescanTimer(){
   const el=document.getElementById('rescanTimer'); if(!el) return;
-  const ts=Number(localStorage.getItem('gn_last_rescan'));
+  const key=currentView==='short'?'gn_st_last_rescan':'gn_last_rescan';
+  const ts=Number(localStorage.getItem(key));
   if(!ts){el.textContent='Last rescan:never'; return;}
   const s=Math.floor((Date.now()-ts)/1000);
   let v;
@@ -1964,6 +2114,198 @@ window.addEventListener('scroll',()=>{
   applyTheme(saved);
   btns.forEach(b=>b.addEventListener('click',()=>applyTheme(b.dataset.t)));
 })();
+
+/* ================================================================== *
+ *  Short Term view (FMP-only, swing trading 1wk-3mo)                 *
+ * ================================================================== */
+
+// Tooltip text for each of the 10 chips (factor, why it matters, rule).
+// "Your value:" gets appended at render time from the per-row computed value.
+const SHORT_LABELS = [
+  { name: "Trend",          why: "An uptrend (price above both its 50-day and 200-day moving averages, with 50 above 200) is the single strongest predictor that recent strength will continue over the next 2-12 weeks.", rule: "Price > 50-day MA > 200-day MA" },
+  { name: "3-Month Momentum", why: "Stocks that have outperformed over the past 3 months tend to keep outperforming over the next 2-12 weeks. This is the bedrock factor for swing trading.", rule: "3-month return is positive and ≥ +5%" },
+  { name: "Near 52-Week High", why: "Stocks within 15% of their 52-week high are in established uptrends. Names more than 20% off their highs usually mean the trend is broken — avoid catching falling knives.", rule: "Within 15% of 52-week high" },
+  { name: "Liquidity",      why: "Thin stocks gap on small flows, slippage eats your edge, and you can get trapped on exit. A liquidity floor is the cheapest risk control.", rule: "20-day average dollar volume ≥ $20 million" },
+  { name: "Analyst Revisions", why: "When sell-side analysts raise their price targets and shift their ratings toward Buy, the stock usually drifts up over the next few weeks as the new numbers diffuse through the market (academic name: 'post-earnings-announcement drift'). The most underrated factor at this horizon.", rule: "Average of two trends is positive: (a) last-month avg price target vs last-quarter avg, and (b) Buy-rating share now vs ~3 months ago" },
+  { name: "Valuation",      why: "We don't screen for cheap (which often signals something broken at this horizon) — we screen out 'egregiously expensive' so multiple compression doesn't blow up your momentum trade.", rule: "Forward P/E ≤ sector 75th percentile" },
+  { name: "Quality",        why: "Positive free cash flow and a returns-on-equity above sector median keeps you out of value traps and meme blow-ups. Quality companies pull back less when momentum reverses.", rule: "TTM FCF > 0 AND ROE > sector median" },
+  { name: "Leverage",       why: "Over-levered names are most fragile when rates move or sentiment shifts — the kind of single-day -15% gap you can't trade out of.", rule: "Net debt / EBITDA < 3x (or net cash position)" },
+  { name: "Catalyst",       why: "Swing trades work best when there's a known event within the holding window that will re-rate the stock — most commonly the next earnings release.", rule: "Earnings between 7 and 90 days from today" },
+  { name: "Volume Surge",   why: "Today's trading volume relative to its 20-day average. Unusually high volume (≥ 1.5×) is one of the most reliable leading indicators of a near-term move — institutions accumulating or distributing leave a footprint here before it shows up in price.", rule: "Today's volume ≥ 1.5× the 20-day average" },
+];
+
+// Newbie tooltip text built from the label + actual computed value
+function tipForChip(idx, reason){
+  const l = SHORT_LABELS[idx];
+  if (!l) return reason || '';
+  const head = `${l.name} — ${l.why}`;
+  const pass = `Pass: ${l.rule}.`;
+  const yours = reason ? `Your value: ${reason}` : '';
+  return [head, pass, yours].filter(Boolean).join('\n\n');
+}
+
+// In-memory short-term rows mirror: { sym: row }
+let shortRowsBySym = Object.create(null);
+let shortLoaded = false;
+
+async function ensureShortDataLoaded(){
+  if (shortLoaded) { renderShortWatchlist(); return; }
+  shortLoaded = true;
+  if (!API_LIVE) { renderShortWatchlist(); return; }
+  try {
+    const rows = await api.get('/api/short/watchlist');
+    if (Array.isArray(rows)) rows.forEach(r => { if (r && r.sym) shortRowsBySym[r.sym.toUpperCase()] = r; });
+  } catch(e) { /* leave empty, render placeholders */ }
+  renderShortWatchlist();
+}
+
+function shortScoreClass(s){
+  const n = parseInt((s||'').toString());
+  if (isNaN(n)) return 'na';   // unscored rows render in neutral, not red
+  if (n >= 7) return 'g';
+  if (n >= 4) return 'y';
+  return 'r';
+}
+
+function renderShortWatchlist(){
+  const tb = document.getElementById('stBody');
+  if (!tb) return;
+  tb.innerHTML = '';
+  const pinned   = watchlist.filter(r => pinnedSyms.has(r.sym));
+  const unpinned = watchlist.filter(r => !pinnedSyms.has(r.sym));
+  const ordered  = [...pinned, ...unpinned];
+  const dividerAt = pinned.length > 0 && unpinned.length > 0 ? pinned.length : -1;
+
+  ordered.forEach((wl, i) => {
+    if (i === dividerAt) {
+      const div = document.createElement('tr'); div.className = 'pin-divider';
+      const numCols = document.querySelectorAll('#shortView thead th').length || 13;
+      div.innerHTML = `<td colspan="${numCols}"></td>`;
+      tb.appendChild(div);
+    }
+    const sym = (wl.sym || '').toUpperCase();
+    const r   = shortRowsBySym[sym] || { sym, scoring: !!wl.shortScoring };
+    const verdicts = r.verdicts || (r.v || []).map(b => b ? 'good' : 'bad');
+    const reasons  = r.reasons  || [];
+    const checks = SHORT_LABELS.map((_, k) => {
+      const v = verdicts[k] || 'na';
+      const cls = v === 'good' ? 'good' : v === 'bad' ? 'bad' : 'na';
+      return `<div class="chk ${cls}" data-tip="${escHtml(tipForChip(k, reasons[k]))}"></div>`;
+    }).join('');
+
+    const score = r.score || '—/10';
+    const cls = r.scoring ? '' : 'sc-' + shortScoreClass(score);
+    const tr = document.createElement('tr');
+    tr.dataset.sym = sym;
+    if (pinnedSyms.has(sym)) tr.classList.add('pinned');
+    if (dividerAt > 0 && i === dividerAt - 1) tr.classList.add('pin-last');
+    if (dividerAt > 0 && i === dividerAt)     tr.classList.add('pin-first');
+    if (r.scoring) tr.classList.add('scoring'); else tr.classList.add(cls);
+
+    const name = r.name || wl.name || sym;
+    const price = (r.price != null) ? r.price : wl.price;
+
+    // Short Term display cells (the columns to the right of the chips)
+    const raw = r.raw || [];
+    const trendVal = raw[0] && raw[0].sma50 != null
+      ? `$${raw[0].price.toFixed(0)} > 50DMA $${raw[0].sma50.toFixed(0)}`
+      : '—';
+    const mom = raw[1] != null ? `${(raw[1] * 100).toFixed(1)}%` : '—';
+    const momCls = (raw[1] != null && raw[1] > 0) ? 'mom-hi' : (raw[1] != null && raw[1] < 0) ? 'mom-lo' : '';
+    const fwdPe = raw[5] && raw[5].fwdPe != null ? `${raw[5].fwdPe.toFixed(1)}x` : '—';
+    const epsRev = (() => {
+      const v = raw[4];
+      if (!v) return '—';
+      if (v.ptNow != null && v.ptThen != null && v.ptThen > 0) {
+        const d = (v.ptNow - v.ptThen) / v.ptThen;
+        return (d > 0 ? '↑' : d < 0 ? '↓' : '→') + ` ${(d * 100).toFixed(1)}%`;
+      }
+      if (v.brNow != null && v.brThen != null) {
+        const d = v.brNow - v.brThen;
+        return (d > 0 ? '↑' : d < 0 ? '↓' : '→') + ` ${(v.brNow * 100).toFixed(0)}%`;
+      }
+      return '—';
+    })();
+    const qual = raw[6] && raw[6].roe != null ? `ROE ${(raw[6].roe * 100).toFixed(0)}%` : '—';
+    const lev = raw[7] && raw[7].ratio != null ? `${raw[7].ratio.toFixed(1)}x` : (raw[7] && raw[7].netDebt < 0 ? 'net cash' : '—');
+    const cat = raw[8] && raw[8].daysUntil != null ? `${raw[8].daysUntil}d` : '—';
+    const vsVal = raw[9];
+    const vs = vsVal && vsVal.rv != null ? `${vsVal.rv.toFixed(2)}x` : '—';
+    const vsCls = vsVal && vsVal.rv >= 1.5 ? 'mom-hi' : '';
+
+    // Per-row hover tips combine the static factor explanation with the live computed value
+    const tipFor = (idx) => escHtml(tipForChip(idx, reasons[idx]));
+
+    tr.innerHTML = `
+      <td class="idx">${i + 1}.</td>
+      <td class="co-cell"><span class="sym">${sym}</span> <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>
+      <td class="num price-cell">${price != null ? '$' + (+price).toFixed(2) : '—'}</td>
+      <td class="grp-start"><div class="checks">${checks}</div></td>
+      <td data-tip="${escHtml('Composite score: '+score+'. Sum of the 10 chips that passed. 7+/10 is a strong setup, 4-6 is mixed, 3 or fewer is weak. Use this to rank candidates, not as a buy signal on its own.')}"><span class="score ${shortScoreClass(score)}">${score}</span></td>
+      <td class="grp-start num" data-tip="${tipFor(0)}">${trendVal}</td>
+      <td class="num ${momCls}" data-tip="${tipFor(1)}">${mom}</td>
+      <td class="grp-start num" data-tip="${tipFor(5)}">${fwdPe}</td>
+      <td class="num" data-tip="${tipFor(4)}">${epsRev}</td>
+      <td class="grp-start num" data-tip="${tipFor(6)}">${qual}</td>
+      <td class="num" data-tip="${tipFor(7)}">${lev}</td>
+      <td class="grp-start num" data-tip="${tipFor(8)}">${cat}</td>
+      <td class="num ${vsCls}" data-tip="${tipFor(9)}">${vs}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+/* ---------------- Short Term rescan ---------------- */
+async function rescanShort(e){
+  // Short Term scans are cheap (pure FMP, no Anthropic) and users expect
+  // "Rescan = fresh data" — always bypass the per-ticker blob cache.
+  const force = true;
+  localStorage.setItem('gn_st_last_rescan', Date.now()); updateRescanTimer();
+  const btn = document.getElementById('rescan');
+  btn.disabled = true;
+  btn.innerHTML = (force ? 'Full rescan…' : 'Refreshing…');
+  // mark scoring state for animation
+  watchlist.forEach(w => { w.shortScoring = true; });
+  renderShortWatchlist();
+  if (!API_LIVE) {
+    setTimeout(() => {
+      watchlist.forEach(w => { w.shortScoring = false; });
+      btn.disabled = false; btn.innerHTML = 'Rescan';
+      renderShortWatchlist();
+    }, 800);
+    return;
+  }
+  try {
+    const jobId = crypto.randomUUID();
+    await api.send('/api/short/rescan', 'POST', {
+      jobId, force,
+      clientTickers: watchlist.map(r => r.sym),
+    }).catch(() => {});
+    // Poll the job for completion
+    const t = setInterval(async () => {
+      const j = await api.get('/api/jobs/' + jobId).catch(() => null);
+      if (!j) return;
+      if (j.rows && j.rows.length) {
+        j.rows.forEach(row => {
+          if (row && row.sym && !row.error) shortRowsBySym[row.sym.toUpperCase()] = row;
+        });
+        renderShortWatchlist();
+      }
+      if (j.status === 'done' || j.status === 'error') {
+        clearInterval(t);
+        watchlist.forEach(w => { w.shortScoring = false; });
+        btn.disabled = false;
+        btn.innerHTML = 'Rescan';
+        renderShortWatchlist();
+        if (j.status === 'error') showToast(j.error || 'Short rescan failed.');
+        else if (j.rows) showToast(`Short Term: rescored ${j.rows.filter(r => !r.error && r.score).length} ticker(s).`);
+      }
+    }, 3000);
+  } catch (err) {
+    watchlist.forEach(w => { w.shortScoring = false; });
+    btn.disabled = false; btn.innerHTML = 'Rescan';
+    showToast('Short rescan failed — try again.');
+  }
+}
 </script>
 </body>
 </html>
