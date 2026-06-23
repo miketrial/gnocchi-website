@@ -325,9 +325,9 @@
   .tarrow.fl{color:var(--ink-faint)}
 
   /* Typing pipeline animation for scanning rows */
-  tbody tr.scoring td{opacity:0.35;pointer-events:none}
-  tbody tr.scoring .co-cell{opacity:1;position:relative;overflow:visible}
-  .typing-overlay{position:absolute;left:calc(50vw - 32px);top:50%;transform:translate(-50%,-50%);white-space:nowrap;font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:11px;color:#378ADD;pointer-events:none;display:flex;align-items:center;gap:2px}
+  tbody tr.scoring td{opacity:0.15;filter:blur(1px);pointer-events:none;transition:opacity .2s,filter .2s}
+  tbody tr.scoring .co-cell{opacity:1;filter:none;position:relative;overflow:visible}
+  .typing-overlay{position:absolute;left:calc(50vw - 32px);top:50%;transform:translate(-50%,-50%);white-space:nowrap;font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:11px;color:#111;pointer-events:none;display:flex;align-items:center;gap:2px;font-weight:600}
   .typing-cursor{animation:blink .8s step-end infinite}
   @keyframes blink{50%{opacity:0}}
 
@@ -2267,9 +2267,13 @@ function renderShortWatchlist(){
     // Per-row hover tips combine the static factor explanation with the live computed value
     const tipFor = (idx) => escHtml(tipForChip(idx, reasons[idx]));
 
+    const coCell = r.scoring
+      ? `<td class="co-cell"><span class="sym" style="opacity:0.3">${sym}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
+      : `<td class="co-cell"><span class="sym">${sym}</span> <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`;
+
     tr.innerHTML = `
       <td class="idx">${i + 1}.</td>
-      <td class="co-cell"><span class="sym">${sym}</span> <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>
+      ${coCell}
       <td class="num price-cell">${price != null ? '$' + (+price).toFixed(2) : '—'}</td>
       <td class="grp-start"><div class="checks">${checks}</div></td>
       <td data-tip="${escHtml('Composite score: '+score+'. Sum of the 10 chips that passed. 7+/10 is a strong setup, 4-6 is mixed, 3 or fewer is weak. Use this to rank candidates, not as a buy signal on its own.')}"><span class="score ${shortScoreClass(score)}">${score}</span></td>
@@ -2282,6 +2286,7 @@ function renderShortWatchlist(){
       <td class="grp-start num" data-tip="${tipFor(8)}">${cat}</td>
       <td class="num ${vsCls}" data-tip="${tipFor(9)}">${vs}</td>`;
     tb.appendChild(tr);
+    if (r.scoring) syncCheckAnim(sym);
   });
 }
 
@@ -2294,12 +2299,13 @@ async function rescanShort(e){
   const btn = document.getElementById('rescan');
   btn.disabled = true;
   btn.innerHTML = (force ? 'Full rescan…' : 'Refreshing…');
-  // mark scoring state for animation
+  // mark scoring + start spinner animation on every row
   watchlist.forEach(w => { w.shortScoring = true; });
   renderShortWatchlist();
+  watchlist.forEach(w => startCheckAnim(w.sym));
   if (!API_LIVE) {
     setTimeout(() => {
-      watchlist.forEach(w => { w.shortScoring = false; });
+      watchlist.forEach(w => { w.shortScoring = false; stopCheckAnim(w.sym); });
       btn.disabled = false; btn.innerHTML = 'Rescan';
       renderShortWatchlist();
     }, 800);
@@ -2311,19 +2317,25 @@ async function rescanShort(e){
       jobId, force,
       clientTickers: watchlist.map(r => r.sym),
     }).catch(() => {});
-    // Poll the job for completion
+    // Poll the job — stop each row's animation as its result lands
     const t = setInterval(async () => {
       const j = await api.get('/api/jobs/' + jobId).catch(() => null);
       if (!j) return;
       if (j.rows && j.rows.length) {
         j.rows.forEach(row => {
-          if (row && row.sym && !row.error) shortRowsBySym[row.sym.toUpperCase()] = row;
+          if (row && row.sym && !row.error) {
+            const up = row.sym.toUpperCase();
+            shortRowsBySym[up] = row;
+            const wl = watchlist.find(w => w.sym === up);
+            if (wl) { wl.shortScoring = false; stopCheckAnim(up); }
+          }
         });
         renderShortWatchlist();
+        syncCheckAnims();
       }
       if (j.status === 'done' || j.status === 'error') {
         clearInterval(t);
-        watchlist.forEach(w => { w.shortScoring = false; });
+        watchlist.forEach(w => { w.shortScoring = false; stopCheckAnim(w.sym); });
         btn.disabled = false;
         btn.innerHTML = 'Rescan';
         renderShortWatchlist();
@@ -2332,7 +2344,7 @@ async function rescanShort(e){
       }
     }, 3000);
   } catch (err) {
-    watchlist.forEach(w => { w.shortScoring = false; });
+    watchlist.forEach(w => { w.shortScoring = false; stopCheckAnim(w.sym); });
     btn.disabled = false; btn.innerHTML = 'Rescan';
     showToast('Short rescan failed — try again.');
   }
