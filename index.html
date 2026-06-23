@@ -43,6 +43,8 @@
     transition:opacity .2s ease;
     display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap;
   }
+  /* Extra breathing room between the view-switch pill and the Rescan cluster */
+  #viewSwitch{ margin-right:18px }
   header.bar > *:not(.rescan-wrap){margin-top:0}
   .brand{font-size:16px; font-weight:600; color:#4a525e; letter-spacing:.3px}
   .brand .dot{color:#7aa6c2}
@@ -621,6 +623,7 @@
     <div class="rescan-wrap" id="wlLeft">
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn" id="rescan">Rescan</button>
+        <button class="btn" id="forceRescan" title="Force a full rescan of every row — bypasses the 'fresh rows' shortcut and re-pulls FMP for everything. Same as Shift+click on Rescan.">Force Rescan</button>
         <button class="btn" id="pipelineBtn" onclick="document.getElementById('pipelineModal').style.display='flex'">Scoring Pipeline</button>
         <button class="btn" id="twToggle">Training Wheels</button>
       </div>
@@ -780,22 +783,23 @@
           </tr>
           <tr>
             <th></th>
-            <th class="sortable" data-sort="name">Company<span class="sub">(ticker)</span></th>
-            <th class="num sortable" data-sort="price">Price<span class="sub">live</span></th>
-            <th class="grp-start"><div class="chkhdr"><span><span class="hl">Revenue</span></span><span><span class="hl">Margin</span></span><span><span class="hl">Contract</span></span><span><span class="hl">Debt</span></span><span><span class="hl">Departures</span></span><span><span class="hl">Forecast</span></span><span><span class="hl">Disruption</span></span><span><span class="hl">Insider</span></span></div></th>
-            <th class="sortable" data-sort="score">Score<span class="sub">of 8</span></th>
-            <th class="grp-start sortable" data-sort="vs">vs Sector<span class="sub">P/E</span></th>
-            <th class="num sortable" data-sort="fwd">P/E<span class="sub">fwd</span></th>
-            <th class="num sortable" data-sort="ttm">P/E<span class="sub">ttm</span></th>
-            <th class="num sortable" data-sort="yr5">P/E<span class="sub">5yr avg</span></th>
-            <th>FWD vs TTM<span class="sub">&nbsp;</span></th>
-            <th class="grp-start">Trend<span class="sub">direction</span></th>
-            <th>Expectations<span class="sub">priced-in</span></th>
-            <th>Catalysts<span class="sub">forward</span></th>
-            <th class="num grp-start sortable" data-sort="ps">P/S<span class="sub">ratio</span></th>
-            <th class="num ar-col">Analyst<span class="sub">&nbsp;</span></th>
-            <th class="num grp-start">Beta<span class="sub">market sens.</span></th>
-            <th class="num">Rel Vol<span class="sub">vs 20d avg</span></th>
+            <th class="sortable" data-sort="name" data-tip="Company name and ticker symbol. Click the header to sort A→Z. Right-click any row for Force rescan / Pin / Delete.">Company<span class="sub">(ticker)</span></th>
+            <th class="num sortable" data-sort="price" data-tip="Latest trade price from FMP's /quote endpoint. Refreshes whenever the row is rescanned.">Price<span class="sub">live</span></th>
+            <th class="grp-start" data-tip="The eight scoring chips: Revenue growth, Margin trend, Contract/backlog, Debt level, Executive Departures, Forecast/guidance, Disruption risk, and Insider activity. Green = pass, red = fail, purple = data missing. Hover an individual chip for its specific reason.">
+              <div class="chkhdr"><span><span class="hl">Revenue</span></span><span><span class="hl">Margin</span></span><span><span class="hl">Contract</span></span><span><span class="hl">Debt</span></span><span><span class="hl">Departures</span></span><span><span class="hl">Forecast</span></span><span><span class="hl">Disruption</span></span><span><span class="hl">Insider</span></span></div></th>
+            <th class="sortable" data-sort="score" data-tip="Composite score: count of the eight chips that passed. 6+/8 is strong, 4-5 is mixed, 3 or fewer is weak. Use as a rank, not a buy signal on its own.">Score<span class="sub">of 8</span></th>
+            <th class="grp-start sortable" data-sort="vs" data-tip="Forward P/E relative to the sector median (from the static SECTOR_PE_MAP). −20% means the stock trades 20% cheaper than peers on forward earnings. Negative = cheaper than sector.">vs Sector<span class="sub">P/E</span></th>
+            <th class="num sortable" data-sort="fwd" data-tip="Forward P/E = price ÷ next-year consensus EPS (FMP analyst-estimates). The headline valuation number for momentum / growth-at-a-reasonable-price work.">P/E<span class="sub">fwd</span></th>
+            <th class="num sortable" data-sort="ttm" data-tip="Trailing-twelve-month P/E = price ÷ last 4 reported quarters' EPS. Reflects what shareholders actually paid for past earnings.">P/E<span class="sub">ttm</span></th>
+            <th class="num sortable" data-sort="yr5" data-tip="Five-year average P/E. Useful for spotting multiple expansion / compression vs the stock's own history — a P/E far above its 5yr avg means the market is paying up for a new narrative.">P/E<span class="sub">5yr avg</span></th>
+            <th data-tip="Compares forward P/E to TTM P/E. ↓ means analysts expect earnings to grow (multiple shrinks as E rises); ↑ means estimates are falling. ↓ is the bullish direction.">FWD vs TTM<span class="sub">&nbsp;</span></th>
+            <th class="grp-start" data-tip="Multi-year direction of margins, growth, or returns — pulled from the Layer-2 Haiku analysis. ↑ improving, → flat, ↓ deteriorating. Drives the qualitative read of the business trajectory.">Trend<span class="sub">direction</span></th>
+            <th data-tip="What the current multiple is asking the business to deliver — e.g. 'priced for 20% revenue growth and stable margins.' Helps you judge whether the stock can clear the bar that's already baked in.">Expectations<span class="sub">priced-in</span></th>
+            <th data-tip="Specific upcoming events that could re-rate the stock: earnings dates, product launches, FDA decisions, contract awards. Pulled from analyst summaries and FMP earnings calendar.">Catalysts<span class="sub">forward</span></th>
+            <th class="num grp-start sortable" data-sort="ps" data-tip="Price / Sales ratio. Most useful for unprofitable or early-stage names where P/E is meaningless. Compare to peers in the same industry, not across sectors.">P/S<span class="sub">ratio</span></th>
+            <th class="num ar-col" data-tip="Analyst rating distribution: Strong Buy / Buy / Hold / Sell counts from FMP's /grades-historical. Skew toward Buy means sell-side is bullish; lots of Holds is a 'show me' name.">Analyst<span class="sub">&nbsp;</span></th>
+            <th class="num grp-start" data-tip="Market beta from FMP's /profile. Beta &gt; 1 means the stock moves more than the S&amp;P 500; &lt; 1 means it dampens index moves. High beta amplifies returns and drawdowns.">Beta<span class="sub">market sens.</span></th>
+            <th class="num" data-tip="Today's volume ÷ 20-day average volume. ≥ 1.5× = unusual activity, which often precedes a meaningful move — institutional accumulation or distribution leaves a footprint here first.">Rel Vol<span class="sub">vs 20d avg</span></th>
           </tr>
         </thead>
         <tbody id="wlBody"></tbody>
@@ -1236,18 +1240,20 @@ function renderWatchlist(){
 
 /* ---------------- check-square tooltip (fixed-position, escapes overflow) --- */
 const tipBox=document.getElementById('tipBox');
-document.getElementById('wlBody').addEventListener('mouseover',e=>{
+// Delegate from document so the tooltip works for both <thead> cells
+// (column descriptors) and <tbody> chips/cells across every view.
+document.addEventListener('mouseover',e=>{
   const el=e.target.closest('[data-tip]');
   if(!el){tipBox.style.display='none';return;}
   tipBox.textContent=el.dataset.tip;
   tipBox.style.display='block';
 });
-document.getElementById('wlBody').addEventListener('mousemove',e=>{
+document.addEventListener('mousemove',e=>{
   if(tipBox.style.display==='none') return;
   tipBox.style.left=(e.clientX+14)+'px';
   tipBox.style.top =(e.clientY-38)+'px';
 });
-document.getElementById('wlBody').addEventListener('mouseleave',()=>{tipBox.style.display='none';});
+document.addEventListener('mouseleave',()=>{tipBox.style.display='none';});
 
 /* ---------------- score history popover (click) ---------------- */
 const scoreHist=document.getElementById('scoreHist');
@@ -1594,6 +1600,9 @@ function setView(v){
   const twBtn=document.getElementById('twToggle');
   if(pipeBtn) pipeBtn.style.display=isShort?'none':'';
   if(twBtn)   twBtn.style.display  =isShort?'none':'';
+  // Short Term rescan always re-pulls everything, so Force Rescan is redundant there
+  const fr=document.getElementById('forceRescan');
+  if(fr) fr.style.display=isShort?'none':'';
   const navTog=document.getElementById('navToggle');
   if(navTog){
     navTog.style.display=isShort?'none':'';
@@ -1957,6 +1966,11 @@ addInput.addEventListener('keydown',async e=>{
    Shift+click  = force a full rescan of every row. */
 const rescanBtn=document.getElementById('rescan');
 rescanBtn.title='Click: refresh stale rows only (>2 days). Shift+click: force full rescan.';
+// Visible Force Rescan button — same path as Shift+click on Rescan
+const forceRescanBtn=document.getElementById('forceRescan');
+if(forceRescanBtn){
+  forceRescanBtn.onclick=(e)=>{ rescanBtn.onclick({ shiftKey:true, target:rescanBtn }); };
+}
 rescanBtn.onclick=async(e)=>{
   // Route to the appropriate scanner based on the active view
   if(currentView==='short'){ return rescanShort(e); }
