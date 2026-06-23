@@ -2256,7 +2256,9 @@ function renderShortWatchlist(){
 
 /* ---------------- Short Term rescan ---------------- */
 async function rescanShort(e){
-  const force = !!(e && e.shiftKey);
+  // Short Term scans are cheap (pure FMP, no Anthropic) and users expect
+  // "Rescan = fresh data" — always bypass the per-ticker blob cache.
+  const force = true;
   localStorage.setItem('gn_st_last_rescan', Date.now()); updateRescanTimer();
   const btn = document.getElementById('rescan');
   btn.disabled = true;
