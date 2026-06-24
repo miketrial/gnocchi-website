@@ -2222,7 +2222,15 @@ async function scoreShortForTicker(sym){
   if (currentView === 'short') renderShortWatchlist();
   const jobId = 'jadd-' + Date.now();
   await api.send('/api/short/rescan','POST',{jobId, force:true, tickers:[up], clientTickers:[up]}).catch(()=>{});
+  let pollCount = 0;
   const t = setInterval(async () => {
+    if (++pollCount > 200) {
+      clearInterval(t);
+      if (wl) wl.shortScoring = false;
+      if (currentView === 'short') renderShortWatchlist();
+      showToast(`${up} scoring timed out — try right-click → Rescan.`);
+      return;
+    }
     const j = await api.get('/api/jobs/'+jobId).catch(()=>null);
     if (!j) return;
     if (j.rows && j.rows.length) {
@@ -2350,7 +2358,15 @@ document.getElementById('ctxRescan').onclick=async()=>{
     if(!API_LIVE){ setTimeout(()=>{ if(wl) wl.shortScoring=false; renderShortWatchlist(); },800); return; }
     const jobId='jrs-'+Date.now();
     await api.send('/api/short/rescan','POST',{jobId,force:true,tickers:[sym],clientTickers:[sym]}).catch(()=>{});
+    let pollCount=0;
     const t=setInterval(async()=>{
+      if(++pollCount>200){
+        clearInterval(t);
+        if(wl) wl.shortScoring=false;
+        renderShortWatchlist();
+        showToast(`${sym} rescan timed out — try again.`);
+        return;
+      }
       const j=await api.get('/api/jobs/'+jobId).catch(()=>null);
       if(!j) return;
       if(j.rows&&j.rows.length){
@@ -2684,8 +2700,18 @@ async function rescanShort(e){
       jobId, force,
       clientTickers: watchlist.map(r => r.sym),
     }).catch(() => {});
-    // Poll — as each fresh result lands, clear that row's legacy flag
+    // Poll — as each fresh result lands, clear that row's legacy flag.
+    // Safety: give up after 10 minutes in case the background fn crashes.
+    let pollCount = 0;
     const t = setInterval(async () => {
+      if (++pollCount > 200) {
+        clearInterval(t);
+        watchlist.forEach(w => { w.legacy = false; w.shortScoring = false; });
+        btn.disabled = false; btn.innerHTML = 'Rescan';
+        renderShortWatchlist();
+        showToast('Rescan timed out — some rows may be incomplete. Try again.');
+        return;
+      }
       const j = await api.get('/api/jobs/' + jobId).catch(() => null);
       if (!j) return;
       if (j.rows && j.rows.length) {
