@@ -1510,21 +1510,26 @@ function buildStFactChart(entries, factorIdx) {
   let svg = '';
 
   if (factorIdx === -1) {
-    // Overall score (0–10)
-    const ys = v => pt + cH - (v/10)*cH;
-    [0,5,10].forEach(v => {
+    // Overall score — detect scale: legacy /10 entries cap at 10, new /30 go higher
+    const maxScore = Math.max(...entries.map(e => parseInt(e.score) || 0), 1);
+    const scale = maxScore > 10 ? 30 : 10;
+    const ys = v => pt + cH - (v/scale)*cH;
+    const gridLines = scale === 30 ? [0,10,20,30] : [0,5,10];
+    gridLines.forEach(v => {
       svg += `<line x1="${pl}" y1="${ys(v)}" x2="${W-pr}" y2="${ys(v)}" stroke="rgba(255,255,255,.07)" stroke-width="0.5"/>`;
       svg += `<text x="${pl-4}" y="${ys(v)+3.5}" text-anchor="end" fill="#606878" font-size="8">${v}</text>`;
     });
     const pts = entries.map((e,i) => {
       const v = parseInt(e.score) || 0;
-      return { x: xs(i), y: ys(v), v, verdict: v>=7?'good':v>=5?'mixed':'bad' };
+      const good = scale === 30 ? v >= 20 : v >= 7;
+      const mid  = scale === 30 ? v >= 12 : v >= 5;
+      return { x: xs(i), y: ys(v), v, verdict: good?'good':mid?'mixed':'bad' };
     });
     if (n > 1) {
       svg += `<polyline points="${pts.map(p=>`${p.x},${p.y}`).join(' ')}" fill="none" stroke="rgba(55,138,221,.5)" stroke-width="1.5" stroke-linejoin="round"/>`;
     }
     pts.forEach(p => {
-      const c = p.v>=7?'#4caf87':p.v>=5?'#e8a838':'#c0392b';
+      const c = p.verdict==='good'?'#4caf87':p.verdict==='mixed'?'#e8a838':'#c0392b';
       svg += `<circle cx="${p.x}" cy="${p.y}" r="${n===1?4:2.5}" fill="${c}" stroke="#1e2230" stroke-width="1"/>`;
     });
   } else {
