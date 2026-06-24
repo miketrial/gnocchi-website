@@ -211,6 +211,7 @@
   .checked.fresh{color:var(--good-fg)}   /* recently checked */
   .checked.warn {color:var(--yel-fg)}    /* getting close to overdue */
   .checked.stale{color:var(--bad-fg)}    /* past 48h — overdue */
+  tr.row-stale{opacity:0.62}             /* entire row dims when data is overdue */
 
   /* 8 check squares (labels now live in the column header, not inside the squares) */
   .checks{display:flex; gap:3px}
@@ -562,18 +563,18 @@
   }
   #twTipClose{top:14px; right:16px; font-size:22px; padding:6px}
   /* Short Term table: drop the noisier text columns under 700px */
-  /* Columns visible: idx, Company, Price, chips, Score, Fwd P/E, Earnings, Vol Surge */
-  /* Columns hidden:  Trend(6), 3M Return(7), Anlyst Rev(9), FCF/ROE(10), Leverage(11) */
-  #shortView thead tr:nth-child(2) th:nth-child(6),
+  /* Columns visible: idx, Company, Price, chips, Score, VS Sector, Fwd P/E, Earnings, Vol Surge */
+  /* Columns hidden:  Trend(7), 3M Return(8), Anlyst Rev(10), FCF/ROE(11), Leverage(12) */
   #shortView thead tr:nth-child(2) th:nth-child(7),
-  #shortView thead tr:nth-child(2) th:nth-child(9),
+  #shortView thead tr:nth-child(2) th:nth-child(8),
   #shortView thead tr:nth-child(2) th:nth-child(10),
   #shortView thead tr:nth-child(2) th:nth-child(11),
-  #shortView tbody td:nth-child(6),
+  #shortView thead tr:nth-child(2) th:nth-child(12),
   #shortView tbody td:nth-child(7),
-  #shortView tbody td:nth-child(9),
+  #shortView tbody td:nth-child(8),
   #shortView tbody td:nth-child(10),
-  #shortView tbody td:nth-child(11){display:none}
+  #shortView tbody td:nth-child(11),
+  #shortView tbody td:nth-child(12){display:none}
   /* Hide the group headers whose cells all collapsed */
   #shortView thead tr.grphdr th:nth-child(3),  /* Momentum */
   #shortView thead tr.grphdr th:nth-child(5){  /* Quality */ display:none }
@@ -655,6 +656,7 @@
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn" id="rescan">Rescan</button>
         <button class="btn" id="forceRescan" title="Force a full rescan of every row — bypasses the 'fresh rows' shortcut and re-pulls FMP for everything. Same as Shift+click on Rescan.">Force Rescan</button>
+        <button class="btn" id="restoreOrder" title="Restore your saved drag-drop order and clear column sort" style="display:none">↺ Order</button>
         <button class="btn" id="pipelineBtn" onclick="document.getElementById('pipelineModal').style.display='flex'">Scoring Pipeline</button>
         <button class="btn" id="twToggle">Training Wheels</button>
       </div>
@@ -873,7 +875,7 @@
       <thead>
         <tr class="grphdr">
           <th colspan="3"></th>
-          <th colspan="2" class="grp">Setup</th>
+          <th colspan="3" class="grp">Setup</th>
           <th colspan="2" class="grp">Momentum</th>
           <th colspan="2" class="grp">Valuation</th>
           <th colspan="2" class="grp">Quality</th>
@@ -885,6 +887,7 @@
           <th class="num sortable" data-sort="price">Price<span class="sub">live</span></th>
           <th class="grp-start"><div class="chkhdr"><span><span class="hl">Trend</span></span><span><span class="hl">3M Mom</span></span><span><span class="hl">Near Hi</span></span><span><span class="hl">Liquid</span></span><span><span class="hl">Anlyst Rev</span></span><span><span class="hl">Value</span></span><span><span class="hl">Quality</span></span><span><span class="hl">Leverage</span></span><span><span class="hl">Catalyst</span></span><span><span class="hl">Vol Surge</span></span></div></th>
           <th class="sortable" data-sort="score">Score<span class="sub">of 10</span></th>
+          <th class="num sortable" data-sort="vspe" data-tip="Forward P/E vs the sector median. Negative = cheaper than peers (green), positive = more expensive (red). Same as the VS Sector column on the Basic page — useful as a risk filter: overpriced stocks fall harder on any missed catalyst.">VS Sector<span class="sub">P/E</span></th>
           <th class="grp-start" data-tip="Trend test — current price vs its 50-day moving average. A stock above its 50DMA, with the 50DMA itself above the 200DMA, is in a confirmed uptrend (the strongest predictor of continued strength over 2-12 weeks).">Trend<span class="sub">price &amp; DMA</span></th>
           <th data-tip="3-month price return. Positive ≥5% earns the green Momentum chip. Stocks that outperformed over the past quarter tend to keep outperforming through the next swing-trade window.">3M Return<span class="sub">vs 0</span></th>
           <th class="grp-start" data-tip="Forward P/E (price ÷ next-year consensus EPS). The Value chip passes when this is below the sector 75th percentile — we don't screen for cheap, just rule out 'egregiously expensive' to avoid multiple compression.">Fwd P/E<span class="sub">vs sector</span></th>
@@ -1109,6 +1112,7 @@ let net = [
 
 /* ---------------- sort state ---------------- */
 let sortCol = null, sortDir = 1;
+let stSortCol = null, stSortDir = -1; // Short Term sort (-1 = desc = highest score first)
 const SECTOR_LABEL = {tech:'Tech',semi:'Semis',saas:'SaaS',hw:'Hardware',ind:'Industrials',energy:'Energy',cons:'Consumer'};
 function sortVal(r, col){
   const num = s => parseFloat((s||'').replace(/[~x%]/g,'')) || 0;
@@ -1125,12 +1129,12 @@ function sortVal(r, col){
   }
 }
 function applySortHeaders(){
-  document.querySelectorAll('th[data-sort]').forEach(th=>{
+  document.querySelectorAll('#watchlistView th[data-sort]').forEach(th=>{
     th.classList.remove('sort-asc','sort-desc');
     if(th.dataset.sort === sortCol) th.classList.add(sortDir===1?'sort-asc':'sort-desc');
   });
 }
-document.querySelector('thead').addEventListener('click', e=>{
+document.querySelector('#watchlistView thead').addEventListener('click', e=>{
   const th = e.target.closest('th[data-sort]'); if(!th) return;
   const col = th.dataset.sort;
   if(sortCol === col) sortDir *= -1; else { sortCol = col; sortDir = 1; }
@@ -1141,6 +1145,55 @@ document.querySelector('thead').addEventListener('click', e=>{
   try{localStorage.setItem('gn_sort',JSON.stringify({col:sortCol,dir:sortDir}));}catch(e){}
   applySortHeaders();
   renderWatchlist();
+  // sync Short Term to same order
+  stSortCol = null; applyStSortHeaders(); renderShortWatchlist();
+  document.getElementById('restoreOrder').style.display = '';
+});
+
+// Short Term sort — score is in shortRowsBySym, not on the watchlist item itself
+function stSortVal(wl, col) {
+  const r = shortRowsBySym[(wl.sym||'').toUpperCase()];
+  switch(col) {
+    case 'name':  return (wl.name||'').toLowerCase();
+    case 'price': return wl.price != null ? +wl.price : -Infinity;
+    case 'score': return (r?.score) ? parseScore(r.score) : -Infinity;
+    case 'vspe':  return wl.vs ? parseFloat((wl.vs||'').replace(/[+%]/g,'')) : Infinity;
+    default:      return 0;
+  }
+}
+function applyStSortHeaders() {
+  document.querySelectorAll('#shortView th[data-sort]').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (th.dataset.sort === stSortCol) th.classList.add(stSortDir === 1 ? 'sort-asc' : 'sort-desc');
+  });
+}
+function applyStSort() {
+  if (!stSortCol) return;
+  watchlist.sort((a,b) => {
+    const av=stSortVal(a,stSortCol), bv=stSortVal(b,stSortCol);
+    return (av<bv?-1:av>bv?1:0)*stSortDir;
+  });
+}
+document.querySelector('#shortView thead').addEventListener('click', e => {
+  const th = e.target.closest('th[data-sort]'); if (!th) return;
+  const col = th.dataset.sort;
+  if (stSortCol === col) stSortDir *= -1;
+  else { stSortCol = col; stSortDir = col === 'name' ? 1 : -1; } // score/price default desc
+  applyStSort();
+  try { localStorage.setItem('gn_st_sort', JSON.stringify({col:stSortCol,dir:stSortDir})); } catch(e) {}
+  applyStSortHeaders();
+  renderShortWatchlist();
+  // sync Basic to same order
+  sortCol = null; applySortHeaders(); renderWatchlist();
+  document.getElementById('restoreOrder').style.display = '';
+});
+
+document.getElementById('restoreOrder').addEventListener('click', () => {
+  watchlist = applyOrder([...watchlist]);
+  sortCol = null; stSortCol = null;
+  applySortHeaders(); applyStSortHeaders();
+  renderWatchlist(); renderShortWatchlist();
+  document.getElementById('restoreOrder').style.display = 'none';
 });
 
 /* ---------------- render watchlist ---------------- */
@@ -1611,10 +1664,12 @@ function updateChecked(){
     const elapsed=Date.now()-new Date(since).getTime();
     const h=Math.floor(elapsed/3600000), m=Math.floor(elapsed%3600000/60000), s=Math.floor(elapsed%60000/1000);
     const ago=h>0?`${h}h ${m}m`:`${m}m ${s}s`;
-    if(elapsed>=WINDOW_MS){ el.classList.add('stale'); el.textContent=`Last checked ${ago} · overdue`; }
+    const tr = el.closest('tr');
+    if(elapsed>=WINDOW_MS){ el.classList.add('stale'); el.textContent=`Last checked ${ago} · overdue`; if(tr) tr.classList.add('row-stale'); }
     else{
       el.classList.add(elapsed>=WINDOW_MS*0.75?'warn':'fresh');
       el.textContent=`Last checked ${ago}`;
+      if(tr) tr.classList.remove('row-stale');
     }
   });
 }
@@ -2222,7 +2277,15 @@ async function scoreShortForTicker(sym){
   if (currentView === 'short') renderShortWatchlist();
   const jobId = 'jadd-' + Date.now();
   await api.send('/api/short/rescan','POST',{jobId, force:true, tickers:[up], clientTickers:[up]}).catch(()=>{});
+  let pollCount = 0;
   const t = setInterval(async () => {
+    if (++pollCount > 200) {
+      clearInterval(t);
+      if (wl) wl.shortScoring = false;
+      if (currentView === 'short') renderShortWatchlist();
+      showToast(`${up} scoring timed out — try right-click → Rescan.`);
+      return;
+    }
     const j = await api.get('/api/jobs/'+jobId).catch(()=>null);
     if (!j) return;
     if (j.rows && j.rows.length) {
@@ -2350,7 +2413,15 @@ document.getElementById('ctxRescan').onclick=async()=>{
     if(!API_LIVE){ setTimeout(()=>{ if(wl) wl.shortScoring=false; renderShortWatchlist(); },800); return; }
     const jobId='jrs-'+Date.now();
     await api.send('/api/short/rescan','POST',{jobId,force:true,tickers:[sym],clientTickers:[sym]}).catch(()=>{});
+    let pollCount=0;
     const t=setInterval(async()=>{
+      if(++pollCount>200){
+        clearInterval(t);
+        if(wl) wl.shortScoring=false;
+        renderShortWatchlist();
+        showToast(`${sym} rescan timed out — try again.`);
+        return;
+      }
       const j=await api.get('/api/jobs/'+jobId).catch(()=>null);
       if(!j) return;
       if(j.rows&&j.rows.length){
@@ -2491,13 +2562,20 @@ let shortRowsBySym = Object.create(null);
 let shortLoaded = false;
 
 async function ensureShortDataLoaded(){
-  if (shortLoaded) { renderShortWatchlist(); return; }
+  if (shortLoaded) { applyStSort(); applyStSortHeaders(); renderShortWatchlist(); return; }
   shortLoaded = true;
   if (!API_LIVE) { renderShortWatchlist(); return; }
   try {
     const rows = await api.get('/api/short/watchlist');
     if (Array.isArray(rows)) rows.forEach(r => { if (r && r.sym) shortRowsBySym[r.sym.toUpperCase()] = r; });
   } catch(e) { /* leave empty, render placeholders */ }
+  // Restore saved ST sort after data is available (score needs shortRowsBySym populated)
+  try {
+    const saved = JSON.parse(localStorage.getItem('gn_st_sort') || 'null');
+    if (saved?.col) { stSortCol = saved.col; stSortDir = saved.dir ?? -1; }
+  } catch(e) {}
+  applyStSort();
+  applyStSortHeaders();
   renderShortWatchlist();
 }
 
@@ -2579,6 +2657,11 @@ function renderShortWatchlist(){
     const vs = vsVal && vsVal.rv != null ? `${vsVal.rv.toFixed(2)}x` : '—';
     const vsCls = vsVal && vsVal.rv >= 1.5 ? 'mom-hi' : '';
 
+    // VS Sector P/E — reuse the Basic pipeline's pre-computed value on the watchlist item
+    const vsPct = wl.vs ? parseFloat((wl.vs||'').replace(/[+%]/g,'')) : null;
+    const vsSect = wl.vs || '—';
+    const vsSectPillCls = wl.vsc || (vsPct != null ? (vsPct <= 0 ? 'g' : vsPct <= 15 ? 'y' : 'r') : 'n');
+
     // Per-row hover tips combine the static factor explanation with the live computed value
     const tipFor = (idx) => escHtml(tipForChip(idx, reasons[idx]));
 
@@ -2602,6 +2685,7 @@ function renderShortWatchlist(){
       <td class="num price-cell">${price != null ? '$' + (+price).toFixed(2) : '—'}</td>
       <td class="grp-start"><div class="checks">${checks}</div></td>
       <td data-col="score" style="cursor:pointer" data-tip="${escHtml('Composite score: '+score+'. Sum of the 10 chips that passed. 7+/10 is a strong setup, 4-6 is mixed, 3 or fewer is weak. Click to see score history.')}"><span class="score ${shortScoreClass(score)}">${score}</span></td>
+      <td class="num" data-tip="Forward P/E vs the sector median. Negative = cheaper than peers, positive = more expensive. Risk filter: overpriced stocks fall harder on missed catalysts."><span class="pill ${vsSectPillCls}">${vsSect}</span></td>
       <td class="grp-start num ${vCls(0)}" data-col="trend" style="cursor:pointer" data-tip="${tipFor(0)}">${trendVal}</td>
       <td class="num ${vCls(1)}" data-col="mom" style="cursor:pointer" data-tip="${tipFor(1)}">${mom}</td>
       <td class="grp-start num ${vCls(5)}" data-col="fwdpe" style="cursor:pointer" data-tip="${tipFor(5)}">${fwdPe}</td>
@@ -2684,8 +2768,18 @@ async function rescanShort(e){
       jobId, force,
       clientTickers: watchlist.map(r => r.sym),
     }).catch(() => {});
-    // Poll — as each fresh result lands, clear that row's legacy flag
+    // Poll — as each fresh result lands, clear that row's legacy flag.
+    // Safety: give up after 10 minutes in case the background fn crashes.
+    let pollCount = 0;
     const t = setInterval(async () => {
+      if (++pollCount > 200) {
+        clearInterval(t);
+        watchlist.forEach(w => { w.legacy = false; w.shortScoring = false; });
+        btn.disabled = false; btn.innerHTML = 'Rescan';
+        renderShortWatchlist();
+        showToast('Rescan timed out — some rows may be incomplete. Try again.');
+        return;
+      }
       const j = await api.get('/api/jobs/' + jobId).catch(() => null);
       if (!j) return;
       if (j.rows && j.rows.length) {
