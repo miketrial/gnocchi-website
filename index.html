@@ -1143,6 +1143,8 @@ document.querySelector('#watchlistView thead').addEventListener('click', e=>{
   try{localStorage.setItem('gn_sort',JSON.stringify({col:sortCol,dir:sortDir}));}catch(e){}
   applySortHeaders();
   renderWatchlist();
+  // sync Short Term to same order
+  stSortCol = null; applyStSortHeaders(); renderShortWatchlist();
 });
 
 // Short Term sort — score is in shortRowsBySym, not on the watchlist item itself
@@ -1178,6 +1180,8 @@ document.querySelector('#shortView thead').addEventListener('click', e => {
   try { localStorage.setItem('gn_st_sort', JSON.stringify({col:stSortCol,dir:stSortDir})); } catch(e) {}
   applyStSortHeaders();
   renderShortWatchlist();
+  // sync Basic to same order
+  sortCol = null; applySortHeaders(); renderWatchlist();
 });
 
 /* ---------------- render watchlist ---------------- */
