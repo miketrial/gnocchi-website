@@ -211,6 +211,7 @@
   .checked.fresh{color:var(--good-fg)}   /* recently checked */
   .checked.warn {color:var(--yel-fg)}    /* getting close to overdue */
   .checked.stale{color:var(--bad-fg)}    /* past 48h — overdue */
+  tr.row-stale{opacity:0.62}             /* entire row dims when data is overdue */
 
   /* 8 check squares (labels now live in the column header, not inside the squares) */
   .checks{display:flex; gap:3px}
@@ -655,6 +656,7 @@
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn" id="rescan">Rescan</button>
         <button class="btn" id="forceRescan" title="Force a full rescan of every row — bypasses the 'fresh rows' shortcut and re-pulls FMP for everything. Same as Shift+click on Rescan.">Force Rescan</button>
+        <button class="btn" id="restoreOrder" title="Restore your saved drag-drop order and clear column sort" style="display:none">↺ Order</button>
         <button class="btn" id="pipelineBtn" onclick="document.getElementById('pipelineModal').style.display='flex'">Scoring Pipeline</button>
         <button class="btn" id="twToggle">Training Wheels</button>
       </div>
@@ -1145,6 +1147,7 @@ document.querySelector('#watchlistView thead').addEventListener('click', e=>{
   renderWatchlist();
   // sync Short Term to same order
   stSortCol = null; applyStSortHeaders(); renderShortWatchlist();
+  document.getElementById('restoreOrder').style.display = '';
 });
 
 // Short Term sort — score is in shortRowsBySym, not on the watchlist item itself
@@ -1182,6 +1185,15 @@ document.querySelector('#shortView thead').addEventListener('click', e => {
   renderShortWatchlist();
   // sync Basic to same order
   sortCol = null; applySortHeaders(); renderWatchlist();
+  document.getElementById('restoreOrder').style.display = '';
+});
+
+document.getElementById('restoreOrder').addEventListener('click', () => {
+  watchlist = applyOrder([...watchlist]);
+  sortCol = null; stSortCol = null;
+  applySortHeaders(); applyStSortHeaders();
+  renderWatchlist(); renderShortWatchlist();
+  document.getElementById('restoreOrder').style.display = 'none';
 });
 
 /* ---------------- render watchlist ---------------- */
@@ -1652,10 +1664,12 @@ function updateChecked(){
     const elapsed=Date.now()-new Date(since).getTime();
     const h=Math.floor(elapsed/3600000), m=Math.floor(elapsed%3600000/60000), s=Math.floor(elapsed%60000/1000);
     const ago=h>0?`${h}h ${m}m`:`${m}m ${s}s`;
-    if(elapsed>=WINDOW_MS){ el.classList.add('stale'); el.textContent=`Last checked ${ago} · overdue`; }
+    const tr = el.closest('tr');
+    if(elapsed>=WINDOW_MS){ el.classList.add('stale'); el.textContent=`Last checked ${ago} · overdue`; if(tr) tr.classList.add('row-stale'); }
     else{
       el.classList.add(elapsed>=WINDOW_MS*0.75?'warn':'fresh');
       el.textContent=`Last checked ${ago}`;
+      if(tr) tr.classList.remove('row-stale');
     }
   });
 }
