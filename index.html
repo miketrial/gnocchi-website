@@ -562,18 +562,18 @@
   }
   #twTipClose{top:14px; right:16px; font-size:22px; padding:6px}
   /* Short Term table: drop the noisier text columns under 700px */
-  /* Columns visible: idx, Company, Price, chips, Score, Fwd P/E, Earnings, Vol Surge */
-  /* Columns hidden:  Trend(6), 3M Return(7), Anlyst Rev(9), FCF/ROE(10), Leverage(11) */
-  #shortView thead tr:nth-child(2) th:nth-child(6),
+  /* Columns visible: idx, Company, Price, chips, Score, VS Sector, Fwd P/E, Earnings, Vol Surge */
+  /* Columns hidden:  Trend(7), 3M Return(8), Anlyst Rev(10), FCF/ROE(11), Leverage(12) */
   #shortView thead tr:nth-child(2) th:nth-child(7),
-  #shortView thead tr:nth-child(2) th:nth-child(9),
+  #shortView thead tr:nth-child(2) th:nth-child(8),
   #shortView thead tr:nth-child(2) th:nth-child(10),
   #shortView thead tr:nth-child(2) th:nth-child(11),
-  #shortView tbody td:nth-child(6),
+  #shortView thead tr:nth-child(2) th:nth-child(12),
   #shortView tbody td:nth-child(7),
-  #shortView tbody td:nth-child(9),
+  #shortView tbody td:nth-child(8),
   #shortView tbody td:nth-child(10),
-  #shortView tbody td:nth-child(11){display:none}
+  #shortView tbody td:nth-child(11),
+  #shortView tbody td:nth-child(12){display:none}
   /* Hide the group headers whose cells all collapsed */
   #shortView thead tr.grphdr th:nth-child(3),  /* Momentum */
   #shortView thead tr.grphdr th:nth-child(5){  /* Quality */ display:none }
@@ -873,7 +873,7 @@
       <thead>
         <tr class="grphdr">
           <th colspan="3"></th>
-          <th colspan="2" class="grp">Setup</th>
+          <th colspan="3" class="grp">Setup</th>
           <th colspan="2" class="grp">Momentum</th>
           <th colspan="2" class="grp">Valuation</th>
           <th colspan="2" class="grp">Quality</th>
@@ -885,6 +885,7 @@
           <th class="num sortable" data-sort="price">Price<span class="sub">live</span></th>
           <th class="grp-start"><div class="chkhdr"><span><span class="hl">Trend</span></span><span><span class="hl">3M Mom</span></span><span><span class="hl">Near Hi</span></span><span><span class="hl">Liquid</span></span><span><span class="hl">Anlyst Rev</span></span><span><span class="hl">Value</span></span><span><span class="hl">Quality</span></span><span><span class="hl">Leverage</span></span><span><span class="hl">Catalyst</span></span><span><span class="hl">Vol Surge</span></span></div></th>
           <th class="sortable" data-sort="score">Score<span class="sub">of 10</span></th>
+          <th class="num sortable" data-sort="vspe" data-tip="Forward P/E vs the sector median. Negative = cheaper than peers (green), positive = more expensive (red). Same as the VS Sector column on the Basic page — useful as a risk filter: overpriced stocks fall harder on any missed catalyst.">VS Sector<span class="sub">P/E</span></th>
           <th class="grp-start" data-tip="Trend test — current price vs its 50-day moving average. A stock above its 50DMA, with the 50DMA itself above the 200DMA, is in a confirmed uptrend (the strongest predictor of continued strength over 2-12 weeks).">Trend<span class="sub">price &amp; DMA</span></th>
           <th data-tip="3-month price return. Positive ≥5% earns the green Momentum chip. Stocks that outperformed over the past quarter tend to keep outperforming through the next swing-trade window.">3M Return<span class="sub">vs 0</span></th>
           <th class="grp-start" data-tip="Forward P/E (price ÷ next-year consensus EPS). The Value chip passes when this is below the sector 75th percentile — we don't screen for cheap, just rule out 'egregiously expensive' to avoid multiple compression.">Fwd P/E<span class="sub">vs sector</span></th>
@@ -1151,6 +1152,7 @@ function stSortVal(wl, col) {
     case 'name':  return (wl.name||'').toLowerCase();
     case 'price': return wl.price != null ? +wl.price : -Infinity;
     case 'score': return (r?.score) ? parseScore(r.score) : -Infinity;
+    case 'vspe':  return wl.vs ? parseFloat((wl.vs||'').replace(/[+%]/g,'')) : Infinity;
     default:      return 0;
   }
 }
@@ -2637,6 +2639,11 @@ function renderShortWatchlist(){
     const vs = vsVal && vsVal.rv != null ? `${vsVal.rv.toFixed(2)}x` : '—';
     const vsCls = vsVal && vsVal.rv >= 1.5 ? 'mom-hi' : '';
 
+    // VS Sector P/E — reuse the Basic pipeline's pre-computed value on the watchlist item
+    const vsPct = wl.vs ? parseFloat((wl.vs||'').replace(/[+%]/g,'')) : null;
+    const vsSect = wl.vs || '—';
+    const vsSectPillCls = wl.vsc || (vsPct != null ? (vsPct <= 0 ? 'g' : vsPct <= 15 ? 'y' : 'r') : 'n');
+
     // Per-row hover tips combine the static factor explanation with the live computed value
     const tipFor = (idx) => escHtml(tipForChip(idx, reasons[idx]));
 
@@ -2660,6 +2667,7 @@ function renderShortWatchlist(){
       <td class="num price-cell">${price != null ? '$' + (+price).toFixed(2) : '—'}</td>
       <td class="grp-start"><div class="checks">${checks}</div></td>
       <td data-col="score" style="cursor:pointer" data-tip="${escHtml('Composite score: '+score+'. Sum of the 10 chips that passed. 7+/10 is a strong setup, 4-6 is mixed, 3 or fewer is weak. Click to see score history.')}"><span class="score ${shortScoreClass(score)}">${score}</span></td>
+      <td class="num" data-tip="Forward P/E vs the sector median. Negative = cheaper than peers, positive = more expensive. Risk filter: overpriced stocks fall harder on missed catalysts."><span class="pill ${vsSectPillCls}">${vsSect}</span></td>
       <td class="grp-start num ${vCls(0)}" data-col="trend" style="cursor:pointer" data-tip="${tipFor(0)}">${trendVal}</td>
       <td class="num ${vCls(1)}" data-col="mom" style="cursor:pointer" data-tip="${tipFor(1)}">${mom}</td>
       <td class="grp-start num ${vCls(5)}" data-col="fwdpe" style="cursor:pointer" data-tip="${tipFor(5)}">${fwdPe}</td>
