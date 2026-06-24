@@ -336,9 +336,13 @@
 
   /* Short Term data cells — colored to match the chip verdict for that factor */
   #shortView tbody td.st-good{ background:rgba(213,245,227,.45); color:var(--good-fg); font-weight:600 }
+  #shortView tbody td.st-ok  { background:rgba(200,238,216,.35); color:var(--good-fg); font-weight:500 }
+  #shortView tbody td.st-weak{ background:rgba(253,232,184,.45); color:#9a6f00;        font-weight:500 }
   #shortView tbody td.st-bad { background:rgba(250,219,216,.45); color:var(--bad-fg);  font-weight:600 }
   #shortView tbody td.st-na  { background:rgba(237,231,246,.45); color:var(--pur-fg);  font-weight:500 }
   #shortView tbody tr:hover td.st-good{ background:rgba(213,245,227,.7) }
+  #shortView tbody tr:hover td.st-ok  { background:rgba(200,238,216,.6) }
+  #shortView tbody tr:hover td.st-weak{ background:rgba(253,232,184,.7) }
   #shortView tbody tr:hover td.st-bad { background:rgba(250,219,216,.7) }
   #shortView tbody tr:hover td.st-na  { background:rgba(237,231,246,.7) }
 
@@ -2630,7 +2634,7 @@ function renderShortWatchlist(){
       return `<div class="chk ${cls}" data-tip="${escHtml(tipForChip(k, reasons[k]))}"></div>`;
     }).join('');
 
-    const score = r.score || '—/10';
+    const score = r.score || '—/30';
     const cls = (isScoring || isLegacy) ? '' : 'sc-' + shortScoreClass(score);
     const tr = document.createElement('tr');
     tr.dataset.sym = sym;
@@ -2691,7 +2695,7 @@ function renderShortWatchlist(){
 
     const vCls = k => {
       const v = verdicts[k];
-      return v === 'good' ? 'st-good' : v === 'bad' ? 'st-bad' : 'st-na';
+      return v === 'good' ? 'st-good' : v === 'ok' ? 'st-ok' : v === 'weak' ? 'st-weak' : v === 'bad' ? 'st-bad' : 'st-na';
     };
 
     tr.innerHTML = `
