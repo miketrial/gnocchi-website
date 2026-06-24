@@ -1833,9 +1833,10 @@ function setView(v){
   const twBtn=document.getElementById('twToggle');
   if(pipeBtn) pipeBtn.style.display=isShort?'none':'';
   if(twBtn)   twBtn.style.display  =isShort?'none':'';
-  // Force Rescan is available on both views — bypasses the per-ticker cache
+  // Force Rescan only meaningful on Basic — Short Term's Rescan already
+  // always force-fetches fresh FMP (see rescanShort).
   const fr=document.getElementById('forceRescan');
-  if(fr) fr.style.display='';
+  if(fr) fr.style.display=isShort?'none':'';
   const navTog=document.getElementById('navToggle');
   if(navTog){
     navTog.style.display=isShort?'none':'';

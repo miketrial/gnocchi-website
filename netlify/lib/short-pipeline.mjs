@@ -67,12 +67,16 @@ function validateShortData(sym, { quote, profile, hist, inc }) {
     if (s && s !== want) warnings.push(`sym-flip: ${ep} returned ${s}, expected ${want}`);
   }
 
-  // Step 2 — price cross-check (quote vs profile vs latest EOD close)
-  const prices = [quote?.[0]?.price, profile?.[0]?.price, hist?.[0]?.price]
+  // Step 2 — price cross-check between feeds representing the SAME point in time.
+  // quote.price and profile.price are both current/intraday → comparable.
+  // hist[0].price is YESTERDAY'S close (today's EOD bar hasn't formed yet), so
+  // including it would flag every >6% intraday mover as a "divergence" and
+  // blank all data. Use it only as a soft sanity floor (must be > 0).
+  const livePrices = [quote?.[0]?.price, profile?.[0]?.price]
     .filter(p => typeof p === "number" && p > 0);
-  if (prices.length >= 2) {
-    const lo = Math.min(...prices), hi = Math.max(...prices);
-    if (hi / lo > 1.06) warnings.push(`price divergence: feeds disagree ${lo} vs ${hi} (>6%)`);
+  if (livePrices.length >= 2) {
+    const lo = Math.min(...livePrices), hi = Math.max(...livePrices);
+    if (hi / lo > 1.06) warnings.push(`price divergence: live feeds disagree ${lo} vs ${hi} (>6%)`);
   }
 
   // Step 3 — freshness of the price series
@@ -431,7 +435,7 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   // Cache check
   if (!skipCache) {
     const cached = await getShortFmpCache(sym);
-    if (cached && cached._v === 3) {
+    if (cached && cached._v === 4) {
       return cached.row;
     }
   } else {
@@ -533,6 +537,6 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     scored_at: new Date().toISOString(),
   };
 
-  await putShortFmpCache(sym, { _v: 3, row }).catch(() => {});
+  await putShortFmpCache(sym, { _v: 4, row }).catch(() => {});
   return row;
 }
