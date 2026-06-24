@@ -331,6 +331,14 @@
   .typing-cursor{animation:blink .8s step-end infinite}
   @keyframes blink{50%{opacity:0}}
 
+  /* Short Term data cells — colored to match the chip verdict for that factor */
+  #shortView tbody td.st-good{ background:rgba(213,245,227,.45); color:var(--good-fg); font-weight:600 }
+  #shortView tbody td.st-bad { background:rgba(250,219,216,.45); color:var(--bad-fg);  font-weight:600 }
+  #shortView tbody td.st-na  { background:rgba(237,231,246,.45); color:var(--pur-fg);  font-weight:500 }
+  #shortView tbody tr:hover td.st-good{ background:rgba(213,245,227,.7) }
+  #shortView tbody tr:hover td.st-bad { background:rgba(250,219,216,.7) }
+  #shortView tbody tr:hover td.st-na  { background:rgba(237,231,246,.7) }
+
   /* Legacy-data hazard — row has stale data, awaiting fresh Rescan fetch */
   tbody tr.legacy td:not(.co-cell):not(:first-child){
     filter:blur(3.5px);opacity:0.25;
@@ -2538,20 +2546,25 @@ function renderShortWatchlist(){
         ? `<td class="co-cell"><span class="sym">${sym}</span><span class="legacy-badge">Legacy</span> <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`
         : `<td class="co-cell"><span class="sym">${sym}</span>${warnBadge} <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`;
 
+    const vCls = k => {
+      const v = verdicts[k];
+      return v === 'good' ? 'st-good' : v === 'bad' ? 'st-bad' : 'st-na';
+    };
+
     tr.innerHTML = `
       <td class="idx">${i + 1}.</td>
       ${coCell}
       <td class="num price-cell">${price != null ? '$' + (+price).toFixed(2) : '—'}</td>
       <td class="grp-start"><div class="checks">${checks}</div></td>
       <td data-col="score" style="cursor:pointer" data-tip="${escHtml('Composite score: '+score+'. Sum of the 10 chips that passed. 7+/10 is a strong setup, 4-6 is mixed, 3 or fewer is weak. Click to see score history.')}"><span class="score ${shortScoreClass(score)}">${score}</span></td>
-      <td class="grp-start num" data-col="trend" style="cursor:pointer" data-tip="${tipFor(0)}">${trendVal}</td>
-      <td class="num ${momCls}" data-col="mom" style="cursor:pointer" data-tip="${tipFor(1)}">${mom}</td>
-      <td class="grp-start num" data-col="fwdpe" style="cursor:pointer" data-tip="${tipFor(5)}">${fwdPe}</td>
-      <td class="num" data-col="epsrev" style="cursor:pointer" data-tip="${tipFor(4)}">${epsRev}</td>
-      <td class="grp-start num" data-col="qual" style="cursor:pointer" data-tip="${tipFor(6)}">${qual}</td>
-      <td class="num" data-col="lev" style="cursor:pointer" data-tip="${tipFor(7)}">${lev}</td>
-      <td class="grp-start num" data-col="cat" style="cursor:pointer" data-tip="${tipFor(8)}">${cat}</td>
-      <td class="num ${vsCls}" data-col="vs" style="cursor:pointer" data-tip="${tipFor(9)}">${vs}</td>`;
+      <td class="grp-start num ${vCls(0)}" data-col="trend" style="cursor:pointer" data-tip="${tipFor(0)}">${trendVal}</td>
+      <td class="num ${vCls(1)}" data-col="mom" style="cursor:pointer" data-tip="${tipFor(1)}">${mom}</td>
+      <td class="grp-start num ${vCls(5)}" data-col="fwdpe" style="cursor:pointer" data-tip="${tipFor(5)}">${fwdPe}</td>
+      <td class="num ${vCls(4)}" data-col="epsrev" style="cursor:pointer" data-tip="${tipFor(4)}">${epsRev}</td>
+      <td class="grp-start num ${vCls(6)}" data-col="qual" style="cursor:pointer" data-tip="${tipFor(6)}">${qual}</td>
+      <td class="num ${vCls(7)}" data-col="lev" style="cursor:pointer" data-tip="${tipFor(7)}">${lev}</td>
+      <td class="grp-start num ${vCls(8)}" data-col="cat" style="cursor:pointer" data-tip="${tipFor(8)}">${cat}</td>
+      <td class="num ${vCls(9)}" data-col="vs" style="cursor:pointer" data-tip="${tipFor(9)}">${vs}</td>`;
     // Drag and drop — same model as Basic, scoped to #stBody
     tr.setAttribute('draggable', 'true');
     tr.addEventListener('dragstart', e => {
