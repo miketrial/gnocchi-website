@@ -1109,6 +1109,7 @@ let net = [
 
 /* ---------------- sort state ---------------- */
 let sortCol = null, sortDir = 1;
+let stSortCol = null, stSortDir = -1; // Short Term sort (-1 = desc = highest score first)
 const SECTOR_LABEL = {tech:'Tech',semi:'Semis',saas:'SaaS',hw:'Hardware',ind:'Industrials',energy:'Energy',cons:'Consumer'};
 function sortVal(r, col){
   const num = s => parseFloat((s||'').replace(/[~x%]/g,'')) || 0;
@@ -1125,12 +1126,12 @@ function sortVal(r, col){
   }
 }
 function applySortHeaders(){
-  document.querySelectorAll('th[data-sort]').forEach(th=>{
+  document.querySelectorAll('#watchlistView th[data-sort]').forEach(th=>{
     th.classList.remove('sort-asc','sort-desc');
     if(th.dataset.sort === sortCol) th.classList.add(sortDir===1?'sort-asc':'sort-desc');
   });
 }
-document.querySelector('thead').addEventListener('click', e=>{
+document.querySelector('#watchlistView thead').addEventListener('click', e=>{
   const th = e.target.closest('th[data-sort]'); if(!th) return;
   const col = th.dataset.sort;
   if(sortCol === col) sortDir *= -1; else { sortCol = col; sortDir = 1; }
@@ -1141,6 +1142,40 @@ document.querySelector('thead').addEventListener('click', e=>{
   try{localStorage.setItem('gn_sort',JSON.stringify({col:sortCol,dir:sortDir}));}catch(e){}
   applySortHeaders();
   renderWatchlist();
+});
+
+// Short Term sort — score is in shortRowsBySym, not on the watchlist item itself
+function stSortVal(wl, col) {
+  const r = shortRowsBySym[(wl.sym||'').toUpperCase()];
+  switch(col) {
+    case 'name':  return (wl.name||'').toLowerCase();
+    case 'price': return wl.price != null ? +wl.price : -Infinity;
+    case 'score': return (r?.score) ? parseScore(r.score) : -Infinity;
+    default:      return 0;
+  }
+}
+function applyStSortHeaders() {
+  document.querySelectorAll('#shortView th[data-sort]').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (th.dataset.sort === stSortCol) th.classList.add(stSortDir === 1 ? 'sort-asc' : 'sort-desc');
+  });
+}
+function applyStSort() {
+  if (!stSortCol) return;
+  watchlist.sort((a,b) => {
+    const av=stSortVal(a,stSortCol), bv=stSortVal(b,stSortCol);
+    return (av<bv?-1:av>bv?1:0)*stSortDir;
+  });
+}
+document.querySelector('#shortView thead').addEventListener('click', e => {
+  const th = e.target.closest('th[data-sort]'); if (!th) return;
+  const col = th.dataset.sort;
+  if (stSortCol === col) stSortDir *= -1;
+  else { stSortCol = col; stSortDir = col === 'name' ? 1 : -1; } // score/price default desc
+  applyStSort();
+  try { localStorage.setItem('gn_st_sort', JSON.stringify({col:stSortCol,dir:stSortDir})); } catch(e) {}
+  applyStSortHeaders();
+  renderShortWatchlist();
 });
 
 /* ---------------- render watchlist ---------------- */
@@ -2507,13 +2542,20 @@ let shortRowsBySym = Object.create(null);
 let shortLoaded = false;
 
 async function ensureShortDataLoaded(){
-  if (shortLoaded) { renderShortWatchlist(); return; }
+  if (shortLoaded) { applyStSort(); applyStSortHeaders(); renderShortWatchlist(); return; }
   shortLoaded = true;
   if (!API_LIVE) { renderShortWatchlist(); return; }
   try {
     const rows = await api.get('/api/short/watchlist');
     if (Array.isArray(rows)) rows.forEach(r => { if (r && r.sym) shortRowsBySym[r.sym.toUpperCase()] = r; });
   } catch(e) { /* leave empty, render placeholders */ }
+  // Restore saved ST sort after data is available (score needs shortRowsBySym populated)
+  try {
+    const saved = JSON.parse(localStorage.getItem('gn_st_sort') || 'null');
+    if (saved?.col) { stSortCol = saved.col; stSortDir = saved.dir ?? -1; }
+  } catch(e) {}
+  applyStSort();
+  applyStSortHeaders();
   renderShortWatchlist();
 }
 
