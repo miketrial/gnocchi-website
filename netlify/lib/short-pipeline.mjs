@@ -1,10 +1,16 @@
 /* ---------- Short Term (1wk-3mo swing trading) pipeline ----------
-   Pure FMP — zero Anthropic calls. Scores each ticker on a 10-check
-   momentum/quality/catalyst factor stack tuned for 2-12 week holds.
+   Pure FMP — zero Anthropic calls. Scores each ticker on a 10-factor
+   momentum/quality/catalyst stack tuned for 2-12 week holds.
 
-   Each check returns { verdict: 'good' | 'bad' | 'na', summary, value }.
-   - good/bad → green/red chip
-   - na → purple chip (only when underlying data couldn't be fetched)
+   Each check returns { points: 0-3 | null, verdict, summary, value }.
+   - points 3 → "good"  (green chip)
+   - points 2 → "ok"    (muted green chip)
+   - points 1 → "weak"  (amber chip)
+   - points 0 → "bad"   (red chip)
+   - points null → "na" (purple chip — data unavailable)
+
+   Score = sum of points across all 10 checks, out of 30.
+   Thresholds: 20+ strong, 12-19 mixed, <12 weak.
 */
 import { getShortFmpCache, putShortFmpCache, deleteShortFmpCache } from "./store.mjs";
 
@@ -188,104 +194,103 @@ function sectorPe75th(industry) {
   return SECTOR_PE_75TH[industry] ?? 30;
 }
 
-/* ---------- Per-check scoring functions ---------- */
+/* ---------- Per-check scoring functions ----------
+   Each returns { points: 0-3 | null, verdict, summary, value }.
+   points null = "na" (data unavailable); 0 = bad, 1 = weak, 2 = ok, 3 = good.
+   Score = sum of points across all 10 checks, out of 30. */
 
-// 1. Trend: Price > 50DMA > 200DMA
+function na(summary) {
+  return { points: null, verdict: "na", summary, value: null };
+}
+function scored(points, summary, value) {
+  const verdict = points >= 3 ? "good" : points >= 2 ? "ok" : points >= 1 ? "weak" : "bad";
+  return { points, verdict, summary, value };
+}
+
+// 1. Trend: how cleanly price is above its moving averages
 function checkTrend(hist) {
-  if (!hist || hist.length < 200) return { verdict: "na", summary: "Need 200 days of price history", value: null };
-  // FMP returns newest first; closes in `price` field
+  if (!hist || hist.length < 200) return na("Need 200 days of price history");
   const closes = hist.slice(0, 220).map(d => d.price ?? d.close).filter(p => p != null);
-  if (closes.length < 200) return { verdict: "na", summary: "Insufficient price history", value: null };
+  if (closes.length < 200) return na("Insufficient price history");
   const sma = (n) => closes.slice(0, n).reduce((s, x) => s + x, 0) / n;
   const price = closes[0];
   const sma50 = sma(50);
   const sma200 = sma(200);
-  const up = price > sma50 && sma50 > sma200;
-  return {
-    verdict: up ? "good" : "bad",
-    summary: up
-      ? `Uptrend: $${price.toFixed(2)} > 50DMA $${sma50.toFixed(2)} > 200DMA $${sma200.toFixed(2)}`
-      : `No uptrend: price $${price.toFixed(2)}, 50DMA $${sma50.toFixed(2)}, 200DMA $${sma200.toFixed(2)}`,
-    value: { price, sma50, sma200 },
-  };
+  const pctAbove50 = (price - sma50) / sma50;
+  let points, label;
+  if (price > sma50 && sma50 > sma200 && pctAbove50 >= 0.08) {
+    points = 3; label = `strong uptrend — ${(pctAbove50*100).toFixed(1)}% above 50DMA`;
+  } else if (price > sma50 && sma50 > sma200) {
+    points = 2; label = "clean uptrend";
+  } else if (price > sma50) {
+    points = 1; label = "above 50DMA but 50DMA still below 200DMA";
+  } else {
+    points = 0; label = "below 50DMA — downtrend";
+  }
+  return scored(points, `$${price.toFixed(2)} vs 50DMA $${sma50.toFixed(2)} / 200DMA $${sma200.toFixed(2)} — ${label}`, { price, sma50, sma200 });
 }
 
-// 2. 3M Momentum: 3-month return positive (proxy for "top 30%" — true ranking
-//    requires a universe scan that's too expensive per ticker; a positive 3M
-//    return above ~5% is a reasonable single-ticker proxy)
+// 2. 3M Momentum: graduated by return magnitude
 function check3MMomentum(hist) {
-  if (!hist || hist.length < 65) return { verdict: "na", summary: "Need 3 months of price history", value: null };
+  if (!hist || hist.length < 65) return na("Need 3 months of price history");
   const closes = hist.slice(0, 70).map(d => d.price ?? d.close).filter(p => p != null);
-  if (closes.length < 63) return { verdict: "na", summary: "Insufficient price history", value: null };
+  if (closes.length < 63) return na("Insufficient price history");
   const now = closes[0];
-  const then = closes[62]; // ~63 trading days ≈ 3 months
-  if (!then || then <= 0) return { verdict: "na", summary: "Bad reference price", value: null };
+  const then = closes[62];
+  if (!then || then <= 0) return na("Bad reference price");
   const ret = shortSane((now / then) - 1, "ret3m");
-  if (ret == null) return { verdict: "na", summary: "3-month return out of plausible range — data suspect", value: null };
-  const pass = ret >= 0.05;
-  return {
-    verdict: pass ? "good" : "bad",
-    summary: pass
-      ? `3-month return +${(ret * 100).toFixed(1)}% (strong momentum)`
-      : `3-month return ${(ret * 100).toFixed(1)}% (lagging)`,
-    value: ret,
-  };
+  if (ret == null) return na("3-month return out of plausible range — data suspect");
+  let points;
+  if (ret >= 0.15)      points = 3;
+  else if (ret >= 0.05) points = 2;
+  else if (ret >= 0)    points = 1;
+  else                  points = 0;
+  const label = points === 3 ? "strong" : points === 2 ? "decent" : points === 1 ? "flat" : "negative";
+  return scored(points, `3-month return ${ret >= 0 ? "+" : ""}${(ret * 100).toFixed(1)}% (${label})`, ret);
 }
 
-// 3. Near High: within 15% of 52-week high
+// 3. Near High: how close to the 52-week high
 function checkNearHigh(hist) {
-  if (!hist || hist.length < 200) return { verdict: "na", summary: "Need 52 weeks of price history", value: null };
-  const window = hist.slice(0, 260);
-  const closes = window.map(d => d.price ?? d.close).filter(p => p != null);
-  if (closes.length < 200) return { verdict: "na", summary: "Insufficient price history", value: null };
+  if (!hist || hist.length < 200) return na("Need 52 weeks of price history");
+  const closes = hist.slice(0, 260).map(d => d.price ?? d.close).filter(p => p != null);
+  if (closes.length < 200) return na("Insufficient price history");
   const high = Math.max(...closes);
   const now = closes[0];
   const pctOff = (high - now) / high;
-  const pass = pctOff <= 0.15;
-  return {
-    verdict: pass ? "good" : "bad",
-    summary: pass
-      ? `Within ${(pctOff * 100).toFixed(1)}% of 52w high ($${high.toFixed(2)})`
-      : `${(pctOff * 100).toFixed(1)}% off 52w high ($${high.toFixed(2)}) — trend may be broken`,
-    value: { high, pctOff },
-  };
+  let points;
+  if (pctOff <= 0.05)       points = 3;
+  else if (pctOff <= 0.15)  points = 2;
+  else if (pctOff <= 0.30)  points = 1;
+  else                      points = 0;
+  const label = points === 3 ? "at/near 52w high" : points === 2 ? "near high" : points === 1 ? "recovering" : "far from high";
+  return scored(points, `${(pctOff * 100).toFixed(1)}% off 52w high ($${high.toFixed(2)}) — ${label}`, { high, pctOff });
 }
 
-// 4. Liquidity: 20-day avg $-volume ≥ $20M
+// 4. Liquidity: 20-day avg $-volume — graduated by how tradeable
 function checkLiquidity(hist, quote) {
-  if (!hist || hist.length < 20) return { verdict: "na", summary: "Need 20 days of price history", value: null };
-  const window = hist.slice(0, 20);
-  const dollarVols = window.map(d => (d.price ?? d.close ?? 0) * (d.volume ?? 0)).filter(v => v > 0);
-  if (!dollarVols.length) return { verdict: "na", summary: "No volume data", value: null };
+  if (!hist || hist.length < 20) return na("Need 20 days of price history");
+  const dollarVols = hist.slice(0, 20).map(d => (d.price ?? d.close ?? 0) * (d.volume ?? 0)).filter(v => v > 0);
+  if (!dollarVols.length) return na("No volume data");
   const avgDollarVol = dollarVols.reduce((s, x) => s + x, 0) / dollarVols.length;
-  const pass = avgDollarVol >= 20_000_000;
   const fmt = (n) => n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : `$${(n / 1e6).toFixed(1)}M`;
-  return {
-    verdict: pass ? "good" : "bad",
-    summary: pass
-      ? `20-day avg $-volume ${fmt(avgDollarVol)} (liquid)`
-      : `20-day avg $-volume ${fmt(avgDollarVol)} (too thin)`,
-    value: avgDollarVol,
-  };
+  let points;
+  if (avgDollarVol >= 100_000_000)     points = 3;
+  else if (avgDollarVol >= 20_000_000) points = 2;
+  else if (avgDollarVol >= 10_000_000) points = 1;
+  else                                 points = 0;
+  const label = points === 3 ? "highly liquid" : points === 2 ? "liquid" : points === 1 ? "marginal" : "too thin";
+  return scored(points, `20-day avg $-volume ${fmt(avgDollarVol)} (${label})`, avgDollarVol);
 }
 
-// 5. Analyst Revisions — uses FMP's price-target-summary + grades-historical,
-//    both available immediately for every covered ticker (no snapshot warm-up).
-//    Two signals, averaged:
-//      a) Price-target drift: lastMonth avg PT vs lastQuarter avg PT
-//      b) Rating drift:       latest month buy ratio vs ~3 months ago buy ratio
-//    Pass if the average of the two normalized deltas is positive.
+// 5. Analyst Revisions — PT drift + rating drift, graduated by composite magnitude
 function checkAnalystRevisions(ptSummary, grades) {
   const s = (ptSummary || [])[0] || null;
   const g = Array.isArray(grades) ? grades : [];
-  // Only use PT signal when there are actual recent price-target updates.
-  // lastMonthAvgPriceTarget=0 means no PTs filed that month, not a price target of $0.
   const ptCount = s?.lastMonthCount ?? 0;
-  const ptNow  = ptCount >= 1 ? s?.lastMonthAvgPriceTarget  : null;
+  const ptNow  = ptCount >= 1 ? s?.lastMonthAvgPriceTarget : null;
   const ptThen = s?.lastQuarterAvgPriceTarget;
   const havePT = ptNow != null && ptNow > 0 && ptThen != null && ptThen > 0;
 
-  // Grades are newest-first. Compute buy ratio = (StrongBuy+Buy) / total.
   function buyRatio(row) {
     if (!row) return null;
     const sb = row.analystRatingsStrongBuy ?? 0;
@@ -297,152 +302,132 @@ function checkAnalystRevisions(ptSummary, grades) {
     return tot > 0 ? (sb + b) / tot : null;
   }
   const brNow = buyRatio(g[0]);
-  const brThen = buyRatio(g[3]); // ~3 months back (monthly snapshots)
+  const brThen = buyRatio(g[3]);
   const haveBR = brNow != null && brThen != null;
 
-  if (!havePT && !haveBR) {
-    return { verdict: "na", summary: "No analyst coverage data (price targets or rating history)", value: null };
-  }
+  if (!havePT && !haveBR) return na("No analyst coverage data (price targets or rating history)");
 
-  const ptDelta = havePT ? (ptNow - ptThen) / ptThen : null;       // fractional change
-  const brDelta = haveBR ? (brNow - brThen) : null;                  // pp change
-  // Combine: average available signals (PT delta and BR delta on similar scale already)
-  const signals = [];
-  if (ptDelta != null) signals.push(ptDelta);
-  if (brDelta != null) signals.push(brDelta);
+  const ptDelta = havePT ? (ptNow - ptThen) / ptThen : null;
+  const brDelta = haveBR ? (brNow - brThen) : null;
+  const signals = [...(ptDelta != null ? [ptDelta] : []), ...(brDelta != null ? [brDelta] : [])];
   const composite = signals.reduce((a, b) => a + b, 0) / signals.length;
-  const pass = composite > 0;
+
+  let points;
+  if (composite >= 0.05)       points = 3;
+  else if (composite >= 0)     points = 2;
+  else if (composite >= -0.05) points = 1;
+  else                         points = 0;
 
   const parts = [];
   if (havePT) parts.push(`PT $${ptThen.toFixed(0)}→$${ptNow.toFixed(0)} (${ptDelta >= 0 ? "+" : ""}${(ptDelta * 100).toFixed(1)}%)`);
   if (haveBR) parts.push(`Buy ratio ${(brThen * 100).toFixed(0)}%→${(brNow * 100).toFixed(0)}%`);
-  return {
-    verdict: pass ? "good" : "bad",
-    summary: pass
-      ? `Analysts more bullish: ${parts.join(" · ")}`
-      : `Analysts cooling: ${parts.join(" · ")}`,
-    value: { ptNow, ptThen, brNow, brThen, composite },
-  };
+  const direction = points >= 2 ? "improving" : points === 1 ? "slightly cooling" : "cooling";
+  return scored(points, `Analyst sentiment ${direction}: ${parts.join(" · ")}`, { ptNow, ptThen, brNow, brThen, composite });
 }
 
-// 6. Valuation: Forward P/E ≤ sector 75th percentile (not egregiously expensive)
+// 6. Valuation: Fwd P/E vs sector 75th pct — graduated by how cheap/expensive
 function checkValuation(price, fwdEps, industry) {
-  if (!price || !fwdEps || fwdEps <= 0) {
-    return { verdict: "na", summary: "No forward P/E (negative or missing fwd EPS)", value: null };
-  }
+  if (!price || !fwdEps || fwdEps <= 0) return na("No forward P/E (negative or missing fwd EPS)");
   const fwdPe = shortSane(price / fwdEps, "fwdPe");
-  if (fwdPe == null) {
-    return { verdict: "na", summary: "Forward P/E out of plausible range — data suspect", value: null };
-  }
+  if (fwdPe == null) return na("Forward P/E out of plausible range — data suspect");
   const threshold = sectorPe75th(industry);
-  const pass = fwdPe <= threshold;
-  return {
-    verdict: pass ? "good" : "bad",
-    summary: pass
-      ? `Fwd P/E ${fwdPe.toFixed(1)}x ≤ ${industry || "sector"} 75th pct (${threshold}x)`
-      : `Fwd P/E ${fwdPe.toFixed(1)}x exceeds ${industry || "sector"} 75th pct (${threshold}x) — egregiously expensive`,
-    value: { fwdPe, threshold, industry },
-  };
+  let points;
+  if (fwdPe <= threshold * 0.75)      points = 3;
+  else if (fwdPe <= threshold)        points = 2;
+  else if (fwdPe <= threshold * 1.5)  points = 1;
+  else                                points = 0;
+  const label = points === 3 ? "cheap vs sector" : points === 2 ? "within range" : points === 1 ? "a bit expensive" : "egregiously expensive";
+  return scored(points, `Fwd P/E ${fwdPe.toFixed(1)}x — ${label} (${industry || "sector"} 75th pct ${threshold}x)`, { fwdPe, threshold, industry });
 }
 
-// 7. Quality: TTM FCF > 0 AND (ROE > sector median).
-// FMP keeps `returnOnEquity` on /key-metrics, NOT /ratios.
+// 7. Quality: FCF + ROE vs sector median — graduated by how many pass and by how much
 function checkQuality(cf, keyMetrics, industry) {
   const cfTTM = (cf || []).slice(0, 4).reduce((s, q) => s + (q.freeCashFlow ?? 0), 0);
   const km0 = (keyMetrics || [])[0];
   const roe = shortSane(km0?.returnOnEquity, "roe");
   const median = sectorRoeMedian(industry);
-  if (!cf || cf.length < 1 || roe == null) {
-    return { verdict: "na", summary: "Missing FCF or ROE data (or ROE out of plausible range)", value: null };
-  }
+  if (!cf || cf.length < 1 || roe == null) return na("Missing FCF or ROE data (or ROE out of plausible range)");
   const fcfOk = cfTTM > 0;
   const roeOk = roe > median;
-  const pass = fcfOk && roeOk;
-  return {
-    verdict: pass ? "good" : "bad",
-    summary: pass
-      ? `Quality: TTM FCF $${(cfTTM / 1e6).toFixed(0)}M (+), ROE ${(roe * 100).toFixed(1)}% > ${industry || "sector"} median ${(median * 100).toFixed(0)}%`
-      : `Quality fails: FCF ${fcfOk ? "+" : "−"}$${Math.abs(cfTTM / 1e6).toFixed(0)}M, ROE ${(roe * 100).toFixed(1)}% vs sector median ${(median * 100).toFixed(0)}%`,
-    value: { fcfTTM: cfTTM, roe, sectorMedian: median },
-  };
+  const roeStrong = roe > median * 1.5;
+  let points;
+  if (fcfOk && roeStrong)  points = 3;
+  else if (fcfOk && roeOk) points = 2;
+  else if (fcfOk || roeOk) points = 1;
+  else                     points = 0;
+  const label = points === 3 ? "excellent" : points === 2 ? "solid" : points === 1 ? "mixed" : "weak";
+  return scored(points,
+    `Quality ${label}: FCF ${fcfOk ? "+" : "−"}$${Math.abs(cfTTM / 1e6).toFixed(0)}M, ROE ${(roe * 100).toFixed(1)}% vs ${(median * 100).toFixed(0)}% sector median`,
+    { fcfTTM: cfTTM, roe, sectorMedian: median });
 }
 
-// 8. Leverage: Net debt / EBITDA < 3x
+// 8. Leverage: Net Debt / EBITDA — graduated by how clean the balance sheet is
 function checkLeverage(bs, inc) {
   const bs0 = (bs || [])[0];
-  if (!bs0) return { verdict: "na", summary: "No balance sheet data", value: null };
+  if (!bs0) return na("No balance sheet data");
   const totalDebt = bs0.totalDebt ?? 0;
   const cash = bs0.cashAndShortTermInvestments ?? 0;
   const netDebt = totalDebt - cash;
-  // EBITDA = operating income + D&A from latest 4 quarters
   const incLast4 = (inc || []).slice(0, 4);
-  if (incLast4.length < 1) return { verdict: "na", summary: "No income statement data", value: null };
+  if (incLast4.length < 1) return na("No income statement data");
   const ebitda = incLast4.reduce((s, q) => s + (q.operatingIncome ?? 0) + (q.depreciationAndAmortization ?? 0), 0);
   if (ebitda <= 0) {
-    // Negative EBITDA — only fails leverage if also net debt positive
-    if (netDebt > 0) {
-      return { verdict: "bad", summary: `Net debt $${(netDebt / 1e9).toFixed(2)}B with negative EBITDA — high risk`, value: { netDebt, ebitda } };
-    }
-    return { verdict: "good", summary: `Net cash position $${(-netDebt / 1e9).toFixed(2)}B (EBITDA negative but no debt burden)`, value: { netDebt, ebitda } };
+    if (netDebt > 0) return scored(0, `Net debt $${(netDebt / 1e9).toFixed(2)}B with negative EBITDA — high risk`, { netDebt, ebitda });
+    return scored(3, `Net cash $${(-netDebt / 1e9).toFixed(2)}B — no debt burden despite negative EBITDA`, { netDebt, ebitda });
   }
   const ratio = shortSane(netDebt / ebitda, "levRatio");
-  if (ratio == null) return { verdict: "na", summary: "Leverage ratio out of plausible range — data suspect", value: null };
-  const pass = ratio < 3;
-  return {
-    verdict: pass ? "good" : "bad",
-    summary: pass
-      ? `Net Debt / EBITDA ${ratio.toFixed(2)}x (healthy, < 3x)`
-      : `Net Debt / EBITDA ${ratio.toFixed(2)}x (over-levered, ≥ 3x)`,
-    value: { netDebt, ebitda, ratio },
-  };
+  if (ratio == null) return na("Leverage ratio out of plausible range — data suspect");
+  let points;
+  if (ratio < 1)       points = 3;
+  else if (ratio < 3)  points = 2;
+  else if (ratio < 5)  points = 1;
+  else                 points = 0;
+  const label = points === 3 ? "very clean" : points === 2 ? "healthy" : points === 1 ? "elevated" : "over-levered";
+  return scored(points, `Net Debt / EBITDA ${ratio.toFixed(2)}x — ${label}`, { netDebt, ebitda, ratio });
 }
 
-// 9. Catalyst: Earnings within 1wk-3mo window
+// 9. Catalyst: earnings in 1wk-3mo window, graduated by recent beat streak
 function checkCatalyst(earningsHist) {
-  if (!earningsHist || !earningsHist.length) return { verdict: "na", summary: "No earnings calendar data", value: null };
+  if (!earningsHist || !earningsHist.length) return na("No earnings calendar data");
   const today = new Date().toISOString().slice(0, 10);
   const future = earningsHist
     .filter(e => e.epsActual == null && e.date > today)
     .sort((a, b) => a.date.localeCompare(b.date));
   const next = future[0];
-  if (!next) return { verdict: "bad", summary: "No upcoming earnings catalyst in calendar", value: null };
+  if (!next) return scored(0, "No upcoming earnings catalyst in calendar", null);
   const daysUntil = Math.ceil((new Date(next.date) - Date.now()) / 86400000);
-  const inWindow = daysUntil >= 7 && daysUntil <= 90;
-  return {
-    verdict: inWindow ? "good" : "bad",
-    summary: inWindow
-      ? `Earnings catalyst in ${daysUntil}d (${next.date}) — within 1wk-3mo window`
-      : daysUntil < 7
-        ? `Earnings in ${daysUntil}d (${next.date}) — too soon (< 1 week)`
-        : `Earnings in ${daysUntil}d (${next.date}) — outside 3-month window`,
-    value: { date: next.date, daysUntil },
-  };
+  if (daysUntil < 7)  return scored(0, `Earnings in ${daysUntil}d (${next.date}) — too soon to position`, { date: next.date, daysUntil });
+  if (daysUntil > 90) return scored(0, `Earnings in ${daysUntil}d (${next.date}) — outside 3-month swing window`, { date: next.date, daysUntil });
+  // In window — check recent beat streak
+  const past = earningsHist.filter(e => e.epsActual != null && e.epsEstimated != null).slice(0, 4);
+  const beats = past.filter(e => e.epsActual > e.epsEstimated).length;
+  const total = past.length;
+  let points, beatSummary;
+  if (total === 0)    { points = 1; beatSummary = "no beat history available"; }
+  else if (beats >= 3){ points = 3; beatSummary = `beat ${beats}/${total} recent quarters`; }
+  else if (beats >= 1){ points = 2; beatSummary = `beat ${beats}/${total} recent quarters`; }
+  else                { points = 1; beatSummary = `missed last ${total} quarter${total > 1 ? "s" : ""}`; }
+  return scored(points, `Earnings in ${daysUntil}d (${next.date}) — ${beatSummary}`, { date: next.date, daysUntil, beats, total });
 }
 
-// 10. Volume Surge: today's volume ≥ 1.5× the 20-day average.
-// (Replaces the original Short-Squeeze chip — FMP's /short-interest endpoint
-//  returns no data on the current plan tier. Volume surge is a stronger
-//  leading indicator for swing-trade timing anyway: unusual volume nearly
-//  always precedes a meaningful price move.)
+// 10. Volume Surge: today vs 20-day avg — graduated by magnitude of the surge
 function checkVolumeSurge(quote, hist) {
   const q0 = (quote || [])[0];
   const todayVol = q0?.volume;
-  if (todayVol == null) return { verdict: "na", summary: "No current volume reading", value: null };
-  if (!hist || hist.length < 20) return { verdict: "na", summary: "Need 20 days of volume history", value: null };
-  // Skip today's bar (often the same as `quote.volume`) so we get a true comparison baseline
+  if (todayVol == null) return na("No current volume reading");
+  if (!hist || hist.length < 20) return na("Need 20 days of volume history");
   const vols = hist.slice(1, 21).map(d => d.volume).filter(v => v != null && v > 0);
-  if (vols.length < 15) return { verdict: "na", summary: "Volume history too sparse", value: null };
+  if (vols.length < 15) return na("Volume history too sparse");
   const avg20 = vols.reduce((s, x) => s + x, 0) / vols.length;
   const rv = shortSane(todayVol / avg20, "volRv");
-  if (rv == null) return { verdict: "na", summary: "Volume ratio out of plausible range — data suspect", value: null };
-  const pass = rv >= 1.5;
-  return {
-    verdict: pass ? "good" : "bad",
-    summary: pass
-      ? `Volume ${rv.toFixed(2)}× the 20-day avg — unusual activity, often precedes a move`
-      : `Volume only ${rv.toFixed(2)}× the 20-day avg — no surge`,
-    value: { rv, todayVol, avg20 },
-  };
+  if (rv == null) return na("Volume ratio out of plausible range — data suspect");
+  let points;
+  if (rv >= 2.5)       points = 3;
+  else if (rv >= 1.5)  points = 2;
+  else if (rv >= 0.8)  points = 1;
+  else                 points = 0;
+  const label = points === 3 ? "strong surge" : points === 2 ? "above average" : points === 1 ? "normal" : "below average (possible distribution)";
+  return scored(points, `Volume ${rv.toFixed(2)}× the 20-day avg — ${label}`, { rv, todayVol, avg20 });
 }
 
 /* ---------- Main scorer ---------- */
@@ -452,7 +437,7 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   // Cache check
   if (!skipCache) {
     const cached = await getShortFmpCache(sym);
-    if (cached && cached._v === 4) {
+    if (cached && cached._v === 5) {
       return cached.row;
     }
   } else {
@@ -536,8 +521,10 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     checkVolumeSurge(quote, hist),                 // 10 (was Short Squeeze — no data on plan)
   ];
 
-  const score = checks.filter(c => c.verdict === "good").length;
-  const total = 10;
+  // Graduated score: sum of points (0-3 per check) out of 30.
+  // na checks contribute 0 points (data unavailable, not a pass or fail).
+  const score = checks.reduce((s, c) => s + (c.points ?? 0), 0);
+  const total = 30;
 
   const row = {
     sym,
@@ -546,14 +533,14 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     sector,
     industry,
     score: `${score}/${total}`,
-    v: checks.map(c => c.verdict === "good"),
+    v: checks.map(c => (c.points ?? 0) >= 2), // backward-compat boolean (ok or good = true)
     reasons: checks.map(c => c.summary),
     raw: checks.map(c => c.value),
-    verdicts: checks.map(c => c.verdict), // exposes 'na' to frontend for purple chips
-    warnings, // 3-step integrity check findings (empty when data is clean)
+    verdicts: checks.map(c => c.verdict), // "good"|"ok"|"weak"|"bad"|"na" for chip colors
+    warnings,
     scored_at: new Date().toISOString(),
   };
 
-  await putShortFmpCache(sym, { _v: 4, row }).catch(() => {});
+  await putShortFmpCache(sym, { _v: 5, row }).catch(() => {});
   return row;
 }
