@@ -2360,10 +2360,15 @@ document.getElementById('ctxPin').onclick=()=>{
   else pinnedSyms.add(sym);
   savePins();
   renderWatchlist();
+  if(currentView==='short') renderShortWatchlist();
 };
 document.getElementById('ctxDel').onclick=async()=>{
   const sym=ctxSym;
-  watchlist=watchlist.filter(r=>r.sym!==sym); renderWatchlist(); ctx.style.display='none';
+  watchlist=watchlist.filter(r=>r.sym!==sym);
+  delete shortRowsBySym[sym];
+  ctx.style.display='none';
+  renderWatchlist();
+  if(currentView==='short') renderShortWatchlist();
   if(API_LIVE) await api.send('/api/watchlist/'+encodeURIComponent(sym),'DELETE').catch(()=>{});
 };
 document.addEventListener('click',()=>ctx.style.display='none');
@@ -2547,6 +2552,49 @@ function renderShortWatchlist(){
       <td class="num" data-col="lev" style="cursor:pointer" data-tip="${tipFor(7)}">${lev}</td>
       <td class="grp-start num" data-col="cat" style="cursor:pointer" data-tip="${tipFor(8)}">${cat}</td>
       <td class="num ${vsCls}" data-col="vs" style="cursor:pointer" data-tip="${tipFor(9)}">${vs}</td>`;
+    // Drag and drop — same model as Basic, scoped to #stBody
+    tr.setAttribute('draggable', 'true');
+    tr.addEventListener('dragstart', e => {
+      dragSrc = tr;
+      const clone = tr.cloneNode(true);
+      clone.style.cssText = `position:fixed;top:-2000px;left:0;transform:scale(1.04);transform-origin:0 0;background:var(--card);box-shadow:0 8px 28px rgba(0,0,0,.2);border-radius:6px;width:${tr.offsetWidth}px;pointer-events:none`;
+      document.body.appendChild(clone);
+      e.dataTransfer.setDragImage(clone, e.offsetX, e.offsetY);
+      requestAnimationFrame(() => clone.remove());
+      e.dataTransfer.effectAllowed = 'move';
+      requestAnimationFrame(() => {
+        document.querySelectorAll('#stBody tr').forEach(row =>
+          row === tr ? row.classList.add('drag-src') : row.classList.add('drag-blur')
+        );
+      });
+    });
+    tr.addEventListener('dragover', e => {
+      e.preventDefault();
+      if (!dragSrc || dragSrc === tr) return;
+      document.querySelectorAll('#stBody tr').forEach(r => r.classList.remove('drop-above','drop-below'));
+      const rect = tr.getBoundingClientRect();
+      tr.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drop-above' : 'drop-below');
+    });
+    tr.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!dragSrc || dragSrc === tr) return;
+      const fromSym = dragSrc.dataset.sym;
+      const toSym   = tr.dataset.sym;
+      const insertAfter = tr.classList.contains('drop-below');
+      const fromIdx = watchlist.findIndex(r => r.sym === fromSym);
+      const [moved] = watchlist.splice(fromIdx, 1);
+      const toIdx = watchlist.findIndex(r => r.sym === toSym);
+      watchlist.splice(insertAfter ? toIdx + 1 : toIdx, 0, moved);
+      saveWatchlistOrder();
+      renderShortWatchlist();
+      renderWatchlist(); // keep Basic view in sync
+    });
+    tr.addEventListener('dragend', () => {
+      document.querySelectorAll('#stBody tr').forEach(r =>
+        r.classList.remove('drag-src','drag-blur','drop-above','drop-below')
+      );
+      dragSrc = null;
+    });
     tb.appendChild(tr);
     if (isScoring) syncCheckAnim(sym);
   });
