@@ -1498,8 +1498,10 @@ function getShortHistory(sym) {
 
 function verdictColor(v) {
   if (v === 'good') return '#4caf87';
+  if (v === 'ok')   return '#88cc99'; // muted green (mid-tone for dark chart bg)
+  if (v === 'weak') return '#e8c068'; // amber
   if (v === 'bad')  return '#c0392b';
-  return '#7b52ab';
+  return '#7b52ab'; // na
 }
 
 function buildStFactChart(entries, factorIdx) {
@@ -1551,15 +1553,21 @@ function buildStFactChart(entries, factorIdx) {
         svg += `<text x="${pl-4}" y="${y+3.5}" text-anchor="end" fill="#606878" font-size="7">${label}</text>`;
       });
 
-      // Threshold reference lines for meaningful factors
-      const thresholds = { 1: 5, 5: null, 6: null, 7: 3, 9: 1.5 };
-      if (thresholds[factorIdx] != null) {
-        const tv = thresholds[factorIdx];
+      // Threshold reference lines — graduated boundaries (0pt→1pt, 1pt→2pt, 2pt→3pt)
+      const thresholds = {
+        1: [0, 5, 15],       // 3M momentum %: 0=weak, 5=ok, 15=good
+        2: [5, 15, 30],      // % off 52w high: 5=good, 15=ok, 30=weak (lower=better)
+        3: [10, 20, 100],    // avg $-vol $M: 10=weak, 20=ok, 100=good
+        4: [-5, 0, 5],       // analyst composite %: -5=weak, 0=ok, 5=good
+        7: [1, 3, 5],        // leverage x: 1=good, 3=ok, 5=weak (lower=better)
+        9: [0.8, 1.5, 2.5],  // vol surge x: 0.8=weak, 1.5=ok, 2.5=good
+      };
+      (thresholds[factorIdx] || []).forEach(tv => {
         if (tv >= lo && tv <= hi) {
           const ty = ys(tv);
-          svg += `<line x1="${pl}" y1="${ty}" x2="${W-pr}" y2="${ty}" stroke="rgba(100,180,100,.25)" stroke-width="0.8" stroke-dasharray="3,2"/>`;
+          svg += `<line x1="${pl}" y1="${ty}" x2="${W-pr}" y2="${ty}" stroke="rgba(100,180,100,.2)" stroke-width="0.8" stroke-dasharray="3,2"/>`;
         }
-      }
+      });
 
       // Line connecting defined points
       const linePts = entries.map((e,i) => ({ x: xs(i), y: ys(vals[i]), v: vals[i] })).filter(p => p.y != null);
