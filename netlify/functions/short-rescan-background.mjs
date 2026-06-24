@@ -7,18 +7,22 @@ export default async (req) => {
   const { jobId, force, tickers: onlyTickers, clientTickers } = await req.json().catch(() => ({}));
   if (!jobId) return new Response("Missing jobId", { status: 400 });
 
-  // Reuse the same rescan lock as basics — only one rescan (basics or short)
-  // runs at a time. Prevents stacked FMP fan-outs from chewing through quota.
-  const gotLock = await acquireRescanLock(jobId);
-  if (!gotLock) {
-    await putJob(jobId, { status: "error", error: "A rescan is already in progress — try again in a moment." });
-    return new Response("", { status: 202 });
+  // Single-ticker adds bypass the lock — they're cheap (one ticker, ~2s) and
+  // firing immediately after a Basic add is the whole point. The lock is for
+  // preventing stacked full-watchlist fan-outs from chewing through FMP quota.
+  const isSingleTicker = onlyTickers && onlyTickers.length === 1;
+  if (!isSingleTicker) {
+    const gotLock = await acquireRescanLock(jobId);
+    if (!gotLock) {
+      await putJob(jobId, { status: "error", error: "A rescan is already in progress — try again in a moment." });
+      return new Response("", { status: 202 });
+    }
   }
 
   try {
     return await runShortScan({ jobId, force, onlyTickers, clientTickers });
   } finally {
-    await releaseRescanLock(jobId);
+    if (!isSingleTicker) await releaseRescanLock(jobId);
   }
 };
 
