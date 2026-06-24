@@ -2208,8 +2208,38 @@ addInput.addEventListener('keydown',async e=>{
     rescanBtn.disabled=true; rescanBtn.innerHTML='<span class="spin">⟳</span> Scoring…';
     await api.send('/api/watchlist/add','POST',{ticker:sym,jobId}).catch(()=>{});
     pollJob(jobId);
+    // Also fire a Short Term scan for this ticker so it appears in both views
+    scoreShortForTicker(sym);
   }
 });
+
+// Single-ticker Short Term scoring — called when a new ticker is added so it
+// shows up populated in the Short Term view too, not just Basic.
+async function scoreShortForTicker(sym){
+  const up = sym.toUpperCase();
+  const wl = watchlist.find(r => r.sym === up);
+  if (wl) wl.shortScoring = true;
+  if (currentView === 'short') renderShortWatchlist();
+  const jobId = 'jadd-' + Date.now();
+  await api.send('/api/short/rescan','POST',{jobId, force:true, tickers:[up], clientTickers:[up]}).catch(()=>{});
+  const t = setInterval(async () => {
+    const j = await api.get('/api/jobs/'+jobId).catch(()=>null);
+    if (!j) return;
+    if (j.rows && j.rows.length) {
+      j.rows.forEach(row => {
+        if (row && row.sym && !row.error) {
+          shortRowsBySym[row.sym.toUpperCase()] = row;
+          saveShortHistory(row.sym.toUpperCase(), row);
+        }
+      });
+    }
+    if (j.status === 'done' || j.status === 'error') {
+      clearInterval(t);
+      if (wl) wl.shortScoring = false;
+      if (currentView === 'short') renderShortWatchlist();
+    }
+  }, 3000);
+}
 
 /* ---------------- rescan ----------------
    Normal click = smart rescan (skips rows scored in the last 2 days, to save cost).
