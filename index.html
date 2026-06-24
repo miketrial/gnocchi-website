@@ -2227,7 +2227,7 @@ async function scoreShortForTicker(sym){
     if (!j) return;
     if (j.rows && j.rows.length) {
       j.rows.forEach(row => {
-        if (row && row.sym && !row.error) {
+        if (row && row.sym && !row.error && (row.verdicts || row.score)) {
           shortRowsBySym[row.sym.toUpperCase()] = row;
           saveShortHistory(row.sym.toUpperCase(), row);
         }
@@ -2354,7 +2354,14 @@ document.getElementById('ctxRescan').onclick=async()=>{
       const j=await api.get('/api/jobs/'+jobId).catch(()=>null);
       if(!j) return;
       if(j.rows&&j.rows.length){
-        j.rows.forEach(row=>{ if(row&&row.sym&&!row.error) shortRowsBySym[row.sym.toUpperCase()]=row; });
+        // Only accept rows that actually have scoring data. A bare {sym}
+        // placeholder would wipe a row's existing chips/values to purple.
+        j.rows.forEach(row=>{
+          if (row && row.sym && !row.error && (row.verdicts || row.score)) {
+            shortRowsBySym[row.sym.toUpperCase()] = row;
+            saveShortHistory(row.sym.toUpperCase(), row);
+          }
+        });
       }
       if(j.status==='done'||j.status==='error'){
         clearInterval(t);
@@ -2683,7 +2690,8 @@ async function rescanShort(e){
       if (!j) return;
       if (j.rows && j.rows.length) {
         j.rows.forEach(row => {
-          if (row && row.sym && !row.error) {
+          // Skip bare placeholders that would wipe a row to purple/dashes.
+          if (row && row.sym && !row.error && (row.verdicts || row.score)) {
             const up = row.sym.toUpperCase();
             shortRowsBySym[up] = row;
             saveShortHistory(up, row);

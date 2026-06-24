@@ -43,15 +43,14 @@ async function runShortScan({ jobId, force, onlyTickers, clientTickers }) {
   await putJob(jobId, { status: "running", total, completed: 0, rows });
 
   for (const sym of allSyms) {
+    // In single-ticker mode, only push rows we actually scored. Bare {sym}
+    // placeholders would overwrite the client's existing row with empty data.
+    if (!targets.includes(sym)) continue;
     try {
-      if (targets.includes(sym)) {
-        const skipCache = !!force || !!(onlyTickers && onlyTickers.length);
-        const row = await scoreTickerShort(sym, { skipCache });
-        await putShortRow(sym, row).catch(() => {});
-        rows.push(row);
-      } else {
-        rows.push({ sym });
-      }
+      const skipCache = !!force || !!(onlyTickers && onlyTickers.length);
+      const row = await scoreTickerShort(sym, { skipCache });
+      await putShortRow(sym, row).catch(() => {});
+      rows.push(row);
     } catch (e) {
       rows.push({ sym, error: String(e?.message || e) });
     }
