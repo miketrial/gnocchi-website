@@ -217,6 +217,8 @@
   .checks{display:flex; gap:3px}
   .chk{ width:22px; height:16px; border-radius:4px; }
   .chk.good{background:var(--good-bg)}
+  .chk.ok  {background:#c8eed8}          /* muted green — partial pass (2/3) */
+  .chk.weak{background:#fde8b8}          /* amber — marginal (1/3) */
   .chk.bad{background:var(--bad-bg)}
   .chk.na{background:var(--pur-bg)}
   /* checklist column header: diagonal labels aligned over the 8 squares */
@@ -334,9 +336,13 @@
 
   /* Short Term data cells — colored to match the chip verdict for that factor */
   #shortView tbody td.st-good{ background:rgba(213,245,227,.45); color:var(--good-fg); font-weight:600 }
+  #shortView tbody td.st-ok  { background:rgba(200,238,216,.35); color:var(--good-fg); font-weight:500 }
+  #shortView tbody td.st-weak{ background:rgba(253,232,184,.45); color:#9a6f00;        font-weight:500 }
   #shortView tbody td.st-bad { background:rgba(250,219,216,.45); color:var(--bad-fg);  font-weight:600 }
   #shortView tbody td.st-na  { background:rgba(237,231,246,.45); color:var(--pur-fg);  font-weight:500 }
   #shortView tbody tr:hover td.st-good{ background:rgba(213,245,227,.7) }
+  #shortView tbody tr:hover td.st-ok  { background:rgba(200,238,216,.6) }
+  #shortView tbody tr:hover td.st-weak{ background:rgba(253,232,184,.7) }
   #shortView tbody tr:hover td.st-bad { background:rgba(250,219,216,.7) }
   #shortView tbody tr:hover td.st-na  { background:rgba(237,231,246,.7) }
 
@@ -886,7 +892,7 @@
           <th class="sortable" data-sort="name">Company<span class="sub">(ticker)</span></th>
           <th class="num sortable" data-sort="price">Price<span class="sub">live</span></th>
           <th class="grp-start"><div class="chkhdr"><span><span class="hl">Trend</span></span><span><span class="hl">3M Mom</span></span><span><span class="hl">Near Hi</span></span><span><span class="hl">Liquid</span></span><span><span class="hl">Anlyst Rev</span></span><span><span class="hl">Value</span></span><span><span class="hl">Quality</span></span><span><span class="hl">Leverage</span></span><span><span class="hl">Catalyst</span></span><span><span class="hl">Vol Surge</span></span></div></th>
-          <th class="sortable" data-sort="score">Score<span class="sub">of 10</span></th>
+          <th class="sortable" data-sort="score" data-tip="Graduated score: each of the 10 factors earns 0–3 points (bad/weak/ok/good), max 30. 20+ is a strong setup, 12–19 is mixed, under 12 is weak.">Score<span class="sub">of 30</span></th>
           <th class="num sortable" data-sort="vspe" data-tip="Forward P/E vs the sector median. Negative = cheaper than peers (green), positive = more expensive (red). Same as the VS Sector column on the Basic page — useful as a risk filter: overpriced stocks fall harder on any missed catalyst.">VS Sector<span class="sub">P/E</span></th>
           <th class="grp-start" data-tip="Trend test — current price vs its 50-day moving average. A stock above its 50DMA, with the 50DMA itself above the 200DMA, is in a confirmed uptrend (the strongest predictor of continued strength over 2-12 weeks).">Trend<span class="sub">price &amp; DMA</span></th>
           <th data-tip="3-month price return. Positive ≥5% earns the green Momentum chip. Stocks that outperformed over the past quarter tend to keep outperforming through the next swing-trade window.">3M Return<span class="sub">vs 0</span></th>
@@ -1496,8 +1502,10 @@ function getShortHistory(sym) {
 
 function verdictColor(v) {
   if (v === 'good') return '#4caf87';
+  if (v === 'ok')   return '#88cc99'; // muted green (mid-tone for dark chart bg)
+  if (v === 'weak') return '#e8c068'; // amber
   if (v === 'bad')  return '#c0392b';
-  return '#7b52ab';
+  return '#7b52ab'; // na
 }
 
 function buildStFactChart(entries, factorIdx) {
@@ -1508,21 +1516,26 @@ function buildStFactChart(entries, factorIdx) {
   let svg = '';
 
   if (factorIdx === -1) {
-    // Overall score (0–10)
-    const ys = v => pt + cH - (v/10)*cH;
-    [0,5,10].forEach(v => {
+    // Overall score — detect scale: legacy /10 entries cap at 10, new /30 go higher
+    const maxScore = Math.max(...entries.map(e => parseInt(e.score) || 0), 1);
+    const scale = maxScore > 10 ? 30 : 10;
+    const ys = v => pt + cH - (v/scale)*cH;
+    const gridLines = scale === 30 ? [0,10,20,30] : [0,5,10];
+    gridLines.forEach(v => {
       svg += `<line x1="${pl}" y1="${ys(v)}" x2="${W-pr}" y2="${ys(v)}" stroke="rgba(255,255,255,.07)" stroke-width="0.5"/>`;
       svg += `<text x="${pl-4}" y="${ys(v)+3.5}" text-anchor="end" fill="#606878" font-size="8">${v}</text>`;
     });
     const pts = entries.map((e,i) => {
       const v = parseInt(e.score) || 0;
-      return { x: xs(i), y: ys(v), v, verdict: v>=7?'good':v>=5?'mixed':'bad' };
+      const good = scale === 30 ? v >= 20 : v >= 7;
+      const mid  = scale === 30 ? v >= 12 : v >= 5;
+      return { x: xs(i), y: ys(v), v, verdict: good?'good':mid?'mixed':'bad' };
     });
     if (n > 1) {
       svg += `<polyline points="${pts.map(p=>`${p.x},${p.y}`).join(' ')}" fill="none" stroke="rgba(55,138,221,.5)" stroke-width="1.5" stroke-linejoin="round"/>`;
     }
     pts.forEach(p => {
-      const c = p.v>=7?'#4caf87':p.v>=5?'#e8a838':'#c0392b';
+      const c = p.verdict==='good'?'#4caf87':p.verdict==='mixed'?'#e8a838':'#c0392b';
       svg += `<circle cx="${p.x}" cy="${p.y}" r="${n===1?4:2.5}" fill="${c}" stroke="#1e2230" stroke-width="1"/>`;
     });
   } else {
@@ -1544,15 +1557,21 @@ function buildStFactChart(entries, factorIdx) {
         svg += `<text x="${pl-4}" y="${y+3.5}" text-anchor="end" fill="#606878" font-size="7">${label}</text>`;
       });
 
-      // Threshold reference lines for meaningful factors
-      const thresholds = { 1: 5, 5: null, 6: null, 7: 3, 9: 1.5 };
-      if (thresholds[factorIdx] != null) {
-        const tv = thresholds[factorIdx];
+      // Threshold reference lines — graduated boundaries (0pt→1pt, 1pt→2pt, 2pt→3pt)
+      const thresholds = {
+        1: [0, 5, 15],       // 3M momentum %: 0=weak, 5=ok, 15=good
+        2: [5, 15, 30],      // % off 52w high: 5=good, 15=ok, 30=weak (lower=better)
+        3: [10, 20, 100],    // avg $-vol $M: 10=weak, 20=ok, 100=good
+        4: [-5, 0, 5],       // analyst composite %: -5=weak, 0=ok, 5=good
+        7: [1, 3, 5],        // leverage x: 1=good, 3=ok, 5=weak (lower=better)
+        9: [0.8, 1.5, 2.5],  // vol surge x: 0.8=weak, 1.5=ok, 2.5=good
+      };
+      (thresholds[factorIdx] || []).forEach(tv => {
         if (tv >= lo && tv <= hi) {
           const ty = ys(tv);
-          svg += `<line x1="${pl}" y1="${ty}" x2="${W-pr}" y2="${ty}" stroke="rgba(100,180,100,.25)" stroke-width="0.8" stroke-dasharray="3,2"/>`;
+          svg += `<line x1="${pl}" y1="${ty}" x2="${W-pr}" y2="${ty}" stroke="rgba(100,180,100,.2)" stroke-width="0.8" stroke-dasharray="3,2"/>`;
         }
-      }
+      });
 
       // Line connecting defined points
       const linePts = entries.map((e,i) => ({ x: xs(i), y: ys(vals[i]), v: vals[i] })).filter(p => p.y != null);
@@ -2582,8 +2601,8 @@ async function ensureShortDataLoaded(){
 function shortScoreClass(s){
   const n = parseInt((s||'').toString());
   if (isNaN(n)) return 'na';   // unscored rows render in neutral, not red
-  if (n >= 7) return 'g';
-  if (n >= 4) return 'y';
+  if (n >= 20) return 'g';     // ≥ 20/30 (67%) — strong setup
+  if (n >= 12) return 'y';     // ≥ 12/30 (40%) — mixed
   return 'r';
 }
 
@@ -2611,11 +2630,11 @@ function renderShortWatchlist(){
     const reasons  = r.reasons  || [];
     const checks = SHORT_LABELS.map((_, k) => {
       const v = verdicts[k] || 'na';
-      const cls = v === 'good' ? 'good' : v === 'bad' ? 'bad' : 'na';
+      const cls = v === 'good' ? 'good' : v === 'ok' ? 'ok' : v === 'weak' ? 'weak' : v === 'bad' ? 'bad' : 'na';
       return `<div class="chk ${cls}" data-tip="${escHtml(tipForChip(k, reasons[k]))}"></div>`;
     }).join('');
 
-    const score = r.score || '—/10';
+    const score = r.score || '—/30';
     const cls = (isScoring || isLegacy) ? '' : 'sc-' + shortScoreClass(score);
     const tr = document.createElement('tr');
     tr.dataset.sym = sym;
@@ -2676,7 +2695,7 @@ function renderShortWatchlist(){
 
     const vCls = k => {
       const v = verdicts[k];
-      return v === 'good' ? 'st-good' : v === 'bad' ? 'st-bad' : 'st-na';
+      return v === 'good' ? 'st-good' : v === 'ok' ? 'st-ok' : v === 'weak' ? 'st-weak' : v === 'bad' ? 'st-bad' : 'st-na';
     };
 
     tr.innerHTML = `
@@ -2684,7 +2703,7 @@ function renderShortWatchlist(){
       ${coCell}
       <td class="num price-cell">${price != null ? '$' + (+price).toFixed(2) : '—'}</td>
       <td class="grp-start"><div class="checks">${checks}</div></td>
-      <td data-col="score" style="cursor:pointer" data-tip="${escHtml('Composite score: '+score+'. Sum of the 10 chips that passed. 7+/10 is a strong setup, 4-6 is mixed, 3 or fewer is weak. Click to see score history.')}"><span class="score ${shortScoreClass(score)}">${score}</span></td>
+      <td data-col="score" style="cursor:pointer" data-tip="${escHtml('Composite score: '+score+'. Each of the 10 factors scores 0–3 points (bad/weak/ok/good) for a max of 30. 20+/30 is a strong setup, 12–19 is mixed, under 12 is weak. Click to see score history.')}"><span class="score ${shortScoreClass(score)}">${score}</span></td>
       <td class="num" data-tip="Forward P/E vs the sector median. Negative = cheaper than peers, positive = more expensive. Risk filter: overpriced stocks fall harder on missed catalysts."><span class="pill ${vsSectPillCls}">${vsSect}</span></td>
       <td class="grp-start num ${vCls(0)}" data-col="trend" style="cursor:pointer" data-tip="${tipFor(0)}">${trendVal}</td>
       <td class="num ${vCls(1)}" data-col="mom" style="cursor:pointer" data-tip="${tipFor(1)}">${mom}</td>
