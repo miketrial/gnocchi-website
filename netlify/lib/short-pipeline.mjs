@@ -266,7 +266,10 @@ function checkNearHigh(hist) {
   return scored(points, `${(pctOff * 100).toFixed(1)}% off 52w high ($${high.toFixed(2)}) — ${label}`, { high, pctOff });
 }
 
-// 4. Liquidity: 20-day avg $-volume — graduated by how tradeable
+// 4. Liquidity: 20-day avg $-volume — graduated by how tradeable.
+// Window: hist[0..19] — the 20 most recent COMPLETE trading days. (Vol Surge
+// uses hist[1..20] because it's comparing hist[0] to its prior 20-day avg.
+// Different intents, both correct.)
 function checkLiquidity(hist, quote) {
   if (!hist || hist.length < 20) return na("Need 20 days of price history");
   const dollarVols = hist.slice(0, 20).map(d => (d.price ?? d.close ?? 0) * (d.volume ?? 0)).filter(v => v > 0);
@@ -301,8 +304,16 @@ function checkAnalystRevisions(ptSummary, grades) {
     const tot = sb + b + h + se + ss;
     return tot > 0 ? (sb + b) / tot : null;
   }
-  const brNow = buyRatio(g[0]);
-  const brThen = buyRatio(g[3]);
+  // "Now" = most recent snapshot. "Then" = closest snapshot ≥ 60 calendar
+  // days back. Date-based so we don't depend on the (unspecified) sample
+  // cadence FMP uses. Falls back to the oldest record we have if 60d isn't
+  // available, so the signal still works for newer coverage.
+  const sortedG = g.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const brNow = buyRatio(sortedG[0]);
+  const cutoff60 = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+  let thenRow = sortedG.find(row => row.date && row.date <= cutoff60);
+  if (!thenRow && sortedG.length >= 2) thenRow = sortedG[sortedG.length - 1];
+  const brThen = buyRatio(thenRow);
   const haveBR = brNow != null && brThen != null;
 
   if (!havePT && !haveBR) return na("No analyst coverage data (price targets or rating history)");
@@ -394,7 +405,9 @@ function checkCatalyst(earningsHist) {
     .filter(e => e.epsActual == null && e.date > today)
     .sort((a, b) => a.date.localeCompare(b.date));
   const next = future[0];
-  if (!next) return scored(0, "No upcoming earnings catalyst in calendar", null);
+  // No upcoming earnings = data unknown, not a confident "fail". Some calendars
+  // simply haven't published the next date yet — flag as na rather than red.
+  if (!next) return na("No upcoming earnings date in FMP calendar");
   const daysUntil = Math.ceil((new Date(next.date) - Date.now()) / 86400000);
   if (daysUntil < 7)  return scored(0, `Earnings in ${daysUntil}d (${next.date}) — too soon to position`, { date: next.date, daysUntil });
   if (daysUntil > 90) return scored(0, `Earnings in ${daysUntil}d (${next.date}) — outside 3-month swing window`, { date: next.date, daysUntil });
@@ -410,47 +423,51 @@ function checkCatalyst(earningsHist) {
   return scored(points, `Earnings in ${daysUntil}d (${next.date}) — ${beatSummary}`, { date: next.date, daysUntil, beats, total });
 }
 
-// 10. Volume Surge — today's volume + direction confirmed by 10-day money flow.
+// 10. Volume Surge — most-recent-complete-day surge + 10-day money flow.
 //
-// Volume alone is direction-blind. Two layers combined make it a real
-// accumulation-vs-distribution signal:
-//   • Today's surge (rv = today vol / 20-day avg) and price direction tells
-//     you "is something happening right now?"
+// Why not use today's live quote? `quote.volume` is a running intraday total —
+// mid-session it's only a fraction of a normal day, so rv = todayVol/20dAvg
+// swings wildly and lies. We anchor on the most recent COMPLETE bar
+// (hist[0] from FMP's EOD light feed) so the score is stable regardless of
+// when the user opens the page.
+//
+// Two signals combined:
+//   • Recent-day surge (rv = hist[0].vol / avg of prior 20 days) + that day's
+//     price direction → "is institutional activity firing right now?"
 //   • 10-day money flow ((up$-vol − down$-vol) / total$-vol, range [-1,+1])
-//     tells you whether the multi-day trend is buying or selling pressure.
-// Confluence between the two = real signal. Disagreement = "wait."
+//     over the 10 most-recent complete days → "what's the multi-day trend?"
+// Confluence = real signal. Disagreement = wait.
 function checkVolumeSurge(quote, hist) {
-  const q0 = (quote || [])[0];
-  const todayVol = q0?.volume;
-  if (todayVol == null) return na("No current volume reading");
-  if (!hist || hist.length < 20) return na("Need 20 days of volume history");
+  // Anchor on most recent complete EOD bar. quote.volume is intraday-partial
+  // during market hours; using hist[0] guarantees a full session.
+  if (!hist || hist.length < 21) return na("Need 21 days of volume history");
+  const h0 = hist[0], h1 = hist[1];
+  const recentVol   = h0?.volume;
+  const recentClose = h0?.price ?? h0?.close;
+  const priorClose  = h1?.price ?? h1?.close;
+  if (recentVol == null || recentClose == null || priorClose == null)
+    return na("Missing recent close/volume bar");
 
-  // 20-day avg volume from days 1..20 (skip today's bar at index 0)
+  // 20-day avg volume from the 20 days BEFORE the most recent bar
   const vols = hist.slice(1, 21).map(d => d.volume).filter(v => v != null && v > 0);
   if (vols.length < 15) return na("Volume history too sparse");
   const avg20 = vols.reduce((s, x) => s + x, 0) / vols.length;
-  const rv = shortSane(todayVol / avg20, "volRv");
+  const rv = shortSane(recentVol / avg20, "volRv");
   if (rv == null) return na("Volume ratio out of plausible range — data suspect");
 
-  // Today's direction: prefer FMP's intraday %, fall back to live vs prior close
-  const pctChange = q0?.changePercentage ?? q0?.changesPercentage ?? null;
-  const priorClose = hist?.[1]?.price ?? hist?.[1]?.close ?? null;
-  const livePrice  = q0?.price ?? null;
-  const todayDir = pctChange != null
-    ? Math.sign(pctChange)
-    : (livePrice != null && priorClose != null ? Math.sign(livePrice - priorClose) : 0);
-  const isUp   = todayDir > 0;
-  const isDown = todayDir < 0;
+  // Direction of the most recent complete bar
+  const recentDir = Math.sign(recentClose - priorClose);
+  const isUp   = recentDir > 0;
+  const isDown = recentDir < 0;
   const dirLabel = isUp ? "up" : isDown ? "down" : "flat";
 
-  // 10-day money flow — sign of (close[i] − close[i+1]) × close[i] × vol[i]
-  // summed and normalized by total $-volume. Skip index 0 (today's bar) so
-  // this is a *confirmation*, not a duplication of the same-day signal.
+  // 10-day money flow — sum up$/down$ over the 10 most recent complete days.
+  // Loop starts at i=0 (yesterday) paired with i+1 (day before) — earlier
+  // versions skipped index 0 and missed the most relevant day.
   let upDollar = 0, dnDollar = 0;
-  const need = 11;
   let lookback = 0;
-  if (hist.length >= need) {
-    for (let i = 1; i <= 10; i++) {
+  if (hist.length >= 11) {
+    for (let i = 0; i < 10; i++) {
       const today = hist[i], prior = hist[i + 1];
       if (!today || !prior) break;
       const close = today.price ?? today.close;
@@ -506,10 +523,12 @@ function checkVolumeSurge(quote, hist) {
     points = 0; label = "below-avg volume — stock being ignored";
   }
 
-  const summary = `Today ${rv.toFixed(2)}× avg, price ${dirLabel}`
+  const summary = `Last session ${rv.toFixed(2)}× avg, price ${dirLabel}`
     + (flow != null ? ` · 10d flow ${flow >= 0 ? "+" : ""}${(flow * 100).toFixed(0)}% (${flowLabel})` : "")
     + ` — ${label}`;
-  return scored(points, summary, { rv, todayVol, avg20, todayDir, isUp, isDown, flow, upDollar, dnDollar });
+  return scored(points, summary, {
+    rv, recentVol, avg20, dir: recentDir, isUp, isDown, dirLabel, flow, upDollar, dnDollar
+  });
 }
 
 /* ---------- Main scorer ---------- */
@@ -519,7 +538,7 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   // Cache check
   if (!skipCache) {
     const cached = await getShortFmpCache(sym);
-    if (cached && cached._v === 7) {
+    if (cached && cached._v === 8) {
       return cached.row;
     }
   } else {
@@ -540,7 +559,9 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     d.profile       = await safe("profile", sym);                                   await delay(200);
     d.earningsHist  = await safe("earnings", sym, "&limit=6");                     await delay(200);
     d.ptSummary     = await safe("price-target-summary", sym);                     await delay(200);
-    d.grades        = await safe("grades-historical", sym, "&limit=6");
+    // grades-historical: pull a wider window so we can pick a snapshot
+    // ~60 calendar days back by date rather than guessing at the sample rate.
+    d.grades        = await safe("grades-historical", sym, "&limit=180");
     return d;
   };
 
@@ -584,10 +605,13 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   const sector = p0.sector || null;
   // Forward EPS — analyst-estimates returns rows with field `epsAvg`
   // (FMP's own naming, NOT estimatedEpsAvg). Take the nearest future row.
+  // Critical: do NOT fall back to estimates[0] — that's a HISTORICAL annual
+  // estimate that would produce a totally wrong "forward" P/E. If no future
+  // estimate exists, return null so Valuation goes purple (na) — honest.
   const todayStr = new Date().toISOString().slice(0, 10);
   const future = (estimates || []).filter(e => e.date && e.date >= todayStr)
                                   .sort((a, b) => a.date.localeCompare(b.date));
-  const fwdEps = future[0]?.epsAvg ?? (estimates || [])[0]?.epsAvg ?? null;
+  const fwdEps = future[0]?.epsAvg ?? null;
 
   // Run all 10 checks
   const checks = [
@@ -623,6 +647,6 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     scored_at: new Date().toISOString(),
   };
 
-  await putShortFmpCache(sym, { _v: 7, row }).catch(() => {});
+  await putShortFmpCache(sym, { _v: 8, row }).catch(() => {});
   return row;
 }

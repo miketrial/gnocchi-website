@@ -216,6 +216,24 @@
   /* 8 check squares (labels now live in the column header, not inside the squares) */
   .checks{display:flex; gap:3px}
   .chk{ width:22px; height:16px; border-radius:4px; }
+  /* Per-chip pulse while a row is being scored — gives visual feedback
+     that work is happening even before the data lands. */
+  @keyframes chkPulse{
+    0%   { background:#eef0f3 }
+    50%  { background:#dee3ea }
+    100% { background:#eef0f3 }
+  }
+  tbody tr.scoring .chk{ animation:chkPulse 1.4s ease-in-out infinite }
+  tbody tr.scoring .chk:nth-child(1){ animation-delay:0.00s }
+  tbody tr.scoring .chk:nth-child(2){ animation-delay:0.08s }
+  tbody tr.scoring .chk:nth-child(3){ animation-delay:0.16s }
+  tbody tr.scoring .chk:nth-child(4){ animation-delay:0.24s }
+  tbody tr.scoring .chk:nth-child(5){ animation-delay:0.32s }
+  tbody tr.scoring .chk:nth-child(6){ animation-delay:0.40s }
+  tbody tr.scoring .chk:nth-child(7){ animation-delay:0.48s }
+  tbody tr.scoring .chk:nth-child(8){ animation-delay:0.56s }
+  tbody tr.scoring .chk:nth-child(9){ animation-delay:0.64s }
+  tbody tr.scoring .chk:nth-child(10){ animation-delay:0.72s }
   .chk.good{background:var(--good-bg)}
   .chk.ok  {background:#c8eed8}          /* muted green — partial pass (2/3) */
   .chk.weak{background:#fde8b8}          /* amber — marginal (1/3) */
@@ -2888,9 +2906,20 @@ document.addEventListener('click', e => {
   }
 });
 
+const DEMOTED_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+function pruneDemoted(){
+  const cutoff = Date.now() - DEMOTED_TTL_MS;
+  let dirty = false;
+  for (const sym of Object.keys(demotedRecent)) {
+    const at = demotedRecent[sym]?.at;
+    if (!at || at < cutoff) { delete demotedRecent[sym]; dirty = true; }
+  }
+  if (dirty) saveDemoted();
+}
 function renderWatchPanel(){
   const el = document.getElementById('watchPanel');
   if (!el) return;
+  pruneDemoted();
   const ready = [], watching = [], demoted = [];
   for (const sym of Object.keys(watchFlags)) {
     if (watchFlags[sym] === 'ready') ready.push(sym);
@@ -3010,9 +3039,16 @@ function renderShortWatchlist(){
 
     // Short Term display cells (the columns to the right of the chips)
     const raw = r.raw || [];
-    const trendVal = raw[0] && raw[0].sma50 != null
-      ? `$${raw[0].price.toFixed(0)} > 50DMA $${raw[0].sma50.toFixed(0)}`
-      : '—';
+    // Trend: show "% above/below 50DMA" so the cell doesn't conflict with
+    // the live Price column (which uses quote.price). The verdict is based
+    // on yesterday's close vs the SMA — showing the relationship as a %
+    // sidesteps the price-source mismatch entirely.
+    const trendVal = (() => {
+      if (!raw[0] || raw[0].sma50 == null || raw[0].price == null) return '—';
+      const pct = (raw[0].price - raw[0].sma50) / raw[0].sma50;
+      const arrow = pct >= 0 ? '↑' : '↓';
+      return `${arrow}${(pct * 100).toFixed(1)}% vs 50DMA`;
+    })();
     const mom = raw[1] != null ? `${(raw[1] * 100).toFixed(1)}%` : '—';
     const momCls = (raw[1] != null && raw[1] > 0) ? 'mom-hi' : (raw[1] != null && raw[1] < 0) ? 'mom-lo' : '';
     const fwdPe = raw[5] && raw[5].fwdPe != null ? `${raw[5].fwdPe.toFixed(1)}x` : '—';
@@ -3032,8 +3068,15 @@ function renderShortWatchlist(){
     const qual = raw[6] && raw[6].roe != null ? `ROE ${(raw[6].roe * 100).toFixed(0)}%` : '—';
     const lev = raw[7] && raw[7].ratio != null ? `${raw[7].ratio.toFixed(1)}x` : (raw[7] && raw[7].netDebt < 0 ? 'net cash' : '—');
     const cat = raw[8] && raw[8].daysUntil != null ? `${raw[8].daysUntil}d` : '—';
+    // Vol Surge cell: prepend direction arrow so the value alone tells you
+    // whether the surge was accumulation (↑) or distribution (↓). Without
+    // this the number "2.30x" looks bullish even when it was a red day.
     const vsVal = raw[9];
-    const vs = vsVal && vsVal.rv != null ? `${vsVal.rv.toFixed(2)}x` : '—';
+    const vs = (() => {
+      if (!vsVal || vsVal.rv == null) return '—';
+      const arrow = vsVal.isUp ? '↑' : vsVal.isDown ? '↓' : '→';
+      return `${arrow}${vsVal.rv.toFixed(2)}x`;
+    })();
     const vsCls = vsVal && vsVal.rv >= 1.5 ? 'mom-hi' : '';
 
     // VS Sector P/E — reuse the Basic pipeline's pre-computed value on the watchlist item
