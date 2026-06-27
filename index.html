@@ -483,6 +483,72 @@
   }
   .wp-x:hover{ background:rgba(239,68,68,.15);color:#991b1b }
 
+  /* Activity strip — compact one-row peek under the three cards */
+  .act-strip{
+    display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+    margin-top:10px;padding:6px 4px 0;border-top:1px solid #f4f5f7;
+  }
+  .act-lbl{
+    font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+    color:var(--ink-faint);margin-right:4px;
+  }
+  .act-chip{
+    display:inline-flex;align-items:center;gap:4px;
+    padding:2px 7px;border-radius:10px;font-size:9px;cursor:pointer;
+    background:#f8f9fb;border:1px solid #eef0f3;
+    transition:background .12s,border-color .12s;
+  }
+  .act-chip:hover{ border-color:#9ca3af;background:#fff }
+  .act-chip .act-icon{ font-size:9px;line-height:1 }
+  .act-chip .act-sym{ font-weight:700;color:var(--ink) }
+  .act-chip .act-time{ color:var(--ink-faint);font-variant-numeric:tabular-nums;font-size:8.5px }
+  .act-chip.act-promote{ background:#ecfdf5;border-color:#a7f3d0 }
+  .act-chip.act-promote .act-icon{ color:#065f46 }
+  .act-chip.act-demote { background:#fef2f2;border-color:#fecaca }
+  .act-chip.act-demote .act-icon{ color:#991b1b }
+  .act-chip.act-add    { background:#fffbeb;border-color:#fde68a }
+  .act-chip.act-add .act-icon{ color:#92400e }
+  .act-chip.act-clear  { background:#f4f5f7;border-color:#e4e7eb }
+  .act-chip.act-clear .act-icon{ color:var(--ink-faint) }
+  .act-more{
+    margin-left:auto;font-size:8.5px;color:var(--ink-faint);cursor:pointer;
+    text-transform:uppercase;letter-spacing:.3px;font-weight:600;padding:2px 6px;
+  }
+  .act-more:hover{ color:var(--ink-soft) }
+
+  /* Expanded activity list */
+  .act-expanded{
+    margin-top:6px;max-height:240px;overflow-y:auto;
+    background:#fafbfc;border:1px solid #eef0f3;border-radius:6px;
+    padding:4px;
+  }
+  .act-row{
+    display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:9.5px;
+    border-radius:4px;cursor:pointer;
+  }
+  .act-row:hover{ background:#fff }
+  .act-row .act-time{ width:26px;color:var(--ink-faint);font-variant-numeric:tabular-nums;font-size:9px }
+  .act-row .act-icon{ width:12px;text-align:center;font-size:10px }
+  .act-row .act-sym{ font-weight:700;color:var(--ink);min-width:46px;font-size:10px }
+  .act-row .act-tag{
+    font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
+    padding:1px 5px;border-radius:3px;background:#f4f5f7;color:var(--ink-faint);
+    min-width:42px;text-align:center;
+  }
+  .act-row .act-detail{ color:var(--ink-soft);font-size:9px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+  .act-row.act-promote .act-icon{ color:#10b981 }
+  .act-row.act-promote .act-tag { background:#d1fae5;color:#065f46 }
+  .act-row.act-demote  .act-icon{ color:#ef4444 }
+  .act-row.act-demote  .act-tag { background:#fee2e2;color:#991b1b }
+  .act-row.act-add     .act-icon{ color:#f59e0b }
+  .act-row.act-add     .act-tag { background:#fef3c7;color:#92400e }
+  .act-row.act-clear   .act-icon{ color:var(--ink-faint) }
+  .act-clear-all{
+    text-align:right;padding:6px 4px 2px;font-size:8.5px;color:var(--ink-faint);
+  }
+  .act-clear-all span{ cursor:pointer;padding:2px 6px }
+  .act-clear-all span:hover{ color:#991b1b;text-decoration:underline }
+
   /* Legacy-data hazard — row has stale data, awaiting fresh Rescan fetch */
   tbody tr.legacy td:not(.co-cell):not(:first-child){
     filter:blur(3.5px);opacity:0.25;
@@ -2838,21 +2904,47 @@ let demotedRecent = (() => {
   try { return JSON.parse(localStorage.getItem('gn_st_demoted') || '{}'); }
   catch(e) { return {}; }
 })();
+// Activity log — last 50 state transitions across all watched stocks.
+// Schema: [{ ts, sym, type: 'promote'|'demote'|'add'|'clear', reason? }]
+let activityLog = (() => {
+  try { return JSON.parse(localStorage.getItem('gn_st_activity') || '[]'); }
+  catch(e) { return []; }
+})();
+let activityExpanded = false;
+const ACTIVITY_CAP = 50;
 function saveWatchFlags(){
   try { localStorage.setItem('gn_st_watch', JSON.stringify(watchFlags)); } catch(e){}
 }
 function saveDemoted(){
   try { localStorage.setItem('gn_st_demoted', JSON.stringify(demotedRecent)); } catch(e){}
 }
+function saveActivity(){
+  try { localStorage.setItem('gn_st_activity', JSON.stringify(activityLog)); } catch(e){}
+}
+function logActivity(sym, type, reason){
+  activityLog.unshift({ ts: Date.now(), sym: (sym||'').toUpperCase(), type, reason: reason || '' });
+  if (activityLog.length > ACTIVITY_CAP) activityLog.length = ACTIVITY_CAP;
+  saveActivity();
+}
+function relTime(ts){
+  const s = Math.max(1, Math.floor((Date.now() - ts) / 1000));
+  if (s < 60)   return s + 's';
+  if (s < 3600) return Math.floor(s / 60) + 'm';
+  if (s < 86400) return Math.floor(s / 3600) + 'h';
+  return Math.floor(s / 86400) + 'd';
+}
 function toggleWatchFlag(sym){
   sym = (sym || '').toUpperCase();
   if (!sym) return;
   if (watchFlags[sym]) {
+    const wasReady = watchFlags[sym] === 'ready';
     delete watchFlags[sym];
     delete demotedRecent[sym];
     saveDemoted();
+    logActivity(sym, 'clear', wasReady ? 'cleared from Ready' : 'cleared from Watching');
   } else {
     watchFlags[sym] = 'watching';
+    logActivity(sym, 'add', 'added to Watching');
   }
   saveWatchFlags();
   renderShortWatchlist();
@@ -2884,8 +2976,34 @@ function readyFailureReasons(r){
   return fails.length ? fails : ['—'];
 }
 // Click handler: ticker chip scrolls to row, X button dismisses (demoted)
-// or clears (watching/ready)
+// or clears (watching/ready). Activity strip events also bind here.
 document.addEventListener('click', e => {
+  // Activity: expand toggle
+  if (e.target.closest('#actToggle')) {
+    activityExpanded = !activityExpanded;
+    renderWatchPanel();
+    return;
+  }
+  // Activity: clear all history
+  if (e.target.closest('#actClearAll')) {
+    if (confirm('Clear all activity history?')) {
+      activityLog = []; saveActivity();
+      renderWatchPanel();
+    }
+    return;
+  }
+  // Activity: click event → jump to ticker
+  const actEl = e.target.closest('[data-actsym]');
+  if (actEl) {
+    const sym = actEl.dataset.actsym;
+    const row = document.querySelector(`#stBody tr[data-sym="${sym}"]`);
+    if (row) {
+      row.scrollIntoView({ behavior:'smooth', block:'center' });
+      row.classList.add('flash');
+      setTimeout(()=>row.classList.remove('flash'), 1400);
+    }
+    return;
+  }
   const x = e.target.closest('.wp-x');
   if (x) {
     e.stopPropagation();
@@ -2926,8 +3044,8 @@ function renderWatchPanel(){
     else if (watchFlags[sym] === 'watching') watching.push(sym);
   }
   for (const sym of Object.keys(demotedRecent)) demoted.push(sym);
-  // Hide entirely when there's nothing to show
-  if (!ready.length && !watching.length && !demoted.length) {
+  // Hide entirely when there's nothing to show — no flags AND no history
+  if (!ready.length && !watching.length && !demoted.length && !activityLog.length) {
     el.innerHTML = '';
     return;
   }
@@ -2949,6 +3067,37 @@ function renderWatchPanel(){
       <div class="wp-body">${body}</div>
     </div>`;
   };
+  // Activity strip — last N transitions, compact. Expand toggle reveals up to 50.
+  const iconFor = t => t === 'promote' ? '✓' : t === 'demote' ? '⚠' : t === 'add' ? '●' : '✗';
+  const labelFor = t => t === 'promote' ? 'W→R' : t === 'demote' ? 'R→D' : t === 'add' ? '+W' : 'cleared';
+  const renderActivityStrip = () => {
+    if (!activityLog.length) return '';
+    const peek = activityLog.slice(0, 4);
+    const peekHtml = peek.map(e =>
+      `<span class="act-chip act-${e.type}" data-actsym="${e.sym}" data-tip="${escHtml(e.type+': '+e.sym+(e.reason?' — '+e.reason:''))}"><span class="act-icon">${iconFor(e.type)}</span><span class="act-sym">${e.sym}</span><span class="act-time">${relTime(e.ts)}</span></span>`
+    ).join('');
+    const more = activityLog.length > 4 ? `<span class="act-more" id="actToggle">${activityExpanded ? '▴ hide' : `▾ ${activityLog.length} total`}</span>` : '';
+    const expanded = activityExpanded ? `
+      <div class="act-expanded">
+        ${activityLog.map(e => `
+          <div class="act-row act-${e.type}" data-actsym="${e.sym}">
+            <span class="act-time">${relTime(e.ts)}</span>
+            <span class="act-icon">${iconFor(e.type)}</span>
+            <span class="act-sym">${e.sym}</span>
+            <span class="act-tag">${labelFor(e.type)}</span>
+            <span class="act-detail">${escHtml(e.reason || '')}</span>
+          </div>`).join('')}
+        <div class="act-clear-all"><span id="actClearAll">Clear history</span></div>
+      </div>` : '';
+    return `
+      <div class="act-strip">
+        <span class="act-lbl">Activity</span>
+        ${peekHtml}
+        ${more}
+      </div>
+      ${expanded}`;
+  };
+
   el.innerHTML = `
     <div class="wp-head">
       <span class="wp-title">Watchlist</span>
@@ -2958,7 +3107,8 @@ function renderWatchPanel(){
       ${section('ready',    '✓ Ready',    ready,    'No stocks ready to trade yet', 'ready')}
       ${section('watching', '● Watching', watching, 'Click a flag in the table to add', 'watching')}
       ${section('demoted',  '⚠ Demoted',  demoted,  'Nothing fell out recently',     'demoted')}
-    </div>`;
+    </div>
+    ${renderActivityStrip()}`;
 }
 
 function renderShortWatchlist(){
@@ -2985,11 +3135,14 @@ function renderShortWatchlist(){
       flagsDirty = true;
       // If this sym was demoted earlier, the alert is no longer relevant
       if (demotedRecent[sym]) { delete demotedRecent[sym]; demotedDirty = true; }
+      logActivity(sym, 'promote', 'Watching → Ready');
     } else if (state === 'ready' && !ready) {
       watchFlags[sym] = 'watching';
       flagsDirty = true;
-      demotedRecent[sym] = { at: Date.now(), reasons: readyFailureReasons(r) };
+      const reasons = readyFailureReasons(r);
+      demotedRecent[sym] = { at: Date.now(), reasons };
       demotedDirty = true;
+      logActivity(sym, 'demote', reasons.join(', '));
     }
   }
   if (flagsDirty)  saveWatchFlags();
