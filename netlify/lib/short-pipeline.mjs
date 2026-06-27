@@ -410,7 +410,11 @@ function checkCatalyst(earningsHist) {
   return scored(points, `Earnings in ${daysUntil}d (${next.date}) — ${beatSummary}`, { date: next.date, daysUntil, beats, total });
 }
 
-// 10. Volume Surge: today vs 20-day avg — graduated by magnitude of the surge
+// 10. Volume Surge: today vs 20-day avg, direction-aware.
+// Big volume on an UP day = accumulation (institutions buying) → reward.
+// Big volume on a DOWN day = distribution (institutions selling) → penalize.
+// Volume alone is direction-blind — pairing it with intraday direction
+// turns a noisy "lots happened today" signal into a buy-vs-sell signal.
 function checkVolumeSurge(quote, hist) {
   const q0 = (quote || [])[0];
   const todayVol = q0?.volume;
@@ -421,13 +425,41 @@ function checkVolumeSurge(quote, hist) {
   const avg20 = vols.reduce((s, x) => s + x, 0) / vols.length;
   const rv = shortSane(todayVol / avg20, "volRv");
   if (rv == null) return na("Volume ratio out of plausible range — data suspect");
-  let points;
-  if (rv >= 2.5)       points = 3;
-  else if (rv >= 1.5)  points = 2;
-  else if (rv >= 0.8)  points = 1;
-  else                 points = 0;
-  const label = points === 3 ? "strong surge" : points === 2 ? "above average" : points === 1 ? "normal" : "below average (possible distribution)";
-  return scored(points, `Volume ${rv.toFixed(2)}× the 20-day avg — ${label}`, { rv, todayVol, avg20 });
+
+  // Direction: prefer FMP's intraday % change; fall back to quote.price vs prior close
+  const pctChange = q0?.changePercentage ?? q0?.changesPercentage ?? null;
+  const priorClose = hist?.[1]?.price ?? hist?.[1]?.close ?? null;
+  const livePrice  = q0?.price ?? null;
+  const dir = pctChange != null
+    ? Math.sign(pctChange)
+    : (livePrice != null && priorClose != null ? Math.sign(livePrice - priorClose) : 0);
+  const isUp = dir > 0;
+  const isDown = dir < 0;
+  const dirLabel = isUp ? "up" : isDown ? "down" : "flat";
+
+  let points, label;
+  if (rv >= 1.5 && isDown) {
+    // High volume + price down = institutional distribution. This is a warning,
+    // not a buy signal. Force red regardless of how big the surge is.
+    points = 0;
+    label = `distribution — heavy selling pressure`;
+  } else if (rv >= 2.5 && isUp) {
+    points = 3; label = "strong accumulation";
+  } else if (rv >= 1.5 && isUp) {
+    points = 2; label = "above-average buying";
+  } else if (rv >= 2.5) {
+    // Big volume on a flat day — usually news pending, treat as ok
+    points = 2; label = "elevated activity (flat)";
+  } else if (rv >= 1.5) {
+    points = 1; label = "elevated but inconclusive";
+  } else if (rv >= 0.8) {
+    points = 1; label = "normal";
+  } else {
+    points = 0; label = "below average — stock being ignored";
+  }
+  return scored(points,
+    `Volume ${rv.toFixed(2)}× the 20-day avg, price ${dirLabel} — ${label}`,
+    { rv, todayVol, avg20, dir, isUp, isDown });
 }
 
 /* ---------- Main scorer ---------- */
@@ -437,7 +469,7 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   // Cache check
   if (!skipCache) {
     const cached = await getShortFmpCache(sym);
-    if (cached && cached._v === 5) {
+    if (cached && cached._v === 6) {
       return cached.row;
     }
   } else {
@@ -541,6 +573,6 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     scored_at: new Date().toISOString(),
   };
 
-  await putShortFmpCache(sym, { _v: 5, row }).catch(() => {});
+  await putShortFmpCache(sym, { _v: 6, row }).catch(() => {});
   return row;
 }

@@ -346,6 +346,44 @@
   #shortView tbody tr:hover td.st-bad { background:rgba(250,219,216,.7) }
   #shortView tbody tr:hover td.st-na  { background:rgba(237,231,246,.7) }
 
+  /* ── Watch flags (Short Term entry tracking) ────────────────────────── */
+  .wflag{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:14px;height:14px;border-radius:3px;
+    background:transparent;border:1px dashed #d4d8de;
+    color:transparent;font-size:9px;line-height:1;
+    cursor:pointer;vertical-align:middle;margin-right:5px;
+    transition:all .12s ease;flex-shrink:0;
+  }
+  .wflag:hover{border-color:#9ca3af;border-style:solid}
+  .wflag.watching{background:#fef3c7;border:1px solid #f59e0b;color:#92400e}
+  .wflag.ready{background:#d1fae5;border:1px solid #10b981;color:#065f46}
+  .wflag.watching::before{content:"●"}
+  .wflag.ready::before{content:"✓"}
+  @keyframes wflashPromote{
+    0%   {background:rgba(209,250,229,0)}
+    30%  {background:rgba(209,250,229,.65)}
+    100% {background:rgba(209,250,229,0)}
+  }
+  #shortView tbody tr.wflash-promote td{ animation:wflashPromote 1.6s ease-out }
+  /* Filter pill bar */
+  #stFilterBar{
+    display:flex;align-items:center;gap:6px;padding:6px 10px 0;
+    font-size:9px;color:var(--ink-faint);
+  }
+  #stFilterBar .lbl{text-transform:uppercase;letter-spacing:.5px;margin-right:4px;font-weight:600}
+  #stFilterBar button{
+    background:transparent;border:1px solid #e4e7eb;border-radius:4px;
+    padding:3px 9px;font-size:9px;font-weight:600;color:var(--ink-faint);
+    cursor:pointer;font-family:inherit;letter-spacing:.3px;text-transform:uppercase;
+  }
+  #stFilterBar button:hover{border-color:#9ca3af;color:var(--ink-soft)}
+  #stFilterBar button.active{background:#1e2228;border-color:#1e2228;color:#fff}
+  #stFilterBar .count{
+    margin-left:auto;font-size:8.5px;color:var(--ink-faint);
+    font-variant-numeric:tabular-nums;
+  }
+
   /* Legacy-data hazard — row has stale data, awaiting fresh Rescan fetch */
   tbody tr.legacy td:not(.co-cell):not(:first-child){
     filter:blur(3.5px);opacity:0.25;
@@ -880,6 +918,13 @@
 
 <!-- ===== SHORT TERM VIEW (FMP-only, swing trading 1wk-3mo) ===== -->
 <div id="shortView" class="hidden">
+  <div id="stFilterBar">
+    <span class="lbl">Show</span>
+    <button data-stfilter="all" class="active">All</button>
+    <button data-stfilter="watching">● Watching</button>
+    <button data-stfilter="ready">✓ Ready</button>
+    <span class="count" id="stFilterCount"></span>
+  </div>
   <div class="card">
     <table>
       <thead>
@@ -2405,6 +2450,13 @@ if(stBody) stBody.addEventListener('contextmenu',e=>openCtxMenu(e,'short'));
 
 // Click any chip or data cell in Short Term → factor history popover
 if(stBody) stBody.addEventListener('click', e => {
+  // Watch flag click — toggle and bail (don't open popover)
+  const wf = e.target.closest('.wflag');
+  if (wf) {
+    e.stopPropagation();
+    toggleWatchFlag(wf.dataset.wflag);
+    return;
+  }
   stFactHist.style.display='none';
   const tr = e.target.closest('tr[data-sym]');
   if (!tr) return;
@@ -2610,14 +2662,99 @@ function shortScoreClass(s){
   return 'r';
 }
 
+// ── Watch flags ───────────────────────────────────────────────────────
+// State: { SYM: 'watching' | 'ready' }. Persisted to localStorage.
+// User clicks the flag to toggle "watching" on/off. The render loop
+// auto-promotes to "ready" when the stock meets entry criteria
+// (score ≥ 22, Catalyst good/ok, Vol Surge good/ok) and demotes back
+// to "watching" if it falls out. A row that promotes during a render
+// gets a brief green flash so the user sees the trigger fire.
+let watchFlags = (() => {
+  try { return JSON.parse(localStorage.getItem('gn_st_watch') || '{}'); }
+  catch(e) { return {}; }
+})();
+function saveWatchFlags(){
+  try { localStorage.setItem('gn_st_watch', JSON.stringify(watchFlags)); } catch(e){}
+}
+function toggleWatchFlag(sym){
+  sym = (sym || '').toUpperCase();
+  if (!sym) return;
+  if (watchFlags[sym]) delete watchFlags[sym];
+  else watchFlags[sym] = 'watching';
+  saveWatchFlags();
+  renderShortWatchlist();
+}
+function meetsReadyCriteria(r){
+  if (!r || !r.score) return false;
+  const n = parseInt((r.score||'').split('/')[0], 10);
+  if (!isFinite(n) || n < 22) return false;
+  const v = r.verdicts || [];
+  const cat = v[8], vol = v[9];
+  const ok = x => x === 'good' || x === 'ok';
+  return ok(cat) && ok(vol);
+}
+let stFilter = 'all';
+document.addEventListener('click', e => {
+  const btn = e.target.closest('#stFilterBar button');
+  if (!btn) return;
+  stFilter = btn.dataset.stfilter;
+  document.querySelectorAll('#stFilterBar button').forEach(b =>
+    b.classList.toggle('active', b.dataset.stfilter === stFilter));
+  renderShortWatchlist();
+});
+
 function renderShortWatchlist(){
   const tb = document.getElementById('stBody');
   if (!tb) return;
   tb.innerHTML = '';
+
+  // Auto-promote / demote watch flags based on current scores. Track which
+  // syms just transitioned so we can flash their row.
+  const justPromoted = new Set();
+  for (const wl of watchlist) {
+    const sym = (wl.sym || '').toUpperCase();
+    const state = watchFlags[sym];
+    if (!state) continue;
+    const r = shortRowsBySym[sym];
+    if (!r || r.scoring || wl.legacy) continue;
+    const ready = meetsReadyCriteria(r);
+    if (state === 'watching' && ready) {
+      watchFlags[sym] = 'ready';
+      justPromoted.add(sym);
+    } else if (state === 'ready' && !ready) {
+      watchFlags[sym] = 'watching';
+    }
+  }
+  if (justPromoted.size) saveWatchFlags();
+
+  // Sort: flagged stocks float to top (ready first, then watching),
+  // then the normal pinned/unpinned order applies inside each tier.
+  const flagRank = sym => {
+    const s = watchFlags[(sym||'').toUpperCase()];
+    return s === 'ready' ? 0 : s === 'watching' ? 1 : 2;
+  };
   const pinned   = watchlist.filter(r => pinnedSyms.has(r.sym));
   const unpinned = watchlist.filter(r => !pinnedSyms.has(r.sym));
-  const ordered  = [...pinned, ...unpinned];
-  const dividerAt = pinned.length > 0 && unpinned.length > 0 ? pinned.length : -1;
+  let ordered = [...pinned, ...unpinned];
+  // Stable sort by flag rank — flagged rows up top across the whole list
+  ordered = ordered
+    .map((row, idx) => ({ row, idx, rank: flagRank(row.sym) }))
+    .sort((a, b) => a.rank - b.rank || a.idx - b.idx)
+    .map(x => x.row);
+
+  // Apply filter
+  if (stFilter !== 'all') {
+    ordered = ordered.filter(r => watchFlags[(r.sym||'').toUpperCase()] === stFilter);
+  }
+  // Pin divider doesn't apply once we've re-sorted by flag — drop it
+  const dividerAt = -1;
+  // Update count label
+  const cntEl = document.getElementById('stFilterCount');
+  if (cntEl) {
+    const watching = Object.values(watchFlags).filter(v => v === 'watching').length;
+    const ready    = Object.values(watchFlags).filter(v => v === 'ready').length;
+    cntEl.textContent = `${ready} ready · ${watching} watching`;
+  }
 
   ordered.forEach((wl, i) => {
     if (i === dividerAt) {
@@ -2691,11 +2828,19 @@ function renderShortWatchlist(){
     const warnBadge = (r.warnings && r.warnings.length)
       ? `<span class="warn-badge" data-tip="${escHtml('Data-integrity check flagged this row:\n• '+r.warnings.join('\n• ')+'\n\nAffected factors show as purple until a clean rescan. Right-click → Force rescan to retry.')}">⚠</span>`
       : '';
+    const wfState = watchFlags[sym] || '';
+    const wfTitle = wfState === 'ready'
+      ? 'Ready to trade — criteria met. Click to clear.'
+      : wfState === 'watching'
+        ? 'Watching — auto-promotes to Ready when score ≥22 and Catalyst + Vol Surge are healthy. Click to clear.'
+        : 'Click to add to watch list — get a green flash when entry criteria fire.';
+    const wfBtn = `<span class="wflag ${wfState}" data-wflag="${sym}" data-tip="${escHtml(wfTitle)}"></span>`;
     const coCell = isScoring
-      ? `<td class="co-cell"><span class="sym" style="opacity:0.3">${sym}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
+      ? `<td class="co-cell">${wfBtn}<span class="sym" style="opacity:0.3">${sym}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
       : isLegacy
-        ? `<td class="co-cell"><span class="sym">${sym}</span><span class="legacy-badge">Legacy</span> <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`
-        : `<td class="co-cell"><span class="sym">${sym}</span>${warnBadge} <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`;
+        ? `<td class="co-cell">${wfBtn}<span class="sym">${sym}</span><span class="legacy-badge">Legacy</span> <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`
+        : `<td class="co-cell">${wfBtn}<span class="sym">${sym}</span>${warnBadge} <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`;
+    if (justPromoted.has(sym)) tr.classList.add('wflash-promote');
 
     const vCls = k => {
       const v = verdicts[k];
