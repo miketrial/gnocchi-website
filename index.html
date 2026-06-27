@@ -2834,13 +2834,13 @@ const SHORT_LABELS = [
 ];
 
 // Newbie tooltip text built from the label + actual computed value
+// Per-row chip / cell tooltip: show ONLY the stock-specific reading, not the
+// generic factor description. Column headers still carry the full
+// definition + pass rule (data-tip on the <th>) for when the user wants it.
 function tipForChip(idx, reason){
   const l = SHORT_LABELS[idx];
-  if (!l) return reason || '';
-  const head = `${l.name} — ${l.why}`;
-  const pass = `Pass: ${l.rule}.`;
-  const yours = reason ? `Your value: ${reason}` : '';
-  return [head, pass, yours].filter(Boolean).join('\n\n');
+  if (!reason) return l ? l.name : '';
+  return l ? `${l.name}: ${reason}` : reason;
 }
 
 // In-memory short-term rows mirror: { sym: row }
