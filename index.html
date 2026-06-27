@@ -111,7 +111,7 @@
     color:var(--ink-faint); text-align:left; padding:5px 5px 7px; vertical-align:bottom;
   }
   thead th .sub{display:block; font-weight:400; text-transform:none; letter-spacing:0; color:#c2c7ce; font-size:7.5px}
-  tbody td{padding:5px 5px; vertical-align:middle}
+  tbody td{padding:3px 5px; vertical-align:middle; border-top:1px solid #f4f5f7}
   tbody tr{transition:background .12s}
   tbody tr:hover{background:#fafbfc}
   tbody tr.flash{background:#eef6fb}
@@ -171,12 +171,12 @@
 
   /* group divider lines through header and body */
   thead tr:nth-child(2) th.grp-start,
-  tbody td.grp-start{border-left:1px dashed rgba(0,0,0,.09)}
+  tbody td.grp-start{border-left:1px solid #eef0f3}
 
   /* 6 — group header row */
   thead tr.grphdr th{
     font-size:7.5px; font-weight:700; text-transform:uppercase; letter-spacing:.6px;
-    color:var(--ink-faint); padding:8px 6px 3px; border-bottom:none;
+    color:var(--ink-faint); padding:8px 6px 3px; border-bottom:1px solid #f4f5f7;
     background:var(--card);
   }
   thead tr.grphdr th:nth-child(1),
@@ -184,8 +184,8 @@
   thead tr.grphdr th:nth-child(1){left:0}
   thead tr.grphdr th:nth-child(2){left:32px}
   thead tr.grphdr th.grp{
-    border-bottom:none; color:var(--ink-faint); padding-bottom:4px;
-    border-left:1px dashed rgba(0,0,0,.09);
+    border-bottom:1px solid #f4f5f7; color:var(--ink-faint); padding-bottom:4px;
+    border-left:1px solid #eef0f3;
   }
 
   .idx{color:var(--ink-faint); width:26px; text-align:right}
