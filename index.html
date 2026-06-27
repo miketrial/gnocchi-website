@@ -1043,16 +1043,16 @@
           <th class="sortable" data-sort="name">Company<span class="sub">(ticker)</span></th>
           <th class="num sortable" data-sort="price">Price<span class="sub">live</span></th>
           <th class="grp-start"><div class="chkhdr"><span><span class="hl">Trend</span></span><span><span class="hl">3M Mom</span></span><span><span class="hl">Near Hi</span></span><span><span class="hl">Liquid</span></span><span><span class="hl">Anlyst Rev</span></span><span><span class="hl">Value</span></span><span><span class="hl">Quality</span></span><span><span class="hl">Leverage</span></span><span><span class="hl">Catalyst</span></span><span><span class="hl">Vol Surge</span></span></div></th>
-          <th class="sortable" data-sort="score" data-tip="Graduated score: each of the 10 factors earns 0–3 points (bad/weak/ok/good), max 30. 20+ is a strong setup, 12–19 is mixed, under 12 is weak.">Score<span class="sub">of 30</span></th>
-          <th class="num sortable" data-sort="vspe" data-tip="Forward P/E vs the sector median. Negative = cheaper than peers (green), positive = more expensive (red). Same as the VS Sector column on the Basic page — useful as a risk filter: overpriced stocks fall harder on any missed catalyst.">VS Sector<span class="sub">P/E</span></th>
-          <th class="grp-start" data-tip="Trend test — current price vs its 50-day moving average. A stock above its 50DMA, with the 50DMA itself above the 200DMA, is in a confirmed uptrend (the strongest predictor of continued strength over 2-12 weeks).">Trend<span class="sub">price &amp; DMA</span></th>
-          <th data-tip="3-month price return. Positive ≥5% earns the green Momentum chip. Stocks that outperformed over the past quarter tend to keep outperforming through the next swing-trade window.">3M Return<span class="sub">vs 0</span></th>
-          <th class="grp-start" data-tip="Forward P/E (price ÷ next-year consensus EPS). The Value chip passes when this is below the sector 75th percentile — we don't screen for cheap, just rule out 'egregiously expensive' to avoid multiple compression.">Fwd P/E<span class="sub">vs sector</span></th>
-          <th data-tip="Analyst sentiment drift: average of (a) last-month avg price target vs last-quarter avg, and (b) % of analysts rating Buy/Strong Buy now vs ~3 months ago. Positive = analysts getting more bullish. Available immediately — no warm-up.">Anlyst Rev<span class="sub">PT &amp; ratings</span></th>
-          <th class="grp-start" data-tip="Return on Equity from FMP key-metrics. The Quality chip passes when TTM free cash flow is positive AND ROE exceeds the sector median — together they screen out value traps and meme blow-ups.">FCF / ROE<span class="sub">TTM</span></th>
-          <th data-tip="Net debt divided by trailing EBITDA. Under 3× is healthy; over 3× means the balance sheet amplifies any sentiment shift or rate move — exactly the kind of single-day -15% gap a swing trader can't escape.">Leverage<span class="sub">net debt/EBITDA</span></th>
-          <th class="grp-start" data-tip="Days until the next earnings release. Catalyst chip passes when this falls between 7 and 90 days — the sweet spot for swing trades, where the event re-rates the stock inside your holding window.">Earnings<span class="sub">days out</span></th>
-          <th id="volSurgeHdr" style="cursor:pointer" data-tip="Volume ÷ 20-day average for the most recent complete session, paired with that day's price direction (arrow) and 10-day money flow. Click the header for the full entry rules.">Vol Surge<span class="sub">today / 20d avg</span></th>
+          <th class="sortable" data-sort="score" data-rulecard="score" style="cursor:help">Score<span class="sub">of 30</span></th>
+          <th class="num sortable" data-sort="vspe" data-rulecard="vsSect" style="cursor:help">VS Sector<span class="sub">P/E</span></th>
+          <th class="grp-start" data-rulecard="trend" style="cursor:help">Trend<span class="sub">price &amp; DMA</span></th>
+          <th data-rulecard="mom" style="cursor:help">3M Return<span class="sub">vs 0</span></th>
+          <th class="grp-start" data-rulecard="fwdpe" style="cursor:help">Fwd P/E<span class="sub">vs sector</span></th>
+          <th data-rulecard="epsrev" style="cursor:help">Anlyst Rev<span class="sub">PT &amp; ratings</span></th>
+          <th class="grp-start" data-rulecard="qual" style="cursor:help">FCF / ROE<span class="sub">TTM</span></th>
+          <th data-rulecard="lev" style="cursor:help">Leverage<span class="sub">net debt/EBITDA</span></th>
+          <th class="grp-start" data-rulecard="cat" style="cursor:help">Earnings<span class="sub">days out</span></th>
+          <th id="volSurgeHdr" data-rulecard="volSurge" style="cursor:help">Vol Surge<span class="sub">today / 20d avg</span></th>
         </tr>
       </thead>
       <tbody id="stBody"></tbody>
@@ -1255,36 +1255,8 @@
 </div>
 
 <!-- Vol Surge column-header info popover -->
-<div id="volSurgeInfo" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.55;padding:14px 16px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:300px;max-width:360px;pointer-events:auto;white-space:normal;border:0.5px solid rgba(255,255,255,.08)">
-  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-    <span style="font-size:11px;font-weight:700;color:#e8eaf0;letter-spacing:.2px">Vol Surge — entry rules</span>
-    <span id="volSurgeInfoClose" style="cursor:pointer;color:#8a95a8;font-size:13px;line-height:1;padding:0 2px">✕</span>
-  </div>
-  <div style="font-size:9.5px;color:#a8b0bc;margin-bottom:10px">
-    The number is volume ÷ 20-day average for the most recent complete session. The arrow is that day's price direction.
-  </div>
-  <div style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8a95a8;margin-bottom:6px">Arrow meaning</div>
-  <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:9.5px;margin-bottom:12px">
-    <span style="color:#10b981;font-weight:700">↑</span><span>Price closed <b style="color:#e8eaf0">up</b> — accumulation (buyers in control)</span>
-    <span style="color:#ef4444;font-weight:700">↓</span><span>Price closed <b style="color:#e8eaf0">down</b> — distribution (sellers in control)</span>
-    <span style="color:#8a95a8;font-weight:700">→</span><span>Price closed <b style="color:#e8eaf0">flat</b> — no clear conviction</span>
-  </div>
-  <div style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8a95a8;margin-bottom:6px">Rules of thumb</div>
-  <div style="display:flex;flex-direction:column;gap:5px;font-size:9.5px">
-    <div style="padding:6px 9px;background:rgba(16,185,129,.12);border-left:2px solid #10b981;border-radius:4px">
-      <b style="color:#a7f3d0">Green chip + ↑ + 1.5×+</b> — the signal you want. Institutions accumulating.
-    </div>
-    <div style="padding:6px 9px;background:rgba(239,68,68,.12);border-left:2px solid #ef4444;border-radius:4px">
-      <b style="color:#fecaca">Red chip + ↓ + 1.5×+</b> — active warning. Smart money exiting. Do not enter.
-    </div>
-    <div style="padding:6px 9px;background:rgba(107,114,128,.18);border-left:2px solid #8a95a8;border-radius:4px">
-      <b style="color:#cbd2db">↓ at any volume</b> — avoid as an entry, even if other factors look good.
-    </div>
-  </div>
-  <div style="font-size:8.5px;color:#6b7280;margin-top:11px;border-top:1px solid rgba(255,255,255,.06);padding-top:8px">
-    Score also incorporates 10-day money flow (sustained up$ vs down$). A multi-day selling trend forces 0 even if today looks fine.
-  </div>
-</div>
+<!-- Generic column-header rule card (hover) -->
+<div id="ruleCard" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.55;padding:14px 16px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:300px;max-width:360px;pointer-events:none;white-space:normal;border:0.5px solid rgba(255,255,255,.08)"></div>
 
 <!-- Per-ticker watchlist history popover -->
 <div id="tickerHist" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.5;padding:12px 14px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:280px;max-width:340px;pointer-events:auto;white-space:normal;border:0.5px solid rgba(255,255,255,.08)">
@@ -1604,7 +1576,7 @@ const tipBox=document.getElementById('tipBox');
 // (column descriptors) and <tbody> chips/cells across every view.
 document.addEventListener('mouseover',e=>{
   const el=e.target.closest('[data-tip]');
-  if(!el){tipBox.style.display='none';return;}
+  if(!el || el.closest('[data-rulecard]')){tipBox.style.display='none';return;}
   tipBox.textContent=el.dataset.tip;
   tipBox.style.display='block';
 });
@@ -3059,26 +3031,222 @@ function renderWatchPanel(){
     </div>`;
 }
 
-// ── Vol Surge column-header info popover ──────────────────────────────
-const volSurgeInfo = document.getElementById('volSurgeInfo');
-document.getElementById('volSurgeInfoClose').addEventListener('click', () => volSurgeInfo.style.display='none');
-document.addEventListener('click', e => {
-  const hdr = e.target.closest('#volSurgeHdr');
-  if (hdr) {
-    e.stopPropagation();
-    volSurgeInfo.style.display = 'block';
-    const r = hdr.getBoundingClientRect();
-    const pw = volSurgeInfo.offsetWidth || 320, ph = volSurgeInfo.offsetHeight || 320;
-    let x = r.left, y = r.bottom + 6;
-    if (x + pw > window.innerWidth - 8) x = window.innerWidth - pw - 8;
-    if (y + ph > window.innerHeight - 8) y = r.top - ph - 6;
-    volSurgeInfo.style.left = Math.max(8, x) + 'px';
-    volSurgeInfo.style.top  = Math.max(8, y) + 'px';
+// ── Column-header rule cards (hover) ──────────────────────────────────
+const ruleCard = document.getElementById('ruleCard');
+const RULE_CARDS = {
+  score: {
+    title: 'Score — how to read it',
+    summary: 'Composite of the 10 short-term factors. Each factor scores 0–3 (bad / weak / ok / good) for a max of 30.',
+    bands: [
+      ['good', '20–30', 'Strong setup. Multiple factors aligned. Worth watching for entry.'],
+      ['ok',   '12–19', 'Mixed. Some tailwinds, some red flags. Wait for confirmation.'],
+      ['bad',  '0–11',  'Weak. Not a swing-trade candidate right now — revisit after a rescan.'],
+    ],
+    rules: [
+      ['Score alone is a ranking, not a buy signal.', 'A 24 with red Vol Surge is worse than a 21 with green Vol Surge + ↑ flow.'],
+      ['Watch for score velocity, not just level.', 'A name climbing 14 → 19 → 23 over a week is the real signal.'],
+    ],
+    footer: 'Click a row\'s score cell to see the per-stock history chart.',
+  },
+  vsSect: {
+    title: 'VS Sector P/E — valuation guardrail',
+    summary: 'Forward P/E minus the sector median, as a percent. −20% means the stock is 20% cheaper than peers on next-year earnings.',
+    bands: [
+      ['good', 'Negative', 'Cheaper than peers. Lower multiple-compression risk on a miss.'],
+      ['ok',   '0 to +25%', 'In line. No edge, no penalty.'],
+      ['bad',  '+25% or more', 'Priced above peers. Any disappointment hits the multiple, not just earnings.'],
+    ],
+    rules: [
+      ['Use as a risk filter, not a buy signal.', 'A cheap stock with no momentum stays cheap. A premium-priced stock with momentum still works — just trim faster.'],
+      ['Sector matters more than absolute P/E.', '30× is rich for a bank, cheap for cloud software.'],
+    ],
+    footer: 'Same data as the Basic page VS Sector column. Sector median is the static SECTOR_PE_MAP.',
+  },
+  trend: {
+    title: 'Trend — price vs 50DMA / 200DMA',
+    summary: 'Where price sits relative to its 50-day moving average, and where the 50DMA sits relative to the 200DMA.',
+    bands: [
+      ['good', 'Price > 50DMA > 200DMA', 'Confirmed uptrend. Strongest 2–12 week predictor we have.'],
+      ['ok',   'Price > 50DMA, but 50 < 200', 'Recovery, not yet a trend. Wait for the golden cross.'],
+      ['bad',  'Price < 50DMA',           'Below trend. Don\'t buy weakness on a swing timeframe.'],
+    ],
+    rules: [
+      ['Never enter a short-term long below the 50DMA.', 'You\'re fighting the dominant trend. Let it base first.'],
+      ['Pullbacks to the 50DMA in an uptrend are the textbook entry.', 'Price tagging the 50 from above, then bouncing on volume = the setup.'],
+    ],
+    footer: 'Arrow shows % above/below the 50DMA. Above 5% = extended; consider waiting for a pullback.',
+  },
+  mom: {
+    title: '3M Return — momentum confirmation',
+    summary: 'Percent change in price over the past 3 months. The simplest momentum factor that actually works.',
+    bands: [
+      ['good', '+5% or more', 'Outperformed. Momentum carries forward through the next swing window.'],
+      ['ok',   '0% to +5%',  'Flat. No momentum tailwind, no headwind.'],
+      ['bad',  'Negative',    'Underperformed. Mean reversion is unreliable on a 2–8 week timeframe.'],
+    ],
+    rules: [
+      ['Buy strength, not weakness.', 'Stocks up 15%+ in 3 months keep outperforming more often than they reverse.'],
+      ['But beware vertical moves.', '+60% in 3 months = late. Look for steady climbers, not parabolic ones.'],
+    ],
+    footer: 'Combine with Trend: green here + green Trend is the cleanest momentum setup.',
+  },
+  fwdpe: {
+    title: 'Fwd P/E — overpayment filter',
+    summary: 'Price ÷ next-year consensus EPS. Used as a ceiling check, not a value screen.',
+    bands: [
+      ['good', 'Below sector 75th %ile', 'Not egregious. Room for the multiple to hold or expand.'],
+      ['ok',   'Near sector 75th %ile',  'Pricey but not extreme. Earnings beat required.'],
+      ['bad',  'Well above 75th %ile',   'Priced for perfection. Any miss → multiple compression.'],
+    ],
+    rules: [
+      ['We don\'t screen for cheap.', 'Cheap stocks underperform expensive ones over swing windows. The goal is to rule out blow-up risk.'],
+      ['A premium multiple is fine if growth justifies it.', 'Cross-check with Anlyst Rev — if estimates are rising, the multiple usually holds.'],
+    ],
+    footer: 'NM means earnings are negative — chip is gray, not red.',
+  },
+  epsrev: {
+    title: 'Analyst Revisions — sentiment drift',
+    summary: 'Average of (a) last-month avg price target vs last-quarter avg, and (b) % Buy/Strong Buy now vs ~3 months ago.',
+    bands: [
+      ['good', '+3% or better', 'Analysts getting more bullish. Estimates and PTs trending up = forward EPS revisions still coming.'],
+      ['ok',   '−1% to +3%',    'Mostly stable. No drift in either direction.'],
+      ['bad',  'Worse than −1%', 'Analysts cutting. Often the earliest crack before a downgrade cycle.'],
+    ],
+    rules: [
+      ['Direction matters more than level.', 'A name with cuts slowing is more interesting than one with rich PTs that are now flat.'],
+      ['Pairs best with Trend.', 'Rising estimates + price above 50DMA = institutions already positioning. Lagging price catches up.'],
+    ],
+    footer: 'Available immediately on add — no rescan warm-up needed.',
+  },
+  qual: {
+    title: 'FCF / ROE — quality screen',
+    summary: 'TTM free cash flow positive AND return on equity above the sector median. Together they screen out value traps.',
+    bands: [
+      ['good', 'FCF > 0 and ROE > sector', 'Real business. Survives a sentiment shift without dilution or rescue financing.'],
+      ['ok',   'One condition met',         'Mixed quality. Watch the cash flow trajectory.'],
+      ['bad',  'FCF < 0 or ROE far below',  'Capital-burning or low-return. Swing risk: one bad print can gap −20%.'],
+    ],
+    rules: [
+      ['Skip negative-FCF names on swing trades.', 'They live and die on capital-market access. A risk-off week = death spiral.'],
+      ['High ROE without leverage is the gold standard.', 'Cross-check Leverage — high ROE driven by debt isn\'t real quality.'],
+    ],
+    footer: 'Both inputs from FMP key-metrics. Sector median is the static SECTOR_ROE_MAP.',
+  },
+  lev: {
+    title: 'Leverage — net debt / EBITDA',
+    summary: 'How many years of EBITDA it would take to pay off net debt. The fastest read on balance-sheet risk.',
+    bands: [
+      ['good', 'Under 1.5×', 'Conservative. Net cash or near it. Lowest swing risk.'],
+      ['ok',   '1.5× – 3×',  'Manageable. Standard for mature businesses.'],
+      ['bad',  'Over 3×',    'Leveraged. Any rate move, sentiment shift, or revenue miss is amplified at the equity line.'],
+    ],
+    rules: [
+      ['Avoid high-leverage names into earnings.', 'A 5% revenue miss can become a 20% equity gap when interest coverage is thin.'],
+      ['Sectors differ.', 'Utilities and REITs run 5×+ by design. Software at 3× is a warning.'],
+    ],
+    footer: 'NM means EBITDA is negative — chip is gray, not red.',
+  },
+  cat: {
+    title: 'Earnings — catalyst window',
+    summary: 'Days until the next earnings release. The single biggest re-rating event in any short-term window.',
+    bands: [
+      ['good', '7 – 90 days', 'In the swing window. Event hits inside your holding period.'],
+      ['ok',   '90 – 180 days', 'Too far out. The setup may evaporate before the catalyst.'],
+      ['bad',  '< 7 days or no date', 'Either too late to enter (gap risk) or no catalyst at all.'],
+    ],
+    rules: [
+      ['Enter 2–6 weeks before earnings, not the week of.', 'You want to ride the run-up. Avoid the binary print itself unless you have a thesis on the result.'],
+      ['No upcoming earnings = no near-term re-rating.', 'Even a great score with no catalyst can drift sideways for months.'],
+    ],
+    footer: 'Date pulled from FMP earnings calendar. Confirm with the company IR page before sizing in.',
+  },
+  volSurge: {
+    title: 'Vol Surge — entry trigger',
+    summary: 'Volume ÷ 20-day average for the most recent complete session, paired with that day\'s price direction (arrow) and 10-day money flow.',
+    arrows: [
+      ['↑', '#10b981', 'Price closed up — accumulation (buyers in control)'],
+      ['↓', '#ef4444', 'Price closed down — distribution (sellers in control)'],
+      ['→', '#8a95a8', 'Price closed flat — no clear conviction'],
+    ],
+    rules: [
+      ['Green chip + ↑ + 1.5×+', 'The signal you want. Institutions accumulating in size.', 'good'],
+      ['Red chip + ↓ + 1.5×+',   'Active warning. Smart money exiting. Do not enter.',      'bad'],
+      ['↓ at any volume',         'Avoid as an entry, even if other factors look good.',     'mute'],
+    ],
+    footer: 'Score also folds in 10-day money flow (sustained up$ vs down$). A multi-day selling trend forces 0 even if today looks fine.',
+  },
+};
+
+function renderRuleCard(key){
+  const c = RULE_CARDS[key];
+  if (!c) return '';
+  const bandColor = {good:'#10b981', ok:'#e8a838', bad:'#ef4444', mute:'#8a95a8'};
+  const bandBg = {good:'rgba(16,185,129,.12)', ok:'rgba(232,168,56,.12)', bad:'rgba(239,68,68,.12)', mute:'rgba(107,114,128,.18)'};
+  const bandLabelColor = {good:'#a7f3d0', ok:'#fde68a', bad:'#fecaca', mute:'#cbd2db'};
+  let html = `<div style="font-size:11px;font-weight:700;color:#e8eaf0;letter-spacing:.2px;margin-bottom:6px">${c.title}</div>`;
+  html += `<div style="font-size:9.5px;color:#a8b0bc;margin-bottom:11px">${c.summary}</div>`;
+  if (c.bands) {
+    html += `<div style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8a95a8;margin-bottom:6px">Bands</div>`;
+    html += `<div style="display:flex;flex-direction:column;gap:5px;font-size:9.5px;margin-bottom:11px">`;
+    for (const [tone, range, desc] of c.bands) {
+      html += `<div style="padding:6px 9px;background:${bandBg[tone]};border-left:2px solid ${bandColor[tone]};border-radius:4px"><b style="color:${bandLabelColor[tone]}">${range}</b> — ${desc}</div>`;
+    }
+    html += `</div>`;
+  }
+  if (c.arrows) {
+    html += `<div style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8a95a8;margin-bottom:6px">Arrow meaning</div>`;
+    html += `<div style="display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:9.5px;margin-bottom:11px">`;
+    for (const [glyph, col, desc] of c.arrows) {
+      html += `<span style="color:${col};font-weight:700">${glyph}</span><span>${desc}</span>`;
+    }
+    html += `</div>`;
+  }
+  if (c.rules) {
+    html += `<div style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8a95a8;margin-bottom:6px">Rules of thumb</div>`;
+    html += `<div style="display:flex;flex-direction:column;gap:5px;font-size:9.5px">`;
+    for (const r of c.rules) {
+      if (r.length === 3 && bandColor[r[2]]) {
+        const tone = r[2];
+        html += `<div style="padding:6px 9px;background:${bandBg[tone]};border-left:2px solid ${bandColor[tone]};border-radius:4px"><b style="color:${bandLabelColor[tone]}">${r[0]}</b> — ${r[1]}</div>`;
+      } else {
+        html += `<div style="padding:6px 9px;background:rgba(255,255,255,.04);border-left:2px solid rgba(255,255,255,.18);border-radius:4px"><b style="color:#e8eaf0">${r[0]}</b> ${r[1]}</div>`;
+      }
+    }
+    html += `</div>`;
+  }
+  if (c.footer) {
+    html += `<div style="font-size:8.5px;color:#6b7280;margin-top:11px;border-top:1px solid rgba(255,255,255,.06);padding-top:8px">${c.footer}</div>`;
+  }
+  return html;
+}
+
+function positionRuleCard(anchor){
+  const r = anchor.getBoundingClientRect();
+  const pw = ruleCard.offsetWidth || 320, ph = ruleCard.offsetHeight || 320;
+  let x = r.left, y = r.bottom + 6;
+  if (x + pw > window.innerWidth  - 8) x = window.innerWidth  - pw - 8;
+  if (y + ph > window.innerHeight - 8) y = r.top - ph - 6;
+  ruleCard.style.left = Math.max(8, x) + 'px';
+  ruleCard.style.top  = Math.max(8, y) + 'px';
+}
+
+document.addEventListener('mouseover', e => {
+  const hdr = e.target.closest('[data-rulecard]');
+  if (!hdr) {
+    if (ruleCard.style.display === 'block' && !ruleCard._sticky) ruleCard.style.display = 'none';
     return;
   }
-  if (volSurgeInfo.style.display === 'block' && !volSurgeInfo.contains(e.target)) {
-    volSurgeInfo.style.display = 'none';
-  }
+  const key = hdr.dataset.rulecard;
+  ruleCard.innerHTML = renderRuleCard(key);
+  ruleCard.style.display = 'block';
+  positionRuleCard(hdr);
+});
+document.addEventListener('mouseout', e => {
+  const hdr = e.target.closest('[data-rulecard]');
+  if (!hdr) return;
+  const to = e.relatedTarget;
+  if (to && (to.closest && to.closest('[data-rulecard]') === hdr)) return;
+  ruleCard.style.display = 'none';
 });
 
 // ── Per-ticker history popover ────────────────────────────────────────
