@@ -476,6 +476,14 @@
   .wp-card.wp-watching .wp-chip{ background:#fffbeb;border-color:#fde68a }
   .wp-card.wp-demoted  .wp-chip{ background:#fef2f2;border-color:#fecaca }
   .wp-chip-reason{ color:var(--ink-faint);font-weight:500;font-size:8.5px;margin-left:3px }
+  .wp-chip-date{
+    color:var(--ink-faint);font-weight:500;font-size:8px;
+    font-variant-numeric:tabular-nums;margin-left:4px;
+    padding:1px 5px;border-radius:3px;background:rgba(0,0,0,.04);
+  }
+  .wp-card.wp-ready    .wp-chip-date{ background:rgba(16,185,129,.12);color:#047857 }
+  .wp-card.wp-watching .wp-chip-date{ background:rgba(245,158,11,.14);color:#92400e }
+  .wp-card.wp-demoted  .wp-chip-date{ background:rgba(239,68,68,.12);color:#991b1b }
   .wp-x{
     display:inline-flex;align-items:center;justify-content:center;
     width:13px;height:13px;border-radius:3px;background:rgba(0,0,0,.05);
@@ -2965,9 +2973,33 @@ function renderWatchPanel(){
     el.innerHTML = '';
     return;
   }
+  // Find the most recent timestamp for a sym's current state from the
+  // activity log (or demotedRecent for demoted). null = no record.
+  const lastEventTs = (sym, types) => {
+    const e = activityLog.find(ev => ev.sym === sym && types.includes(ev.type));
+    return e ? e.ts : null;
+  };
+  const chipDate = (sym, kind) => {
+    let ts = null;
+    if (kind === 'demoted')      ts = demotedRecent[sym]?.at ?? null;
+    else if (kind === 'ready')   ts = lastEventTs(sym, ['promote']);
+    else if (kind === 'watching')ts = lastEventTs(sym, ['add','demote']);
+    return ts;
+  };
+  const fmtChipDate = ts => {
+    if (!ts) return '';
+    const ageH = (Date.now() - ts) / 3600000;
+    if (ageH < 24) return relTime(ts);
+    const d = new Date(ts);
+    return d.toLocaleDateString(undefined, { month:'short', day:'numeric' });
+  };
   const chip = (sym, kind, reason) => {
     const reasonHtml = reason ? `<span class="wp-chip-reason">${escHtml(reason)}</span>` : '';
-    return `<span class="wp-chip" data-sym="${sym}" data-tip="${escHtml('Click to jump to '+sym+' in the table below')}">${sym}${reasonHtml}<span class="wp-x" data-sym="${sym}" data-kind="${kind}" data-tip="${escHtml(kind==='demoted'?'Dismiss this alert':'Clear watchlist flag')}">×</span></span>`;
+    const ts = chipDate(sym, kind);
+    const dateHtml = ts
+      ? `<span class="wp-chip-date" data-tip="${escHtml(new Date(ts).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}">${fmtChipDate(ts)}</span>`
+      : '';
+    return `<span class="wp-chip" data-sym="${sym}" data-tip="${escHtml('Click for '+sym+' history · entered this state '+(ts?relTime(ts)+' ago':'recently'))}">${sym}${dateHtml}${reasonHtml}<span class="wp-x" data-sym="${sym}" data-kind="${kind}" data-tip="${escHtml(kind==='demoted'?'Dismiss this alert':'Clear watchlist flag')}">×</span></span>`;
   };
   const section = (cls, label, items, emptyMsg, kind) => {
     const body = items.length
