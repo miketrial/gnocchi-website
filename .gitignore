@@ -1,4 +1,7 @@
-.env
-node_modules/
-.netlify/
+.claude/
 .DS_Store
+*.pdf
+Screenshot*.png
+plan.md
+*.skill
+netlify/edge-functions/

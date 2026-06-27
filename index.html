@@ -216,6 +216,24 @@
   /* 8 check squares (labels now live in the column header, not inside the squares) */
   .checks{display:flex; gap:3px}
   .chk{ width:22px; height:16px; border-radius:4px; }
+  /* Per-chip pulse while a row is being scored — gives visual feedback
+     that work is happening even before the data lands. */
+  @keyframes chkPulse{
+    0%   { background:#eef0f3 }
+    50%  { background:#dee3ea }
+    100% { background:#eef0f3 }
+  }
+  tbody tr.scoring .chk{ animation:chkPulse 1.4s ease-in-out infinite }
+  tbody tr.scoring .chk:nth-child(1){ animation-delay:0.00s }
+  tbody tr.scoring .chk:nth-child(2){ animation-delay:0.08s }
+  tbody tr.scoring .chk:nth-child(3){ animation-delay:0.16s }
+  tbody tr.scoring .chk:nth-child(4){ animation-delay:0.24s }
+  tbody tr.scoring .chk:nth-child(5){ animation-delay:0.32s }
+  tbody tr.scoring .chk:nth-child(6){ animation-delay:0.40s }
+  tbody tr.scoring .chk:nth-child(7){ animation-delay:0.48s }
+  tbody tr.scoring .chk:nth-child(8){ animation-delay:0.56s }
+  tbody tr.scoring .chk:nth-child(9){ animation-delay:0.64s }
+  tbody tr.scoring .chk:nth-child(10){ animation-delay:0.72s }
   .chk.good{background:var(--good-bg)}
   .chk.ok  {background:#c8eed8}          /* muted green — partial pass (2/3) */
   .chk.weak{background:#fde8b8}          /* amber — marginal (1/3) */
@@ -345,6 +363,133 @@
   #shortView tbody tr:hover td.st-weak{ background:rgba(253,232,184,.7) }
   #shortView tbody tr:hover td.st-bad { background:rgba(250,219,216,.7) }
   #shortView tbody tr:hover td.st-na  { background:rgba(237,231,246,.7) }
+
+  /* ── Watch flag walkthrough card (bottom of Short Term view) ────────── */
+  .wf-guide{
+    margin:24px 0 12px; padding:22px 26px;
+    background:var(--card); border:1px solid #eef0f3; border-radius:10px;
+    color:var(--ink);
+  }
+  .wf-guide-head{ margin-bottom:18px; border-bottom:1px solid #f4f5f7; padding-bottom:14px }
+  .wf-guide-eyebrow{
+    display:inline-block; font-size:8.5px; font-weight:700; letter-spacing:.7px;
+    text-transform:uppercase; color:var(--ink-faint);
+    background:#f4f5f7; border-radius:4px; padding:3px 8px; margin-bottom:8px;
+  }
+  .wf-guide-title{ font-size:15px; font-weight:700; color:var(--ink); margin-bottom:3px }
+  .wf-guide-sub{ font-size:10px; color:var(--ink-faint); line-height:1.5 }
+
+  .wf-guide-grid{
+    display:grid; grid-template-columns:repeat(2, 1fr); gap:18px 28px;
+    margin-bottom:18px;
+  }
+  @media (max-width: 760px){ .wf-guide-grid{ grid-template-columns:1fr } }
+  .wf-step{ display:flex; gap:12px; align-items:flex-start }
+  .wf-step-n{
+    flex-shrink:0; width:22px; height:22px; border-radius:50%;
+    background:var(--ink); color:#fff; font-size:10px; font-weight:700;
+    display:flex; align-items:center; justify-content:center; margin-top:1px;
+    font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  .wf-step-title{ font-size:10.5px; font-weight:700; color:var(--ink); margin-bottom:3px }
+  .wf-step-body p{ font-size:10px; color:var(--ink-soft); line-height:1.55; margin:0 }
+  .wf-step-body b{ color:var(--ink); font-weight:700 }
+
+  .wf-pill{
+    display:inline-block; font-size:8.5px; font-weight:700;
+    padding:1px 6px; border-radius:3px; vertical-align:middle;
+  }
+  .wf-pill.wf-watching{ background:#fef3c7; color:#92400e; border:1px solid #f59e0b }
+  .wf-pill.wf-ready   { background:#d1fae5; color:#065f46; border:1px solid #10b981 }
+  .wf-pill.wf-demoted { background:#fee2e2; color:#991b1b; border:1px solid #ef4444 }
+
+  .wf-guide-foot{
+    display:grid; grid-template-columns:repeat(2, 1fr); gap:18px 28px;
+    border-top:1px solid #f4f5f7; padding-top:16px;
+  }
+  @media (max-width: 760px){ .wf-guide-foot{ grid-template-columns:1fr } }
+  .wf-foot-ttl{
+    font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.5px;
+    color:var(--ink-faint); margin-bottom:8px;
+  }
+  .wf-guide-foot ul{ margin:0; padding-left:16px }
+  .wf-guide-foot li{ font-size:10px; color:var(--ink-soft); line-height:1.6; margin-bottom:4px }
+  .wf-guide-foot b{ color:var(--ink); font-weight:700 }
+
+  /* ── Watch flags (Short Term entry tracking) ────────────────────────── */
+  .wflag{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:14px;height:14px;border-radius:3px;
+    background:transparent;border:1px dashed #d4d8de;
+    color:transparent;font-size:9px;line-height:1;
+    cursor:pointer;vertical-align:middle;margin-right:5px;
+    transition:all .12s ease;flex-shrink:0;
+  }
+  .wflag:hover{border-color:#9ca3af;border-style:solid}
+  .wflag.watching{background:#fef3c7;border:1px solid #f59e0b;color:#92400e}
+  .wflag.ready{background:#d1fae5;border:1px solid #10b981;color:#065f46}
+  .wflag.watching::before{content:"●"}
+  .wflag.ready::before{content:"✓"}
+  @keyframes wflashPromote{
+    0%   {background:rgba(209,250,229,0)}
+    30%  {background:rgba(209,250,229,.65)}
+    100% {background:rgba(209,250,229,0)}
+  }
+  #shortView tbody tr.wflash-promote td{ animation:wflashPromote 1.6s ease-out }
+  /* Unified watch panel — Ready / Watching / Demoted side-by-side */
+  #watchPanel{ margin:0 0 14px; padding:0 }
+  #watchPanel:empty{ display:none }
+  .wp-head{ display:flex;align-items:baseline;gap:10px;margin-bottom:8px;padding:0 4px }
+  .wp-title{ font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-faint) }
+  .wp-sub{ font-size:8.5px;color:#9ca3af }
+  .wp-cards{ display:grid;grid-template-columns:repeat(3,1fr);gap:10px }
+  @media (max-width:760px){ .wp-cards{ grid-template-columns:1fr } }
+  .wp-card{
+    background:var(--card);border:1px solid #eef0f3;border-left-width:3px;
+    border-radius:8px;padding:10px 12px;min-height:60px;
+  }
+  .wp-card.wp-ready   { border-left-color:#10b981 }
+  .wp-card.wp-watching{ border-left-color:#f59e0b }
+  .wp-card.wp-demoted { border-left-color:#ef4444 }
+  .wp-card-head{
+    display:flex;align-items:center;justify-content:space-between;
+    font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+    color:var(--ink-soft);margin-bottom:7px;
+  }
+  .wp-card.wp-ready    .wp-card-head{ color:#065f46 }
+  .wp-card.wp-watching .wp-card-head{ color:#92400e }
+  .wp-card.wp-demoted  .wp-card-head{ color:#991b1b }
+  .wp-count{ font-size:8.5px;font-weight:700;background:#f4f5f7;color:var(--ink-faint);padding:1px 6px;border-radius:8px;font-variant-numeric:tabular-nums }
+  .wp-card.wp-ready    .wp-count{ background:#d1fae5;color:#065f46 }
+  .wp-card.wp-watching .wp-count{ background:#fef3c7;color:#92400e }
+  .wp-card.wp-demoted  .wp-count{ background:#fee2e2;color:#991b1b }
+  .wp-body{ display:flex;flex-wrap:wrap;gap:5px }
+  .wp-empty{ font-size:9px;color:#c2c7ce;font-style:italic }
+  .wp-chip{
+    display:inline-flex;align-items:center;gap:5px;
+    background:#fff;border:1px solid #e4e7eb;border-radius:5px;
+    padding:3px 4px 3px 8px;font-size:9.5px;font-weight:600;color:var(--ink);
+    cursor:pointer;transition:all .1s;
+  }
+  .wp-chip:hover{ border-color:#9ca3af }
+  .wp-card.wp-ready    .wp-chip{ background:#ecfdf5;border-color:#a7f3d0 }
+  .wp-card.wp-watching .wp-chip{ background:#fffbeb;border-color:#fde68a }
+  .wp-card.wp-demoted  .wp-chip{ background:#fef2f2;border-color:#fecaca }
+  .wp-chip-reason{ color:var(--ink-faint);font-weight:500;font-size:8.5px;margin-left:3px }
+  .wp-chip-date{
+    color:var(--ink-faint);font-weight:500;font-size:8px;
+    font-variant-numeric:tabular-nums;margin-left:4px;
+    padding:1px 5px;border-radius:3px;background:rgba(0,0,0,.04);
+  }
+  .wp-card.wp-ready    .wp-chip-date{ background:rgba(16,185,129,.12);color:#047857 }
+  .wp-card.wp-watching .wp-chip-date{ background:rgba(245,158,11,.14);color:#92400e }
+  .wp-card.wp-demoted  .wp-chip-date{ background:rgba(239,68,68,.12);color:#991b1b }
+  .wp-x{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:13px;height:13px;border-radius:3px;background:rgba(0,0,0,.05);
+    color:var(--ink-faint);font-size:10px;line-height:1;font-weight:700;
+  }
+  .wp-x:hover{ background:rgba(239,68,68,.15);color:#991b1b }
 
   /* Legacy-data hazard — row has stale data, awaiting fresh Rescan fetch */
   tbody tr.legacy td:not(.co-cell):not(:first-child){
@@ -880,6 +1025,8 @@
 
 <!-- ===== SHORT TERM VIEW (FMP-only, swing trading 1wk-3mo) ===== -->
 <div id="shortView" class="hidden">
+  <!-- Unified watchlist panel — populated by renderWatchPanel() -->
+  <div id="watchPanel"></div>
   <div class="card">
     <table>
       <thead>
@@ -896,16 +1043,16 @@
           <th class="sortable" data-sort="name">Company<span class="sub">(ticker)</span></th>
           <th class="num sortable" data-sort="price">Price<span class="sub">live</span></th>
           <th class="grp-start"><div class="chkhdr"><span><span class="hl">Trend</span></span><span><span class="hl">3M Mom</span></span><span><span class="hl">Near Hi</span></span><span><span class="hl">Liquid</span></span><span><span class="hl">Anlyst Rev</span></span><span><span class="hl">Value</span></span><span><span class="hl">Quality</span></span><span><span class="hl">Leverage</span></span><span><span class="hl">Catalyst</span></span><span><span class="hl">Vol Surge</span></span></div></th>
-          <th class="sortable" data-sort="score" data-tip="Graduated score: each of the 10 factors earns 0–3 points (bad/weak/ok/good), max 30. 20+ is a strong setup, 12–19 is mixed, under 12 is weak.">Score<span class="sub">of 30</span></th>
-          <th class="num sortable" data-sort="vspe" data-tip="Forward P/E vs the sector median. Negative = cheaper than peers (green), positive = more expensive (red). Same as the VS Sector column on the Basic page — useful as a risk filter: overpriced stocks fall harder on any missed catalyst.">VS Sector<span class="sub">P/E</span></th>
-          <th class="grp-start" data-tip="Trend test — current price vs its 50-day moving average. A stock above its 50DMA, with the 50DMA itself above the 200DMA, is in a confirmed uptrend (the strongest predictor of continued strength over 2-12 weeks).">Trend<span class="sub">price &amp; DMA</span></th>
-          <th data-tip="3-month price return. Positive ≥5% earns the green Momentum chip. Stocks that outperformed over the past quarter tend to keep outperforming through the next swing-trade window.">3M Return<span class="sub">vs 0</span></th>
-          <th class="grp-start" data-tip="Forward P/E (price ÷ next-year consensus EPS). The Value chip passes when this is below the sector 75th percentile — we don't screen for cheap, just rule out 'egregiously expensive' to avoid multiple compression.">Fwd P/E<span class="sub">vs sector</span></th>
-          <th data-tip="Analyst sentiment drift: average of (a) last-month avg price target vs last-quarter avg, and (b) % of analysts rating Buy/Strong Buy now vs ~3 months ago. Positive = analysts getting more bullish. Available immediately — no warm-up.">Anlyst Rev<span class="sub">PT &amp; ratings</span></th>
-          <th class="grp-start" data-tip="Return on Equity from FMP key-metrics. The Quality chip passes when TTM free cash flow is positive AND ROE exceeds the sector median — together they screen out value traps and meme blow-ups.">FCF / ROE<span class="sub">TTM</span></th>
-          <th data-tip="Net debt divided by trailing EBITDA. Under 3× is healthy; over 3× means the balance sheet amplifies any sentiment shift or rate move — exactly the kind of single-day -15% gap a swing trader can't escape.">Leverage<span class="sub">net debt/EBITDA</span></th>
-          <th class="grp-start" data-tip="Days until the next earnings release. Catalyst chip passes when this falls between 7 and 90 days — the sweet spot for swing trades, where the event re-rates the stock inside your holding window.">Earnings<span class="sub">days out</span></th>
-          <th data-tip="Today's trading volume divided by the 20-day average. ≥1.5× = unusual activity, which almost always precedes a meaningful move (replaces Short Squeeze — FMP short-interest data is unavailable on the current plan).">Vol Surge<span class="sub">today / 20d avg</span></th>
+          <th class="sortable" data-sort="score" data-rulecard="score" style="cursor:help">Score<span class="sub">of 30</span></th>
+          <th class="num sortable" data-sort="vspe" data-rulecard="vsSect" style="cursor:help">VS Sector<span class="sub">P/E</span></th>
+          <th class="grp-start" data-rulecard="trend" style="cursor:help">Trend<span class="sub">price &amp; DMA</span></th>
+          <th data-rulecard="mom" style="cursor:help">3M Return<span class="sub">vs 0</span></th>
+          <th class="grp-start" data-rulecard="fwdpe" style="cursor:help">Fwd P/E<span class="sub">vs sector</span></th>
+          <th data-rulecard="epsrev" style="cursor:help">Anlyst Rev<span class="sub">PT &amp; ratings</span></th>
+          <th class="grp-start" data-rulecard="qual" style="cursor:help">FCF / ROE<span class="sub">TTM</span></th>
+          <th data-rulecard="lev" style="cursor:help">Leverage<span class="sub">net debt/EBITDA</span></th>
+          <th class="grp-start" data-rulecard="cat" style="cursor:help">Earnings<span class="sub">days out</span></th>
+          <th id="volSurgeHdr" data-rulecard="volSurge" style="cursor:help">Vol Surge<span class="sub">today / 20d avg</span></th>
         </tr>
       </thead>
       <tbody id="stBody"></tbody>
@@ -919,6 +1066,70 @@
     <span><b style="background:var(--pur-bg);color:var(--pur-fg)">●</b><span style="color:var(--pur-fg);font-weight:600">Purple</span> · data not available from FMP for this ticker</span>
     <div class="ttl" style="margin-top:10px">Tip</div>
     <span style="color:var(--ink-soft)">Hover any chip to read what it measures, why it matters, the pass rule, and your computed value.</span>
+  </div>
+
+  <!-- ── Watchlist (Watch flag) walkthrough ─────────────────────────────── -->
+  <div class="wf-guide">
+    <div class="wf-guide-head">
+      <span class="wf-guide-eyebrow">How to use</span>
+      <div class="wf-guide-title">The Watch Flag — your entry-trigger alarm</div>
+      <div class="wf-guide-sub">Mark a stock now, get a green flash the moment it becomes actionable.</div>
+    </div>
+
+    <div class="wf-guide-grid">
+      <div class="wf-step">
+        <div class="wf-step-n">1</div>
+        <div class="wf-step-body">
+          <div class="wf-step-title">Spot a stock with a strong setup</div>
+          <p>Scan the table for names with <b>Trend, 3M Mom, and Near Hi</b> all green. These are stocks already in confirmed uptrends — the foundation of every good swing trade.</p>
+        </div>
+      </div>
+
+      <div class="wf-step">
+        <div class="wf-step-n">2</div>
+        <div class="wf-step-body">
+          <div class="wf-step-title">Click the dashed box next to its ticker</div>
+          <p>The flag turns yellow (<span class="wf-pill wf-watching">● Watching</span>). The stock is now on your radar. Your selection is saved locally — refresh, close the tab, come back tomorrow, your watchlist stays.</p>
+        </div>
+      </div>
+
+      <div class="wf-step">
+        <div class="wf-step-n">3</div>
+        <div class="wf-step-body">
+          <div class="wf-step-title">Wait for the auto-promote</div>
+          <p>The screener checks every render. When your watched stock crosses the entry threshold — <b>score ≥ 22</b>, <b>Catalyst</b> good or ok, <b>Vol Surge</b> good or ok — the flag flips to green (<span class="wf-pill wf-ready">✓ Ready</span>) and the entire row flashes briefly.</p>
+        </div>
+      </div>
+
+      <div class="wf-step">
+        <div class="wf-step-n">4</div>
+        <div class="wf-step-body">
+          <div class="wf-step-title">Read the Watchlist panel at the top</div>
+          <p>Three live cards: <span class="wf-pill wf-ready">✓ Ready</span> stocks that just hit criteria, <span class="wf-pill wf-watching">● Watching</span> your queue, and <span class="wf-pill wf-demoted">⚠ Demoted</span> stocks that <i>were</i> Ready but fell back — with the specific reason. Click a ticker to jump to its row.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="wf-guide-foot">
+      <div class="wf-foot-col">
+        <div class="wf-foot-ttl">What makes a stock "Ready"</div>
+        <ul>
+          <li><b>Score ≥ 22 of 30</b> — at least 7–8 of the 10 factors are healthy.</li>
+          <li><b>Catalyst chip green or ok</b> — earnings 14–60 days out. A known event that will re-rate the stock inside your hold.</li>
+          <li><b>Vol Surge chip green or ok</b> — today's volume is high AND the price is moving up, with 10-day money flow confirming buying (not distribution).</li>
+        </ul>
+      </div>
+      <div class="wf-foot-col">
+        <div class="wf-foot-ttl">Tips for using it well</div>
+        <ul>
+          <li>Mark <b>everything that looks interesting but isn't quite there</b>. The flag costs you nothing.</li>
+          <li>When a stock falls back from Ready, it lands in the red <b>Demoted</b> card with the exact reason — so you know whether to take it off the list or just keep watching.</li>
+          <li>Click the <b>×</b> on a demoted chip to dismiss the alert (the stock stays in Watching).</li>
+          <li>Click the flag again at any time to <b>clear it</b> entirely.</li>
+          <li>Treat the green flash as a <b>"check this now"</b> signal, not an autopilot buy.</li>
+        </ul>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1041,6 +1252,23 @@
   </div>
   <svg id="stFactHistSvg" width="222" height="96" style="display:block;margin-bottom:8px"></svg>
   <div id="stFactHistRows" style="max-height:140px;overflow-y:auto;scrollbar-width:thin"></div>
+</div>
+
+<!-- Vol Surge column-header info popover -->
+<!-- Generic column-header rule card (hover) -->
+<div id="ruleCard" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.55;padding:14px 16px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:300px;max-width:360px;pointer-events:none;white-space:normal;border:0.5px solid rgba(255,255,255,.08)"></div>
+
+<!-- Per-ticker watchlist history popover -->
+<div id="tickerHist" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.5;padding:12px 14px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:280px;max-width:340px;pointer-events:auto;white-space:normal;border:0.5px solid rgba(255,255,255,.08)">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+    <span id="tickerHistTitle" style="font-size:11px;font-weight:700;color:#e8eaf0;letter-spacing:.2px"></span>
+    <span id="tickerHistClose" style="cursor:pointer;color:#8a95a8;font-size:13px;line-height:1;padding:0 2px">✕</span>
+  </div>
+  <div id="tickerHistSub" style="font-size:8.5px;color:#8a95a8;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+    <span id="tickerHistStats"></span>
+    <span id="tickerHistJump" style="cursor:pointer;color:#a7f3d0;text-transform:uppercase;letter-spacing:.4px;font-weight:600">Jump to row →</span>
+  </div>
+  <div id="tickerHistRows" style="max-height:240px;overflow-y:auto;scrollbar-width:thin"></div>
 </div>
 
 <!-- context menu -->
@@ -1348,7 +1576,7 @@ const tipBox=document.getElementById('tipBox');
 // (column descriptors) and <tbody> chips/cells across every view.
 document.addEventListener('mouseover',e=>{
   const el=e.target.closest('[data-tip]');
-  if(!el){tipBox.style.display='none';return;}
+  if(!el || el.closest('[data-rulecard]')){tipBox.style.display='none';return;}
   tipBox.textContent=el.dataset.tip;
   tipBox.style.display='block';
 });
@@ -2405,6 +2633,13 @@ if(stBody) stBody.addEventListener('contextmenu',e=>openCtxMenu(e,'short'));
 
 // Click any chip or data cell in Short Term → factor history popover
 if(stBody) stBody.addEventListener('click', e => {
+  // Watch flag click — toggle and bail (don't open popover)
+  const wf = e.target.closest('.wflag');
+  if (wf) {
+    e.stopPropagation();
+    toggleWatchFlag(wf.dataset.wflag);
+    return;
+  }
   stFactHist.style.display='none';
   const tr = e.target.closest('tr[data-sym]');
   if (!tr) return;
@@ -2571,13 +2806,13 @@ const SHORT_LABELS = [
 ];
 
 // Newbie tooltip text built from the label + actual computed value
+// Per-row chip / cell tooltip: show ONLY the stock-specific reading, not the
+// generic factor description. Column headers still carry the full
+// definition + pass rule (data-tip on the <th>) for when the user wants it.
 function tipForChip(idx, reason){
   const l = SHORT_LABELS[idx];
-  if (!l) return reason || '';
-  const head = `${l.name} — ${l.why}`;
-  const pass = `Pass: ${l.rule}.`;
-  const yours = reason ? `Your value: ${reason}` : '';
-  return [head, pass, yours].filter(Boolean).join('\n\n');
+  if (!reason) return l ? l.name : '';
+  return l ? `${l.name}: ${reason}` : reason;
 }
 
 // In-memory short-term rows mirror: { sym: row }
@@ -2610,14 +2845,541 @@ function shortScoreClass(s){
   return 'r';
 }
 
+// ── Watch flags ───────────────────────────────────────────────────────
+// State:
+//   watchFlags  = { SYM: 'watching' | 'ready' }
+//   demotedRecent = { SYM: { at, reasons[] } }  — was ready, fell out
+// Both persisted to localStorage.
+// User clicks the flag to toggle "watching" on/off. The render loop
+// auto-promotes to "ready" when score ≥ 22, Catalyst good/ok, Vol Surge
+// good/ok. When a "ready" stock falls back, it's demoted to "watching"
+// AND a demoted record is captured with the failure reasons so the user
+// sees what changed in the red card.
+let watchFlags = (() => {
+  try { return JSON.parse(localStorage.getItem('gn_st_watch') || '{}'); }
+  catch(e) { return {}; }
+})();
+let demotedRecent = (() => {
+  try { return JSON.parse(localStorage.getItem('gn_st_demoted') || '{}'); }
+  catch(e) { return {}; }
+})();
+// Activity log — last 50 state transitions across all watched stocks.
+// Schema: [{ ts, sym, type: 'promote'|'demote'|'add'|'clear', reason? }]
+let activityLog = (() => {
+  try { return JSON.parse(localStorage.getItem('gn_st_activity') || '[]'); }
+  catch(e) { return []; }
+})();
+let activityExpanded = false;
+const ACTIVITY_CAP = 50;
+function saveWatchFlags(){
+  try { localStorage.setItem('gn_st_watch', JSON.stringify(watchFlags)); } catch(e){}
+}
+function saveDemoted(){
+  try { localStorage.setItem('gn_st_demoted', JSON.stringify(demotedRecent)); } catch(e){}
+}
+function saveActivity(){
+  try { localStorage.setItem('gn_st_activity', JSON.stringify(activityLog)); } catch(e){}
+}
+function logActivity(sym, type, reason){
+  activityLog.unshift({ ts: Date.now(), sym: (sym||'').toUpperCase(), type, reason: reason || '' });
+  if (activityLog.length > ACTIVITY_CAP) activityLog.length = ACTIVITY_CAP;
+  saveActivity();
+}
+function relTime(ts){
+  const s = Math.max(1, Math.floor((Date.now() - ts) / 1000));
+  if (s < 60)   return s + 's';
+  if (s < 3600) return Math.floor(s / 60) + 'm';
+  if (s < 86400) return Math.floor(s / 3600) + 'h';
+  return Math.floor(s / 86400) + 'd';
+}
+function toggleWatchFlag(sym){
+  sym = (sym || '').toUpperCase();
+  if (!sym) return;
+  if (watchFlags[sym]) {
+    const wasReady = watchFlags[sym] === 'ready';
+    delete watchFlags[sym];
+    delete demotedRecent[sym];
+    saveDemoted();
+    logActivity(sym, 'clear', wasReady ? 'cleared from Ready' : 'cleared from Watching');
+  } else {
+    watchFlags[sym] = 'watching';
+    logActivity(sym, 'add', 'added to Watching');
+  }
+  saveWatchFlags();
+  renderShortWatchlist();
+}
+function dismissDemoted(sym){
+  sym = (sym || '').toUpperCase();
+  delete demotedRecent[sym];
+  saveDemoted();
+  renderShortWatchlist();
+}
+function meetsReadyCriteria(r){
+  if (!r || !r.score) return false;
+  const n = parseInt((r.score||'').split('/')[0], 10);
+  if (!isFinite(n) || n < 22) return false;
+  const v = r.verdicts || [];
+  const cat = v[8], vol = v[9];
+  const ok = x => x === 'good' || x === 'ok';
+  return ok(cat) && ok(vol);
+}
+function readyFailureReasons(r){
+  if (!r || !r.score) return ['no data'];
+  const fails = [];
+  const n = parseInt((r.score||'').split('/')[0], 10);
+  if (!isFinite(n) || n < 22) fails.push(`score ${isFinite(n)?n:'—'}/30`);
+  const v = r.verdicts || [];
+  const ok = x => x === 'good' || x === 'ok';
+  if (!ok(v[8])) fails.push('Catalyst weak');
+  if (!ok(v[9])) fails.push('Vol Surge weak');
+  return fails.length ? fails : ['—'];
+}
+// Click handler: ticker chip opens per-ticker history popover.
+// X button dismisses (demoted) or clears (watching/ready).
+document.addEventListener('click', e => {
+  const x = e.target.closest('.wp-x');
+  if (x) {
+    e.stopPropagation();
+    const sym = x.dataset.sym;
+    const kind = x.dataset.kind;
+    if (kind === 'demoted') dismissDemoted(sym);
+    else toggleWatchFlag(sym);
+    return;
+  }
+  const chip = e.target.closest('.wp-chip');
+  if (chip && chip.dataset.sym) {
+    showTickerHistory(chip.dataset.sym, chip);
+  }
+});
+
+const DEMOTED_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+function pruneDemoted(){
+  const cutoff = Date.now() - DEMOTED_TTL_MS;
+  let dirty = false;
+  for (const sym of Object.keys(demotedRecent)) {
+    const at = demotedRecent[sym]?.at;
+    if (!at || at < cutoff) { delete demotedRecent[sym]; dirty = true; }
+  }
+  if (dirty) saveDemoted();
+}
+function renderWatchPanel(){
+  const el = document.getElementById('watchPanel');
+  if (!el) return;
+  pruneDemoted();
+  const ready = [], watching = [], demoted = [];
+  for (const sym of Object.keys(watchFlags)) {
+    if (watchFlags[sym] === 'ready') ready.push(sym);
+    else if (watchFlags[sym] === 'watching') watching.push(sym);
+  }
+  for (const sym of Object.keys(demotedRecent)) demoted.push(sym);
+  // Hide entirely when there's nothing to show — no flags AND no history
+  if (!ready.length && !watching.length && !demoted.length && !activityLog.length) {
+    el.innerHTML = '';
+    return;
+  }
+  // Find the most recent timestamp for a sym's current state from the
+  // activity log (or demotedRecent for demoted). null = no record.
+  const lastEventTs = (sym, types) => {
+    const e = activityLog.find(ev => ev.sym === sym && types.includes(ev.type));
+    return e ? e.ts : null;
+  };
+  const chipDate = (sym, kind) => {
+    let ts = null;
+    if (kind === 'demoted')      ts = demotedRecent[sym]?.at ?? null;
+    else if (kind === 'ready')   ts = lastEventTs(sym, ['promote']);
+    else if (kind === 'watching')ts = lastEventTs(sym, ['add','demote']);
+    return ts;
+  };
+  const fmtChipDate = ts => {
+    if (!ts) return '';
+    const ageH = (Date.now() - ts) / 3600000;
+    if (ageH < 24) return relTime(ts);
+    const d = new Date(ts);
+    return d.toLocaleDateString(undefined, { month:'short', day:'numeric' });
+  };
+  const chip = (sym, kind, reason) => {
+    const reasonHtml = reason ? `<span class="wp-chip-reason">${escHtml(reason)}</span>` : '';
+    const ts = chipDate(sym, kind);
+    const dateHtml = ts
+      ? `<span class="wp-chip-date" data-tip="${escHtml(new Date(ts).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}">${fmtChipDate(ts)}</span>`
+      : '';
+    return `<span class="wp-chip" data-sym="${sym}" data-tip="${escHtml('Click for '+sym+' history · entered this state '+(ts?relTime(ts)+' ago':'recently'))}">${sym}${dateHtml}${reasonHtml}<span class="wp-x" data-sym="${sym}" data-kind="${kind}" data-tip="${escHtml(kind==='demoted'?'Dismiss this alert':'Clear watchlist flag')}">×</span></span>`;
+  };
+  const section = (cls, label, items, emptyMsg, kind) => {
+    const body = items.length
+      ? items.map(s => {
+          const reason = kind === 'demoted'
+            ? (demotedRecent[s]?.reasons || []).join(', ')
+            : '';
+          return chip(s, kind, reason);
+        }).join('')
+      : `<span class="wp-empty">${emptyMsg}</span>`;
+    return `<div class="wp-card wp-${cls}">
+      <div class="wp-card-head">${label}<span class="wp-count">${items.length}</span></div>
+      <div class="wp-body">${body}</div>
+    </div>`;
+  };
+  el.innerHTML = `
+    <div class="wp-head">
+      <span class="wp-title">Watchlist</span>
+      <span class="wp-sub">Click a ticker to see its history · × to clear</span>
+    </div>
+    <div class="wp-cards">
+      ${section('ready',    '✓ Ready',    ready,    'No stocks ready to trade yet', 'ready')}
+      ${section('watching', '● Watching', watching, 'Click a flag in the table to add', 'watching')}
+      ${section('demoted',  '⚠ Demoted',  demoted,  'Nothing fell out recently',     'demoted')}
+    </div>`;
+}
+
+// ── Column-header rule cards (hover) ──────────────────────────────────
+const ruleCard = document.getElementById('ruleCard');
+const RULE_CARDS = {
+  score: {
+    title: 'Score — how to read it',
+    summary: 'Composite of the 10 short-term factors. Each factor scores 0–3 (bad / weak / ok / good) for a max of 30.',
+    bands: [
+      ['good', '20–30', 'Strong setup. Multiple factors aligned. Worth watching for entry.'],
+      ['ok',   '12–19', 'Mixed. Some tailwinds, some red flags. Wait for confirmation.'],
+      ['bad',  '0–11',  'Weak. Not a swing-trade candidate right now — revisit after a rescan.'],
+    ],
+    rules: [
+      ['Score alone is a ranking, not a buy signal.', 'A 24 with red Vol Surge is worse than a 21 with green Vol Surge + ↑ flow.'],
+      ['Watch for score velocity, not just level.', 'A name climbing 14 → 19 → 23 over a week is the real signal.'],
+    ],
+    footer: 'Click a row\'s score cell to see the per-stock history chart.',
+  },
+  vsSect: {
+    title: 'VS Sector P/E — valuation guardrail',
+    summary: 'Forward P/E minus the sector median, as a percent. −20% means the stock is 20% cheaper than peers on next-year earnings.',
+    bands: [
+      ['good', 'Negative', 'Cheaper than peers. Lower multiple-compression risk on a miss.'],
+      ['ok',   '0 to +25%', 'In line. No edge, no penalty.'],
+      ['bad',  '+25% or more', 'Priced above peers. Any disappointment hits the multiple, not just earnings.'],
+    ],
+    rules: [
+      ['Use as a risk filter, not a buy signal.', 'A cheap stock with no momentum stays cheap. A premium-priced stock with momentum still works — just trim faster.'],
+      ['Sector matters more than absolute P/E.', '30× is rich for a bank, cheap for cloud software.'],
+    ],
+    footer: 'Same data as the Basic page VS Sector column. Sector median is the static SECTOR_PE_MAP.',
+  },
+  trend: {
+    title: 'Trend — price vs 50DMA / 200DMA',
+    summary: 'Where price sits relative to its 50-day moving average, and where the 50DMA sits relative to the 200DMA.',
+    bands: [
+      ['good', 'Price > 50DMA > 200DMA', 'Confirmed uptrend. Strongest 2–12 week predictor we have.'],
+      ['ok',   'Price > 50DMA, but 50 < 200', 'Recovery, not yet a trend. Wait for the golden cross.'],
+      ['bad',  'Price < 50DMA',           'Below trend. Don\'t buy weakness on a swing timeframe.'],
+    ],
+    rules: [
+      ['Never enter a short-term long below the 50DMA.', 'You\'re fighting the dominant trend. Let it base first.'],
+      ['Pullbacks to the 50DMA in an uptrend are the textbook entry.', 'Price tagging the 50 from above, then bouncing on volume = the setup.'],
+    ],
+    footer: 'Arrow shows % above/below the 50DMA. Above 5% = extended; consider waiting for a pullback.',
+  },
+  mom: {
+    title: '3M Return — momentum confirmation',
+    summary: 'Percent change in price over the past 3 months. The simplest momentum factor that actually works.',
+    bands: [
+      ['good', '+5% or more', 'Outperformed. Momentum carries forward through the next swing window.'],
+      ['ok',   '0% to +5%',  'Flat. No momentum tailwind, no headwind.'],
+      ['bad',  'Negative',    'Underperformed. Mean reversion is unreliable on a 2–8 week timeframe.'],
+    ],
+    rules: [
+      ['Buy strength, not weakness.', 'Stocks up 15%+ in 3 months keep outperforming more often than they reverse.'],
+      ['But beware vertical moves.', '+60% in 3 months = late. Look for steady climbers, not parabolic ones.'],
+    ],
+    footer: 'Combine with Trend: green here + green Trend is the cleanest momentum setup.',
+  },
+  fwdpe: {
+    title: 'Fwd P/E — overpayment filter',
+    summary: 'Price ÷ next-year consensus EPS. Used as a ceiling check, not a value screen.',
+    bands: [
+      ['good', 'Below sector 75th %ile', 'Not egregious. Room for the multiple to hold or expand.'],
+      ['ok',   'Near sector 75th %ile',  'Pricey but not extreme. Earnings beat required.'],
+      ['bad',  'Well above 75th %ile',   'Priced for perfection. Any miss → multiple compression.'],
+    ],
+    rules: [
+      ['We don\'t screen for cheap.', 'Cheap stocks underperform expensive ones over swing windows. The goal is to rule out blow-up risk.'],
+      ['A premium multiple is fine if growth justifies it.', 'Cross-check with Anlyst Rev — if estimates are rising, the multiple usually holds.'],
+    ],
+    footer: 'NM means earnings are negative — chip is gray, not red.',
+  },
+  epsrev: {
+    title: 'Analyst Revisions — sentiment drift',
+    summary: 'Average of (a) last-month avg price target vs last-quarter avg, and (b) % Buy/Strong Buy now vs ~3 months ago.',
+    bands: [
+      ['good', '+3% or better', 'Analysts getting more bullish. Estimates and PTs trending up = forward EPS revisions still coming.'],
+      ['ok',   '−1% to +3%',    'Mostly stable. No drift in either direction.'],
+      ['bad',  'Worse than −1%', 'Analysts cutting. Often the earliest crack before a downgrade cycle.'],
+    ],
+    rules: [
+      ['Direction matters more than level.', 'A name with cuts slowing is more interesting than one with rich PTs that are now flat.'],
+      ['Pairs best with Trend.', 'Rising estimates + price above 50DMA = institutions already positioning. Lagging price catches up.'],
+    ],
+    footer: 'Available immediately on add — no rescan warm-up needed.',
+  },
+  qual: {
+    title: 'FCF / ROE — quality screen',
+    summary: 'TTM free cash flow positive AND return on equity above the sector median. Together they screen out value traps.',
+    bands: [
+      ['good', 'FCF > 0 and ROE > sector', 'Real business. Survives a sentiment shift without dilution or rescue financing.'],
+      ['ok',   'One condition met',         'Mixed quality. Watch the cash flow trajectory.'],
+      ['bad',  'FCF < 0 or ROE far below',  'Capital-burning or low-return. Swing risk: one bad print can gap −20%.'],
+    ],
+    rules: [
+      ['Skip negative-FCF names on swing trades.', 'They live and die on capital-market access. A risk-off week = death spiral.'],
+      ['High ROE without leverage is the gold standard.', 'Cross-check Leverage — high ROE driven by debt isn\'t real quality.'],
+    ],
+    footer: 'Both inputs from FMP key-metrics. Sector median is the static SECTOR_ROE_MAP.',
+  },
+  lev: {
+    title: 'Leverage — net debt / EBITDA',
+    summary: 'How many years of EBITDA it would take to pay off net debt. The fastest read on balance-sheet risk.',
+    bands: [
+      ['good', 'Under 1.5×', 'Conservative. Net cash or near it. Lowest swing risk.'],
+      ['ok',   '1.5× – 3×',  'Manageable. Standard for mature businesses.'],
+      ['bad',  'Over 3×',    'Leveraged. Any rate move, sentiment shift, or revenue miss is amplified at the equity line.'],
+    ],
+    rules: [
+      ['Avoid high-leverage names into earnings.', 'A 5% revenue miss can become a 20% equity gap when interest coverage is thin.'],
+      ['Sectors differ.', 'Utilities and REITs run 5×+ by design. Software at 3× is a warning.'],
+    ],
+    footer: 'NM means EBITDA is negative — chip is gray, not red.',
+  },
+  cat: {
+    title: 'Earnings — catalyst window',
+    summary: 'Days until the next earnings release. The single biggest re-rating event in any short-term window.',
+    bands: [
+      ['good', '7 – 90 days', 'In the swing window. Event hits inside your holding period.'],
+      ['ok',   '90 – 180 days', 'Too far out. The setup may evaporate before the catalyst.'],
+      ['bad',  '< 7 days or no date', 'Either too late to enter (gap risk) or no catalyst at all.'],
+    ],
+    rules: [
+      ['Enter 2–6 weeks before earnings, not the week of.', 'You want to ride the run-up. Avoid the binary print itself unless you have a thesis on the result.'],
+      ['No upcoming earnings = no near-term re-rating.', 'Even a great score with no catalyst can drift sideways for months.'],
+    ],
+    footer: 'Date pulled from FMP earnings calendar. Confirm with the company IR page before sizing in.',
+  },
+  volSurge: {
+    title: 'Vol Surge — entry trigger',
+    summary: 'Volume ÷ 20-day average for the most recent complete session, paired with that day\'s price direction (arrow) and 10-day money flow.',
+    arrows: [
+      ['↑', '#10b981', 'Price closed up — accumulation (buyers in control)'],
+      ['↓', '#ef4444', 'Price closed down — distribution (sellers in control)'],
+      ['→', '#8a95a8', 'Price closed flat — no clear conviction'],
+    ],
+    rules: [
+      ['Green chip + ↑ + 1.5×+', 'The signal you want. Institutions accumulating in size.', 'good'],
+      ['Red chip + ↓ + 1.5×+',   'Active warning. Smart money exiting. Do not enter.',      'bad'],
+      ['↓ at any volume',         'Avoid as an entry, even if other factors look good.',     'mute'],
+    ],
+    footer: 'Score also folds in 10-day money flow (sustained up$ vs down$). A multi-day selling trend forces 0 even if today looks fine.',
+  },
+};
+
+function renderRuleCard(key){
+  const c = RULE_CARDS[key];
+  if (!c) return '';
+  const bandColor = {good:'#10b981', ok:'#e8a838', bad:'#ef4444', mute:'#8a95a8'};
+  const bandBg = {good:'rgba(16,185,129,.12)', ok:'rgba(232,168,56,.12)', bad:'rgba(239,68,68,.12)', mute:'rgba(107,114,128,.18)'};
+  const bandLabelColor = {good:'#a7f3d0', ok:'#fde68a', bad:'#fecaca', mute:'#cbd2db'};
+  let html = `<div style="font-size:11px;font-weight:700;color:#e8eaf0;letter-spacing:.2px;margin-bottom:6px">${c.title}</div>`;
+  html += `<div style="font-size:9.5px;color:#a8b0bc;margin-bottom:11px">${c.summary}</div>`;
+  if (c.bands) {
+    html += `<div style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8a95a8;margin-bottom:6px">Bands</div>`;
+    html += `<div style="display:flex;flex-direction:column;gap:5px;font-size:9.5px;margin-bottom:11px">`;
+    for (const [tone, range, desc] of c.bands) {
+      html += `<div style="padding:6px 9px;background:${bandBg[tone]};border-left:2px solid ${bandColor[tone]};border-radius:4px"><b style="color:${bandLabelColor[tone]}">${range}</b> — ${desc}</div>`;
+    }
+    html += `</div>`;
+  }
+  if (c.arrows) {
+    html += `<div style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8a95a8;margin-bottom:6px">Arrow meaning</div>`;
+    html += `<div style="display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:9.5px;margin-bottom:11px">`;
+    for (const [glyph, col, desc] of c.arrows) {
+      html += `<span style="color:${col};font-weight:700">${glyph}</span><span>${desc}</span>`;
+    }
+    html += `</div>`;
+  }
+  if (c.rules) {
+    html += `<div style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8a95a8;margin-bottom:6px">Rules of thumb</div>`;
+    html += `<div style="display:flex;flex-direction:column;gap:5px;font-size:9.5px">`;
+    for (const r of c.rules) {
+      if (r.length === 3 && bandColor[r[2]]) {
+        const tone = r[2];
+        html += `<div style="padding:6px 9px;background:${bandBg[tone]};border-left:2px solid ${bandColor[tone]};border-radius:4px"><b style="color:${bandLabelColor[tone]}">${r[0]}</b> — ${r[1]}</div>`;
+      } else {
+        html += `<div style="padding:6px 9px;background:rgba(255,255,255,.04);border-left:2px solid rgba(255,255,255,.18);border-radius:4px"><b style="color:#e8eaf0">${r[0]}</b> ${r[1]}</div>`;
+      }
+    }
+    html += `</div>`;
+  }
+  if (c.footer) {
+    html += `<div style="font-size:8.5px;color:#6b7280;margin-top:11px;border-top:1px solid rgba(255,255,255,.06);padding-top:8px">${c.footer}</div>`;
+  }
+  return html;
+}
+
+function positionRuleCard(anchor){
+  const r = anchor.getBoundingClientRect();
+  const pw = ruleCard.offsetWidth || 320, ph = ruleCard.offsetHeight || 320;
+  let x = r.left, y = r.bottom + 6;
+  if (x + pw > window.innerWidth  - 8) x = window.innerWidth  - pw - 8;
+  if (y + ph > window.innerHeight - 8) y = r.top - ph - 6;
+  ruleCard.style.left = Math.max(8, x) + 'px';
+  ruleCard.style.top  = Math.max(8, y) + 'px';
+}
+
+document.addEventListener('mouseover', e => {
+  const hdr = e.target.closest('[data-rulecard]');
+  if (!hdr) {
+    if (ruleCard.style.display === 'block' && !ruleCard._sticky) ruleCard.style.display = 'none';
+    return;
+  }
+  const key = hdr.dataset.rulecard;
+  ruleCard.innerHTML = renderRuleCard(key);
+  ruleCard.style.display = 'block';
+  positionRuleCard(hdr);
+});
+document.addEventListener('mouseout', e => {
+  const hdr = e.target.closest('[data-rulecard]');
+  if (!hdr) return;
+  const to = e.relatedTarget;
+  if (to && (to.closest && to.closest('[data-rulecard]') === hdr)) return;
+  ruleCard.style.display = 'none';
+});
+
+// ── Per-ticker history popover ────────────────────────────────────────
+const tickerHist = document.getElementById('tickerHist');
+document.getElementById('tickerHistClose').addEventListener('click', () => tickerHist.style.display='none');
+document.addEventListener('click', e => {
+  if (tickerHist.style.display === 'block' && !tickerHist.contains(e.target) && !e.target.closest('.wp-chip')) {
+    tickerHist.style.display = 'none';
+  }
+});
+document.getElementById('tickerHistJump').addEventListener('click', () => {
+  const sym = tickerHist.dataset.sym;
+  if (!sym) return;
+  tickerHist.style.display = 'none';
+  const row = document.querySelector(`#stBody tr[data-sym="${sym}"]`);
+  if (row) {
+    row.scrollIntoView({ behavior:'smooth', block:'center' });
+    row.classList.add('flash');
+    setTimeout(()=>row.classList.remove('flash'), 1400);
+  }
+});
+
+function showTickerHistory(sym, anchorEl){
+  sym = (sym || '').toUpperCase();
+  if (!sym) return;
+  tickerHist.dataset.sym = sym;
+  const events = activityLog.filter(e => e.sym === sym);
+
+  // Stats summary
+  const promotions = events.filter(e => e.type === 'promote').length;
+  const demotions  = events.filter(e => e.type === 'demote').length;
+  const oldest = events.length ? events[events.length - 1].ts : null;
+  const spanDays = oldest ? Math.max(1, Math.ceil((Date.now() - oldest) / 86400000)) : 0;
+  const currentState = watchFlags[sym]
+    ? (watchFlags[sym] === 'ready' ? '✓ Ready' : '● Watching')
+    : (demotedRecent[sym] ? '⚠ Demoted' : 'Not flagged');
+
+  document.getElementById('tickerHistTitle').textContent = `${sym} · ${currentState}`;
+  document.getElementById('tickerHistStats').textContent = events.length
+    ? `${promotions} promotion${promotions===1?'':'s'} · ${demotions} demotion${demotions===1?'':'s'} · ${spanDays}d`
+    : 'No history yet';
+
+  // Event rows
+  const iconFor  = t => t === 'promote' ? '✓' : t === 'demote' ? '⚠' : t === 'add' ? '●' : '✗';
+  const labelFor = t => t === 'promote' ? 'Promoted to Ready'
+                      : t === 'demote'  ? 'Demoted to Watching'
+                      : t === 'add'     ? 'Added to Watching'
+                                        : 'Cleared from watchlist';
+  const colorFor = t => t === 'promote' ? '#10b981'
+                      : t === 'demote'  ? '#ef4444'
+                      : t === 'add'     ? '#f59e0b'
+                                        : '#8a95a8';
+  const rowsEl = document.getElementById('tickerHistRows');
+  if (!events.length) {
+    rowsEl.innerHTML = `<div style="color:#8a95a8;font-size:9.5px;padding:6px 2px">Nothing recorded yet. Add this ticker via its flag and history will accumulate here.</div>`;
+  } else {
+    rowsEl.innerHTML = events.map(e => {
+      const when = new Date(e.ts);
+      const rel = relTime(e.ts);
+      const abs = when.toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+      return `
+        <div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,.06)">
+          <div style="width:34px;font-size:9px;color:#8a95a8;font-variant-numeric:tabular-nums;text-align:right;padding-top:1px">${rel}</div>
+          <div style="width:14px;color:${colorFor(e.type)};font-size:11px;line-height:1;padding-top:1px;text-align:center">${iconFor(e.type)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:9.5px;font-weight:600;color:#e8eaf0">${labelFor(e.type)}</div>
+            ${e.reason ? `<div style="font-size:8.5px;color:#a8b0bc;margin-top:1px;word-wrap:break-word">${escHtml(e.reason)}</div>` : ''}
+            <div style="font-size:8px;color:#6b7280;margin-top:2px">${abs}</div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // Position the popover near the anchor element if provided
+  tickerHist.style.display = 'block';
+  const pw = tickerHist.offsetWidth || 300, ph = tickerHist.offsetHeight || 320;
+  let x = window.innerWidth / 2 - pw / 2, y = 80;
+  if (anchorEl) {
+    const r = anchorEl.getBoundingClientRect();
+    x = r.left;
+    y = r.bottom + 6;
+    if (x + pw > window.innerWidth - 8) x = window.innerWidth - pw - 8;
+    if (y + ph > window.innerHeight - 8) y = r.top - ph - 6;
+  }
+  tickerHist.style.left = Math.max(8, x) + 'px';
+  tickerHist.style.top  = Math.max(8, y) + 'px';
+}
+
 function renderShortWatchlist(){
   const tb = document.getElementById('stBody');
   if (!tb) return;
   tb.innerHTML = '';
+
+  // Auto-promote / demote watch flags based on current scores. Track which
+  // syms just transitioned so we can flash their row and surface demotions
+  // in the red card.
+  const justPromoted = new Set();
+  let flagsDirty = false;
+  let demotedDirty = false;
+  for (const wl of watchlist) {
+    const sym = (wl.sym || '').toUpperCase();
+    const state = watchFlags[sym];
+    if (!state) continue;
+    const r = shortRowsBySym[sym];
+    if (!r || r.scoring || wl.legacy) continue;
+    const ready = meetsReadyCriteria(r);
+    if (state === 'watching' && ready) {
+      watchFlags[sym] = 'ready';
+      justPromoted.add(sym);
+      flagsDirty = true;
+      // If this sym was demoted earlier, the alert is no longer relevant
+      if (demotedRecent[sym]) { delete demotedRecent[sym]; demotedDirty = true; }
+      logActivity(sym, 'promote', 'Watching → Ready');
+    } else if (state === 'ready' && !ready) {
+      watchFlags[sym] = 'watching';
+      flagsDirty = true;
+      const reasons = readyFailureReasons(r);
+      demotedRecent[sym] = { at: Date.now(), reasons };
+      demotedDirty = true;
+      logActivity(sym, 'demote', reasons.join(', '));
+    }
+  }
+  if (flagsDirty)  saveWatchFlags();
+  if (demotedDirty) saveDemoted();
+
+  // Pin order is sacred — flags never reorder rows. The watch panel above
+  // surfaces Ready / Watching / Demoted; the table just highlights in place.
   const pinned   = watchlist.filter(r => pinnedSyms.has(r.sym));
   const unpinned = watchlist.filter(r => !pinnedSyms.has(r.sym));
-  const ordered  = [...pinned, ...unpinned];
-  const dividerAt = pinned.length > 0 && unpinned.length > 0 ? pinned.length : -1;
+  let ordered = [...pinned, ...unpinned];
+  const dividerAt = (pinned.length > 0 && unpinned.length > 0) ? pinned.length : -1;
+
+  renderWatchPanel();
 
   ordered.forEach((wl, i) => {
     if (i === dividerAt) {
@@ -2654,9 +3416,16 @@ function renderShortWatchlist(){
 
     // Short Term display cells (the columns to the right of the chips)
     const raw = r.raw || [];
-    const trendVal = raw[0] && raw[0].sma50 != null
-      ? `$${raw[0].price.toFixed(0)} > 50DMA $${raw[0].sma50.toFixed(0)}`
-      : '—';
+    // Trend: show "% above/below 50DMA" so the cell doesn't conflict with
+    // the live Price column (which uses quote.price). The verdict is based
+    // on yesterday's close vs the SMA — showing the relationship as a %
+    // sidesteps the price-source mismatch entirely.
+    const trendVal = (() => {
+      if (!raw[0] || raw[0].sma50 == null || raw[0].price == null) return '—';
+      const pct = (raw[0].price - raw[0].sma50) / raw[0].sma50;
+      const arrow = pct >= 0 ? '↑' : '↓';
+      return `${arrow}${(pct * 100).toFixed(1)}% vs 50DMA`;
+    })();
     const mom = raw[1] != null ? `${(raw[1] * 100).toFixed(1)}%` : '—';
     const momCls = (raw[1] != null && raw[1] > 0) ? 'mom-hi' : (raw[1] != null && raw[1] < 0) ? 'mom-lo' : '';
     const fwdPe = raw[5] && raw[5].fwdPe != null ? `${raw[5].fwdPe.toFixed(1)}x` : '—';
@@ -2676,8 +3445,15 @@ function renderShortWatchlist(){
     const qual = raw[6] && raw[6].roe != null ? `ROE ${(raw[6].roe * 100).toFixed(0)}%` : '—';
     const lev = raw[7] && raw[7].ratio != null ? `${raw[7].ratio.toFixed(1)}x` : (raw[7] && raw[7].netDebt < 0 ? 'net cash' : '—');
     const cat = raw[8] && raw[8].daysUntil != null ? `${raw[8].daysUntil}d` : '—';
+    // Vol Surge cell: prepend direction arrow so the value alone tells you
+    // whether the surge was accumulation (↑) or distribution (↓). Without
+    // this the number "2.30x" looks bullish even when it was a red day.
     const vsVal = raw[9];
-    const vs = vsVal && vsVal.rv != null ? `${vsVal.rv.toFixed(2)}x` : '—';
+    const vs = (() => {
+      if (!vsVal || vsVal.rv == null) return '—';
+      const arrow = vsVal.isUp ? '↑' : vsVal.isDown ? '↓' : '→';
+      return `${arrow}${vsVal.rv.toFixed(2)}x`;
+    })();
     const vsCls = vsVal && vsVal.rv >= 1.5 ? 'mom-hi' : '';
 
     // VS Sector P/E — reuse the Basic pipeline's pre-computed value on the watchlist item
@@ -2691,11 +3467,19 @@ function renderShortWatchlist(){
     const warnBadge = (r.warnings && r.warnings.length)
       ? `<span class="warn-badge" data-tip="${escHtml('Data-integrity check flagged this row:\n• '+r.warnings.join('\n• ')+'\n\nAffected factors show as purple until a clean rescan. Right-click → Force rescan to retry.')}">⚠</span>`
       : '';
+    const wfState = watchFlags[sym] || '';
+    const wfTitle = wfState === 'ready'
+      ? 'Ready to trade — criteria met. Click to clear.'
+      : wfState === 'watching'
+        ? 'Watching — auto-promotes to Ready when score ≥22 and Catalyst + Vol Surge are healthy. Click to clear.'
+        : 'Click to add to watch list — get a green flash when entry criteria fire.';
+    const wfBtn = `<span class="wflag ${wfState}" data-wflag="${sym}" data-tip="${escHtml(wfTitle)}"></span>`;
     const coCell = isScoring
-      ? `<td class="co-cell"><span class="sym" style="opacity:0.3">${sym}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
+      ? `<td class="co-cell">${wfBtn}<span class="sym" style="opacity:0.3">${sym}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
       : isLegacy
-        ? `<td class="co-cell"><span class="sym">${sym}</span><span class="legacy-badge">Legacy</span> <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`
-        : `<td class="co-cell"><span class="sym">${sym}</span>${warnBadge} <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`;
+        ? `<td class="co-cell">${wfBtn}<span class="sym">${sym}</span><span class="legacy-badge">Legacy</span> <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`
+        : `<td class="co-cell">${wfBtn}<span class="sym">${sym}</span>${warnBadge} <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`;
+    if (justPromoted.has(sym)) tr.classList.add('wflash-promote');
 
     const vCls = k => {
       const v = verdicts[k];
