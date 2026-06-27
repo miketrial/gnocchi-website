@@ -2727,27 +2727,17 @@ function renderShortWatchlist(){
   }
   if (justPromoted.size) saveWatchFlags();
 
-  // Sort: flagged stocks float to top (ready first, then watching),
-  // then the normal pinned/unpinned order applies inside each tier.
-  const flagRank = sym => {
-    const s = watchFlags[(sym||'').toUpperCase()];
-    return s === 'ready' ? 0 : s === 'watching' ? 1 : 2;
-  };
+  // Pin order is sacred — flags do NOT reorder rows. They highlight in place;
+  // the filter pill is the way to drill into Watching / Ready when you want.
   const pinned   = watchlist.filter(r => pinnedSyms.has(r.sym));
   const unpinned = watchlist.filter(r => !pinnedSyms.has(r.sym));
   let ordered = [...pinned, ...unpinned];
-  // Stable sort by flag rank — flagged rows up top across the whole list
-  ordered = ordered
-    .map((row, idx) => ({ row, idx, rank: flagRank(row.sym) }))
-    .sort((a, b) => a.rank - b.rank || a.idx - b.idx)
-    .map(x => x.row);
 
-  // Apply filter
+  // Apply filter (flag-based view)
   if (stFilter !== 'all') {
     ordered = ordered.filter(r => watchFlags[(r.sym||'').toUpperCase()] === stFilter);
   }
-  // Pin divider doesn't apply once we've re-sorted by flag — drop it
-  const dividerAt = -1;
+  const dividerAt = (stFilter === 'all' && pinned.length > 0 && unpinned.length > 0) ? pinned.length : -1;
   // Update count label
   const cntEl = document.getElementById('stFilterCount');
   if (cntEl) {

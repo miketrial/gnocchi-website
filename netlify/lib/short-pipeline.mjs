@@ -410,56 +410,106 @@ function checkCatalyst(earningsHist) {
   return scored(points, `Earnings in ${daysUntil}d (${next.date}) — ${beatSummary}`, { date: next.date, daysUntil, beats, total });
 }
 
-// 10. Volume Surge: today vs 20-day avg, direction-aware.
-// Big volume on an UP day = accumulation (institutions buying) → reward.
-// Big volume on a DOWN day = distribution (institutions selling) → penalize.
-// Volume alone is direction-blind — pairing it with intraday direction
-// turns a noisy "lots happened today" signal into a buy-vs-sell signal.
+// 10. Volume Surge — today's volume + direction confirmed by 10-day money flow.
+//
+// Volume alone is direction-blind. Two layers combined make it a real
+// accumulation-vs-distribution signal:
+//   • Today's surge (rv = today vol / 20-day avg) and price direction tells
+//     you "is something happening right now?"
+//   • 10-day money flow ((up$-vol − down$-vol) / total$-vol, range [-1,+1])
+//     tells you whether the multi-day trend is buying or selling pressure.
+// Confluence between the two = real signal. Disagreement = "wait."
 function checkVolumeSurge(quote, hist) {
   const q0 = (quote || [])[0];
   const todayVol = q0?.volume;
   if (todayVol == null) return na("No current volume reading");
   if (!hist || hist.length < 20) return na("Need 20 days of volume history");
+
+  // 20-day avg volume from days 1..20 (skip today's bar at index 0)
   const vols = hist.slice(1, 21).map(d => d.volume).filter(v => v != null && v > 0);
   if (vols.length < 15) return na("Volume history too sparse");
   const avg20 = vols.reduce((s, x) => s + x, 0) / vols.length;
   const rv = shortSane(todayVol / avg20, "volRv");
   if (rv == null) return na("Volume ratio out of plausible range — data suspect");
 
-  // Direction: prefer FMP's intraday % change; fall back to quote.price vs prior close
+  // Today's direction: prefer FMP's intraday %, fall back to live vs prior close
   const pctChange = q0?.changePercentage ?? q0?.changesPercentage ?? null;
   const priorClose = hist?.[1]?.price ?? hist?.[1]?.close ?? null;
   const livePrice  = q0?.price ?? null;
-  const dir = pctChange != null
+  const todayDir = pctChange != null
     ? Math.sign(pctChange)
     : (livePrice != null && priorClose != null ? Math.sign(livePrice - priorClose) : 0);
-  const isUp = dir > 0;
-  const isDown = dir < 0;
+  const isUp   = todayDir > 0;
+  const isDown = todayDir < 0;
   const dirLabel = isUp ? "up" : isDown ? "down" : "flat";
 
-  let points, label;
-  if (rv >= 1.5 && isDown) {
-    // High volume + price down = institutional distribution. This is a warning,
-    // not a buy signal. Force red regardless of how big the surge is.
-    points = 0;
-    label = `distribution — heavy selling pressure`;
-  } else if (rv >= 2.5 && isUp) {
-    points = 3; label = "strong accumulation";
-  } else if (rv >= 1.5 && isUp) {
-    points = 2; label = "above-average buying";
-  } else if (rv >= 2.5) {
-    // Big volume on a flat day — usually news pending, treat as ok
-    points = 2; label = "elevated activity (flat)";
-  } else if (rv >= 1.5) {
-    points = 1; label = "elevated but inconclusive";
-  } else if (rv >= 0.8) {
-    points = 1; label = "normal";
-  } else {
-    points = 0; label = "below average — stock being ignored";
+  // 10-day money flow — sign of (close[i] − close[i+1]) × close[i] × vol[i]
+  // summed and normalized by total $-volume. Skip index 0 (today's bar) so
+  // this is a *confirmation*, not a duplication of the same-day signal.
+  let upDollar = 0, dnDollar = 0;
+  const need = 11;
+  let lookback = 0;
+  if (hist.length >= need) {
+    for (let i = 1; i <= 10; i++) {
+      const today = hist[i], prior = hist[i + 1];
+      if (!today || !prior) break;
+      const close = today.price ?? today.close;
+      const pclose = prior.price ?? prior.close;
+      const vol = today.volume;
+      if (close == null || pclose == null || vol == null || vol <= 0) continue;
+      const dollar = close * vol;
+      if (close > pclose)      upDollar += dollar;
+      else if (close < pclose) dnDollar += dollar;
+      lookback++;
+    }
   }
-  return scored(points,
-    `Volume ${rv.toFixed(2)}× the 20-day avg, price ${dirLabel} — ${label}`,
-    { rv, todayVol, avg20, dir, isUp, isDown });
+  const haveFlow = lookback >= 6; // need a meaningful sample
+  const totalFlow = upDollar + dnDollar;
+  const flow = haveFlow && totalFlow > 0 ? (upDollar - dnDollar) / totalFlow : null;
+  const flowLabel = flow == null ? "n/a"
+    : flow >=  0.3 ? "strong buying"
+    : flow >=  0.1 ? "buying"
+    : flow >  -0.1 ? "neutral"
+    : flow >= -0.3 ? "selling"
+    : "strong selling";
+
+  // Score = confluence of today + 10-day flow.
+  // Distribution overrides everything else.
+  let points, label;
+  const sustainedSell = flow != null && flow <= -0.3;
+  const sustainedBuy  = flow != null && flow >=  0.3;
+  const mildBuy       = flow != null && flow >=  0.1;
+
+  if (rv >= 1.5 && isDown) {
+    points = 0; label = "distribution — heavy selling today";
+  } else if (sustainedSell) {
+    points = 0; label = "10-day flow is selling pressure";
+  } else if (rv >= 2.5 && isUp && sustainedBuy) {
+    points = 3; label = "strong confluence — today's surge + sustained buying";
+  } else if (rv >= 1.5 && isUp && sustainedBuy) {
+    points = 3; label = "above-avg surge confirmed by multi-day buying";
+  } else if (rv >= 2.5 && isUp) {
+    points = 3; label = "strong accumulation today";
+  } else if (rv >= 1.5 && isUp && mildBuy) {
+    points = 2; label = "above-avg buying today, mild multi-day support";
+  } else if (rv >= 1.5 && isUp) {
+    points = 2; label = "above-avg today but multi-day flow flat";
+  } else if (sustainedBuy && rv >= 0.8) {
+    points = 2; label = "sustained 10-day accumulation";
+  } else if (rv >= 2.5) {
+    points = 1; label = "high volume but direction unclear";
+  } else if (mildBuy && rv >= 0.8) {
+    points = 1; label = "mild 10-day buying";
+  } else if (rv >= 0.8) {
+    points = 1; label = "normal activity";
+  } else {
+    points = 0; label = "below-avg volume — stock being ignored";
+  }
+
+  const summary = `Today ${rv.toFixed(2)}× avg, price ${dirLabel}`
+    + (flow != null ? ` · 10d flow ${flow >= 0 ? "+" : ""}${(flow * 100).toFixed(0)}% (${flowLabel})` : "")
+    + ` — ${label}`;
+  return scored(points, summary, { rv, todayVol, avg20, todayDir, isUp, isDown, flow, upDollar, dnDollar });
 }
 
 /* ---------- Main scorer ---------- */
@@ -469,7 +519,7 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   // Cache check
   if (!skipCache) {
     const cached = await getShortFmpCache(sym);
-    if (cached && cached._v === 6) {
+    if (cached && cached._v === 7) {
       return cached.row;
     }
   } else {
@@ -573,6 +623,6 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     scored_at: new Date().toISOString(),
   };
 
-  await putShortFmpCache(sym, { _v: 6, row }).catch(() => {});
+  await putShortFmpCache(sym, { _v: 7, row }).catch(() => {});
   return row;
 }
