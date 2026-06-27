@@ -1580,18 +1580,22 @@ document.addEventListener('mouseover',e=>{
   tipBox.textContent=el.dataset.tip;
   tipBox.style.display='block';
 });
+let _tipRaf = null;
 document.addEventListener('mousemove',e=>{
   if(tipBox.style.display==='none') return;
-  const tw=tipBox.offsetWidth||270, th=tipBox.offsetHeight||60;
-  const pad=12;
-  // Flip to the left of the cursor if right-side placement would clip the viewport
-  const wantRight = e.clientX + 14 + tw + pad;
-  const x = wantRight > window.innerWidth
-    ? Math.max(pad, e.clientX - 14 - tw)
-    : e.clientX + 14;
-  const y = Math.max(pad, Math.min(e.clientY - 38, window.innerHeight - th - pad));
-  tipBox.style.left = x + 'px';
-  tipBox.style.top  = y + 'px';
+  if(_tipRaf) return;
+  _tipRaf = requestAnimationFrame(()=>{
+    _tipRaf = null;
+    const tw=tipBox.offsetWidth||270, th=tipBox.offsetHeight||60;
+    const pad=12;
+    const wantRight = e.clientX + 14 + tw + pad;
+    const x = wantRight > window.innerWidth
+      ? Math.max(pad, e.clientX - 14 - tw)
+      : e.clientX + 14;
+    const y = Math.max(pad, Math.min(e.clientY - 38, window.innerHeight - th - pad));
+    tipBox.style.left = x + 'px';
+    tipBox.style.top  = y + 'px';
+  });
 });
 document.addEventListener('mouseleave',()=>{tipBox.style.display='none';});
 
@@ -2764,12 +2768,17 @@ document.getElementById('addNetRow').onclick=async()=>{
 
 /* ---------------- scroll fade header ---------------- */
 const bar=document.getElementById('bar');
+let _scrollRaf = null;
 window.addEventListener('scroll',()=>{
-  const y=window.scrollY;
-  const op=Math.max(0,1-y/120);
-  bar.style.opacity=op;
-  bar.style.pointerEvents=op===0?'none':'';
-});
+  if(_scrollRaf) return;
+  _scrollRaf = requestAnimationFrame(()=>{
+    _scrollRaf = null;
+    const y=window.scrollY;
+    const op=Math.max(0,1-y/120);
+    bar.style.opacity=op;
+    bar.style.pointerEvents=op===0?'none':'';
+  });
+}, {passive:true});
 
 /* ── Theme switcher ── */
 (function(){
