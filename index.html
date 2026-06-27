@@ -346,6 +346,57 @@
   #shortView tbody tr:hover td.st-bad { background:rgba(250,219,216,.7) }
   #shortView tbody tr:hover td.st-na  { background:rgba(237,231,246,.7) }
 
+  /* ── Watch flag walkthrough card (bottom of Short Term view) ────────── */
+  .wf-guide{
+    margin:24px 0 12px; padding:22px 26px;
+    background:var(--card); border:1px solid #eef0f3; border-radius:10px;
+    color:var(--ink);
+  }
+  .wf-guide-head{ margin-bottom:18px; border-bottom:1px solid #f4f5f7; padding-bottom:14px }
+  .wf-guide-eyebrow{
+    display:inline-block; font-size:8.5px; font-weight:700; letter-spacing:.7px;
+    text-transform:uppercase; color:var(--ink-faint);
+    background:#f4f5f7; border-radius:4px; padding:3px 8px; margin-bottom:8px;
+  }
+  .wf-guide-title{ font-size:15px; font-weight:700; color:var(--ink); margin-bottom:3px }
+  .wf-guide-sub{ font-size:10px; color:var(--ink-faint); line-height:1.5 }
+
+  .wf-guide-grid{
+    display:grid; grid-template-columns:repeat(2, 1fr); gap:18px 28px;
+    margin-bottom:18px;
+  }
+  @media (max-width: 760px){ .wf-guide-grid{ grid-template-columns:1fr } }
+  .wf-step{ display:flex; gap:12px; align-items:flex-start }
+  .wf-step-n{
+    flex-shrink:0; width:22px; height:22px; border-radius:50%;
+    background:var(--ink); color:#fff; font-size:10px; font-weight:700;
+    display:flex; align-items:center; justify-content:center; margin-top:1px;
+    font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  .wf-step-title{ font-size:10.5px; font-weight:700; color:var(--ink); margin-bottom:3px }
+  .wf-step-body p{ font-size:10px; color:var(--ink-soft); line-height:1.55; margin:0 }
+  .wf-step-body b{ color:var(--ink); font-weight:700 }
+
+  .wf-pill{
+    display:inline-block; font-size:8.5px; font-weight:700;
+    padding:1px 6px; border-radius:3px; vertical-align:middle;
+  }
+  .wf-pill.wf-watching{ background:#fef3c7; color:#92400e; border:1px solid #f59e0b }
+  .wf-pill.wf-ready   { background:#d1fae5; color:#065f46; border:1px solid #10b981 }
+
+  .wf-guide-foot{
+    display:grid; grid-template-columns:repeat(2, 1fr); gap:18px 28px;
+    border-top:1px solid #f4f5f7; padding-top:16px;
+  }
+  @media (max-width: 760px){ .wf-guide-foot{ grid-template-columns:1fr } }
+  .wf-foot-ttl{
+    font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.5px;
+    color:var(--ink-faint); margin-bottom:8px;
+  }
+  .wf-guide-foot ul{ margin:0; padding-left:16px }
+  .wf-guide-foot li{ font-size:10px; color:var(--ink-soft); line-height:1.6; margin-bottom:4px }
+  .wf-guide-foot b{ color:var(--ink); font-weight:700 }
+
   /* ── Watch flags (Short Term entry tracking) ────────────────────────── */
   .wflag{
     display:inline-flex;align-items:center;justify-content:center;
@@ -964,6 +1015,69 @@
     <span><b style="background:var(--pur-bg);color:var(--pur-fg)">●</b><span style="color:var(--pur-fg);font-weight:600">Purple</span> · data not available from FMP for this ticker</span>
     <div class="ttl" style="margin-top:10px">Tip</div>
     <span style="color:var(--ink-soft)">Hover any chip to read what it measures, why it matters, the pass rule, and your computed value.</span>
+  </div>
+
+  <!-- ── Watchlist (Watch flag) walkthrough ─────────────────────────────── -->
+  <div class="wf-guide">
+    <div class="wf-guide-head">
+      <span class="wf-guide-eyebrow">How to use</span>
+      <div class="wf-guide-title">The Watch Flag — your entry-trigger alarm</div>
+      <div class="wf-guide-sub">Mark a stock now, get a green flash the moment it becomes actionable.</div>
+    </div>
+
+    <div class="wf-guide-grid">
+      <div class="wf-step">
+        <div class="wf-step-n">1</div>
+        <div class="wf-step-body">
+          <div class="wf-step-title">Spot a stock with a strong setup</div>
+          <p>Scan the table for names with <b>Trend, 3M Mom, and Near Hi</b> all green. These are stocks already in confirmed uptrends — the foundation of every good swing trade.</p>
+        </div>
+      </div>
+
+      <div class="wf-step">
+        <div class="wf-step-n">2</div>
+        <div class="wf-step-body">
+          <div class="wf-step-title">Click the dashed box next to its ticker</div>
+          <p>The flag turns yellow (<span class="wf-pill wf-watching">● Watching</span>). The stock is now on your radar. Your selection is saved locally — refresh, close the tab, come back tomorrow, your watchlist stays.</p>
+        </div>
+      </div>
+
+      <div class="wf-step">
+        <div class="wf-step-n">3</div>
+        <div class="wf-step-body">
+          <div class="wf-step-title">Wait for the auto-promote</div>
+          <p>The screener checks every render. When your watched stock crosses the entry threshold — <b>score ≥ 22</b>, <b>Catalyst</b> good or ok, <b>Vol Surge</b> good or ok — the flag flips to green (<span class="wf-pill wf-ready">✓ Ready</span>) and the entire row flashes briefly.</p>
+        </div>
+      </div>
+
+      <div class="wf-step">
+        <div class="wf-step-n">4</div>
+        <div class="wf-step-body">
+          <div class="wf-step-title">Filter the view to act</div>
+          <p>Use the pill bar at the top (<b>All / Watching / Ready</b>) to focus. <b>Ready</b> shows only stocks that just triggered. Pin order is preserved everywhere — flags never reorder your rows.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="wf-guide-foot">
+      <div class="wf-foot-col">
+        <div class="wf-foot-ttl">What makes a stock "Ready"</div>
+        <ul>
+          <li><b>Score ≥ 22 of 30</b> — at least 7–8 of the 10 factors are healthy.</li>
+          <li><b>Catalyst chip green or ok</b> — earnings 14–60 days out. A known event that will re-rate the stock inside your hold.</li>
+          <li><b>Vol Surge chip green or ok</b> — today's volume is high AND the price is moving up, with 10-day money flow confirming buying (not distribution).</li>
+        </ul>
+      </div>
+      <div class="wf-foot-col">
+        <div class="wf-foot-ttl">Tips for using it well</div>
+        <ul>
+          <li>Mark <b>everything that looks interesting but isn't quite there</b>. The flag costs you nothing.</li>
+          <li>Stocks that drop back below the criteria <b>auto-demote</b> back to Watching. A "Ready" flag is always current.</li>
+          <li>Click the flag again at any time to <b>clear it</b> entirely.</li>
+          <li>Treat the green flash as a <b>"check this now"</b> signal, not an autopilot buy.</li>
+        </ul>
+      </div>
+    </div>
   </div>
 </div>
 
