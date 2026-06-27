@@ -483,72 +483,6 @@
   }
   .wp-x:hover{ background:rgba(239,68,68,.15);color:#991b1b }
 
-  /* Activity strip — compact one-row peek under the three cards */
-  .act-strip{
-    display:flex;align-items:center;gap:6px;flex-wrap:wrap;
-    margin-top:10px;padding:6px 4px 0;border-top:1px solid #f4f5f7;
-  }
-  .act-lbl{
-    font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
-    color:var(--ink-faint);margin-right:4px;
-  }
-  .act-chip{
-    display:inline-flex;align-items:center;gap:4px;
-    padding:2px 7px;border-radius:10px;font-size:9px;cursor:pointer;
-    background:#f8f9fb;border:1px solid #eef0f3;
-    transition:background .12s,border-color .12s;
-  }
-  .act-chip:hover{ border-color:#9ca3af;background:#fff }
-  .act-chip .act-icon{ font-size:9px;line-height:1 }
-  .act-chip .act-sym{ font-weight:700;color:var(--ink) }
-  .act-chip .act-time{ color:var(--ink-faint);font-variant-numeric:tabular-nums;font-size:8.5px }
-  .act-chip.act-promote{ background:#ecfdf5;border-color:#a7f3d0 }
-  .act-chip.act-promote .act-icon{ color:#065f46 }
-  .act-chip.act-demote { background:#fef2f2;border-color:#fecaca }
-  .act-chip.act-demote .act-icon{ color:#991b1b }
-  .act-chip.act-add    { background:#fffbeb;border-color:#fde68a }
-  .act-chip.act-add .act-icon{ color:#92400e }
-  .act-chip.act-clear  { background:#f4f5f7;border-color:#e4e7eb }
-  .act-chip.act-clear .act-icon{ color:var(--ink-faint) }
-  .act-more{
-    margin-left:auto;font-size:8.5px;color:var(--ink-faint);cursor:pointer;
-    text-transform:uppercase;letter-spacing:.3px;font-weight:600;padding:2px 6px;
-  }
-  .act-more:hover{ color:var(--ink-soft) }
-
-  /* Expanded activity list */
-  .act-expanded{
-    margin-top:6px;max-height:240px;overflow-y:auto;
-    background:#fafbfc;border:1px solid #eef0f3;border-radius:6px;
-    padding:4px;
-  }
-  .act-row{
-    display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:9.5px;
-    border-radius:4px;cursor:pointer;
-  }
-  .act-row:hover{ background:#fff }
-  .act-row .act-time{ width:26px;color:var(--ink-faint);font-variant-numeric:tabular-nums;font-size:9px }
-  .act-row .act-icon{ width:12px;text-align:center;font-size:10px }
-  .act-row .act-sym{ font-weight:700;color:var(--ink);min-width:46px;font-size:10px }
-  .act-row .act-tag{
-    font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
-    padding:1px 5px;border-radius:3px;background:#f4f5f7;color:var(--ink-faint);
-    min-width:42px;text-align:center;
-  }
-  .act-row .act-detail{ color:var(--ink-soft);font-size:9px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
-  .act-row.act-promote .act-icon{ color:#10b981 }
-  .act-row.act-promote .act-tag { background:#d1fae5;color:#065f46 }
-  .act-row.act-demote  .act-icon{ color:#ef4444 }
-  .act-row.act-demote  .act-tag { background:#fee2e2;color:#991b1b }
-  .act-row.act-add     .act-icon{ color:#f59e0b }
-  .act-row.act-add     .act-tag { background:#fef3c7;color:#92400e }
-  .act-row.act-clear   .act-icon{ color:var(--ink-faint) }
-  .act-clear-all{
-    text-align:right;padding:6px 4px 2px;font-size:8.5px;color:var(--ink-faint);
-  }
-  .act-clear-all span{ cursor:pointer;padding:2px 6px }
-  .act-clear-all span:hover{ color:#991b1b;text-decoration:underline }
-
   /* Legacy-data hazard — row has stale data, awaiting fresh Rescan fetch */
   tbody tr.legacy td:not(.co-cell):not(:first-child){
     filter:blur(3.5px);opacity:0.25;
@@ -1310,6 +1244,19 @@
   </div>
   <svg id="stFactHistSvg" width="222" height="96" style="display:block;margin-bottom:8px"></svg>
   <div id="stFactHistRows" style="max-height:140px;overflow-y:auto;scrollbar-width:thin"></div>
+</div>
+
+<!-- Per-ticker watchlist history popover -->
+<div id="tickerHist" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.5;padding:12px 14px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:280px;max-width:340px;pointer-events:auto;white-space:normal;border:0.5px solid rgba(255,255,255,.08)">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+    <span id="tickerHistTitle" style="font-size:11px;font-weight:700;color:#e8eaf0;letter-spacing:.2px"></span>
+    <span id="tickerHistClose" style="cursor:pointer;color:#8a95a8;font-size:13px;line-height:1;padding:0 2px">✕</span>
+  </div>
+  <div id="tickerHistSub" style="font-size:8.5px;color:#8a95a8;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+    <span id="tickerHistStats"></span>
+    <span id="tickerHistJump" style="cursor:pointer;color:#a7f3d0;text-transform:uppercase;letter-spacing:.4px;font-weight:600">Jump to row →</span>
+  </div>
+  <div id="tickerHistRows" style="max-height:240px;overflow-y:auto;scrollbar-width:thin"></div>
 </div>
 
 <!-- context menu -->
@@ -2975,35 +2922,9 @@ function readyFailureReasons(r){
   if (!ok(v[9])) fails.push('Vol Surge weak');
   return fails.length ? fails : ['—'];
 }
-// Click handler: ticker chip scrolls to row, X button dismisses (demoted)
-// or clears (watching/ready). Activity strip events also bind here.
+// Click handler: ticker chip opens per-ticker history popover.
+// X button dismisses (demoted) or clears (watching/ready).
 document.addEventListener('click', e => {
-  // Activity: expand toggle
-  if (e.target.closest('#actToggle')) {
-    activityExpanded = !activityExpanded;
-    renderWatchPanel();
-    return;
-  }
-  // Activity: clear all history
-  if (e.target.closest('#actClearAll')) {
-    if (confirm('Clear all activity history?')) {
-      activityLog = []; saveActivity();
-      renderWatchPanel();
-    }
-    return;
-  }
-  // Activity: click event → jump to ticker
-  const actEl = e.target.closest('[data-actsym]');
-  if (actEl) {
-    const sym = actEl.dataset.actsym;
-    const row = document.querySelector(`#stBody tr[data-sym="${sym}"]`);
-    if (row) {
-      row.scrollIntoView({ behavior:'smooth', block:'center' });
-      row.classList.add('flash');
-      setTimeout(()=>row.classList.remove('flash'), 1400);
-    }
-    return;
-  }
   const x = e.target.closest('.wp-x');
   if (x) {
     e.stopPropagation();
@@ -3015,12 +2936,7 @@ document.addEventListener('click', e => {
   }
   const chip = e.target.closest('.wp-chip');
   if (chip && chip.dataset.sym) {
-    const row = document.querySelector(`#stBody tr[data-sym="${chip.dataset.sym}"]`);
-    if (row) {
-      row.scrollIntoView({ behavior:'smooth', block:'center' });
-      row.classList.add('flash');
-      setTimeout(()=>row.classList.remove('flash'), 1400);
-    }
+    showTickerHistory(chip.dataset.sym, chip);
   }
 });
 
@@ -3067,48 +2983,102 @@ function renderWatchPanel(){
       <div class="wp-body">${body}</div>
     </div>`;
   };
-  // Activity strip — last N transitions, compact. Expand toggle reveals up to 50.
-  const iconFor = t => t === 'promote' ? '✓' : t === 'demote' ? '⚠' : t === 'add' ? '●' : '✗';
-  const labelFor = t => t === 'promote' ? 'W→R' : t === 'demote' ? 'R→D' : t === 'add' ? '+W' : 'cleared';
-  const renderActivityStrip = () => {
-    if (!activityLog.length) return '';
-    const peek = activityLog.slice(0, 4);
-    const peekHtml = peek.map(e =>
-      `<span class="act-chip act-${e.type}" data-actsym="${e.sym}" data-tip="${escHtml(e.type+': '+e.sym+(e.reason?' — '+e.reason:''))}"><span class="act-icon">${iconFor(e.type)}</span><span class="act-sym">${e.sym}</span><span class="act-time">${relTime(e.ts)}</span></span>`
-    ).join('');
-    const more = activityLog.length > 4 ? `<span class="act-more" id="actToggle">${activityExpanded ? '▴ hide' : `▾ ${activityLog.length} total`}</span>` : '';
-    const expanded = activityExpanded ? `
-      <div class="act-expanded">
-        ${activityLog.map(e => `
-          <div class="act-row act-${e.type}" data-actsym="${e.sym}">
-            <span class="act-time">${relTime(e.ts)}</span>
-            <span class="act-icon">${iconFor(e.type)}</span>
-            <span class="act-sym">${e.sym}</span>
-            <span class="act-tag">${labelFor(e.type)}</span>
-            <span class="act-detail">${escHtml(e.reason || '')}</span>
-          </div>`).join('')}
-        <div class="act-clear-all"><span id="actClearAll">Clear history</span></div>
-      </div>` : '';
-    return `
-      <div class="act-strip">
-        <span class="act-lbl">Activity</span>
-        ${peekHtml}
-        ${more}
-      </div>
-      ${expanded}`;
-  };
-
   el.innerHTML = `
     <div class="wp-head">
       <span class="wp-title">Watchlist</span>
-      <span class="wp-sub">Click a ticker to jump to its row · × to clear</span>
+      <span class="wp-sub">Click a ticker to see its history · × to clear</span>
     </div>
     <div class="wp-cards">
       ${section('ready',    '✓ Ready',    ready,    'No stocks ready to trade yet', 'ready')}
       ${section('watching', '● Watching', watching, 'Click a flag in the table to add', 'watching')}
       ${section('demoted',  '⚠ Demoted',  demoted,  'Nothing fell out recently',     'demoted')}
-    </div>
-    ${renderActivityStrip()}`;
+    </div>`;
+}
+
+// ── Per-ticker history popover ────────────────────────────────────────
+const tickerHist = document.getElementById('tickerHist');
+document.getElementById('tickerHistClose').addEventListener('click', () => tickerHist.style.display='none');
+document.addEventListener('click', e => {
+  if (tickerHist.style.display === 'block' && !tickerHist.contains(e.target) && !e.target.closest('.wp-chip')) {
+    tickerHist.style.display = 'none';
+  }
+});
+document.getElementById('tickerHistJump').addEventListener('click', () => {
+  const sym = tickerHist.dataset.sym;
+  if (!sym) return;
+  tickerHist.style.display = 'none';
+  const row = document.querySelector(`#stBody tr[data-sym="${sym}"]`);
+  if (row) {
+    row.scrollIntoView({ behavior:'smooth', block:'center' });
+    row.classList.add('flash');
+    setTimeout(()=>row.classList.remove('flash'), 1400);
+  }
+});
+
+function showTickerHistory(sym, anchorEl){
+  sym = (sym || '').toUpperCase();
+  if (!sym) return;
+  tickerHist.dataset.sym = sym;
+  const events = activityLog.filter(e => e.sym === sym);
+
+  // Stats summary
+  const promotions = events.filter(e => e.type === 'promote').length;
+  const demotions  = events.filter(e => e.type === 'demote').length;
+  const oldest = events.length ? events[events.length - 1].ts : null;
+  const spanDays = oldest ? Math.max(1, Math.ceil((Date.now() - oldest) / 86400000)) : 0;
+  const currentState = watchFlags[sym]
+    ? (watchFlags[sym] === 'ready' ? '✓ Ready' : '● Watching')
+    : (demotedRecent[sym] ? '⚠ Demoted' : 'Not flagged');
+
+  document.getElementById('tickerHistTitle').textContent = `${sym} · ${currentState}`;
+  document.getElementById('tickerHistStats').textContent = events.length
+    ? `${promotions} promotion${promotions===1?'':'s'} · ${demotions} demotion${demotions===1?'':'s'} · ${spanDays}d`
+    : 'No history yet';
+
+  // Event rows
+  const iconFor  = t => t === 'promote' ? '✓' : t === 'demote' ? '⚠' : t === 'add' ? '●' : '✗';
+  const labelFor = t => t === 'promote' ? 'Promoted to Ready'
+                      : t === 'demote'  ? 'Demoted to Watching'
+                      : t === 'add'     ? 'Added to Watching'
+                                        : 'Cleared from watchlist';
+  const colorFor = t => t === 'promote' ? '#10b981'
+                      : t === 'demote'  ? '#ef4444'
+                      : t === 'add'     ? '#f59e0b'
+                                        : '#8a95a8';
+  const rowsEl = document.getElementById('tickerHistRows');
+  if (!events.length) {
+    rowsEl.innerHTML = `<div style="color:#8a95a8;font-size:9.5px;padding:6px 2px">Nothing recorded yet. Add this ticker via its flag and history will accumulate here.</div>`;
+  } else {
+    rowsEl.innerHTML = events.map(e => {
+      const when = new Date(e.ts);
+      const rel = relTime(e.ts);
+      const abs = when.toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+      return `
+        <div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,.06)">
+          <div style="width:34px;font-size:9px;color:#8a95a8;font-variant-numeric:tabular-nums;text-align:right;padding-top:1px">${rel}</div>
+          <div style="width:14px;color:${colorFor(e.type)};font-size:11px;line-height:1;padding-top:1px;text-align:center">${iconFor(e.type)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:9.5px;font-weight:600;color:#e8eaf0">${labelFor(e.type)}</div>
+            ${e.reason ? `<div style="font-size:8.5px;color:#a8b0bc;margin-top:1px;word-wrap:break-word">${escHtml(e.reason)}</div>` : ''}
+            <div style="font-size:8px;color:#6b7280;margin-top:2px">${abs}</div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // Position the popover near the anchor element if provided
+  tickerHist.style.display = 'block';
+  const pw = tickerHist.offsetWidth || 300, ph = tickerHist.offsetHeight || 320;
+  let x = window.innerWidth / 2 - pw / 2, y = 80;
+  if (anchorEl) {
+    const r = anchorEl.getBoundingClientRect();
+    x = r.left;
+    y = r.bottom + 6;
+    if (x + pw > window.innerWidth - 8) x = window.innerWidth - pw - 8;
+    if (y + ph > window.innerHeight - 8) y = r.top - ph - 6;
+  }
+  tickerHist.style.left = Math.max(8, x) + 'px';
+  tickerHist.style.top  = Math.max(8, y) + 'px';
 }
 
 function renderShortWatchlist(){
