@@ -383,6 +383,7 @@
   }
   .wf-pill.wf-watching{ background:#fef3c7; color:#92400e; border:1px solid #f59e0b }
   .wf-pill.wf-ready   { background:#d1fae5; color:#065f46; border:1px solid #10b981 }
+  .wf-pill.wf-demoted { background:#fee2e2; color:#991b1b; border:1px solid #ef4444 }
 
   .wf-guide-foot{
     display:grid; grid-template-columns:repeat(2, 1fr); gap:18px 28px;
@@ -417,23 +418,52 @@
     100% {background:rgba(209,250,229,0)}
   }
   #shortView tbody tr.wflash-promote td{ animation:wflashPromote 1.6s ease-out }
-  /* Filter pill bar */
-  #stFilterBar{
-    display:flex;align-items:center;gap:6px;padding:6px 10px 0;
-    font-size:9px;color:var(--ink-faint);
+  /* Unified watch panel — Ready / Watching / Demoted side-by-side */
+  #watchPanel{ margin:0 0 14px; padding:0 }
+  #watchPanel:empty{ display:none }
+  .wp-head{ display:flex;align-items:baseline;gap:10px;margin-bottom:8px;padding:0 4px }
+  .wp-title{ font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-faint) }
+  .wp-sub{ font-size:8.5px;color:#9ca3af }
+  .wp-cards{ display:grid;grid-template-columns:repeat(3,1fr);gap:10px }
+  @media (max-width:760px){ .wp-cards{ grid-template-columns:1fr } }
+  .wp-card{
+    background:var(--card);border:1px solid #eef0f3;border-left-width:3px;
+    border-radius:8px;padding:10px 12px;min-height:60px;
   }
-  #stFilterBar .lbl{text-transform:uppercase;letter-spacing:.5px;margin-right:4px;font-weight:600}
-  #stFilterBar button{
-    background:transparent;border:1px solid #e4e7eb;border-radius:4px;
-    padding:3px 9px;font-size:9px;font-weight:600;color:var(--ink-faint);
-    cursor:pointer;font-family:inherit;letter-spacing:.3px;text-transform:uppercase;
+  .wp-card.wp-ready   { border-left-color:#10b981 }
+  .wp-card.wp-watching{ border-left-color:#f59e0b }
+  .wp-card.wp-demoted { border-left-color:#ef4444 }
+  .wp-card-head{
+    display:flex;align-items:center;justify-content:space-between;
+    font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+    color:var(--ink-soft);margin-bottom:7px;
   }
-  #stFilterBar button:hover{border-color:#9ca3af;color:var(--ink-soft)}
-  #stFilterBar button.active{background:#1e2228;border-color:#1e2228;color:#fff}
-  #stFilterBar .count{
-    margin-left:auto;font-size:8.5px;color:var(--ink-faint);
-    font-variant-numeric:tabular-nums;
+  .wp-card.wp-ready    .wp-card-head{ color:#065f46 }
+  .wp-card.wp-watching .wp-card-head{ color:#92400e }
+  .wp-card.wp-demoted  .wp-card-head{ color:#991b1b }
+  .wp-count{ font-size:8.5px;font-weight:700;background:#f4f5f7;color:var(--ink-faint);padding:1px 6px;border-radius:8px;font-variant-numeric:tabular-nums }
+  .wp-card.wp-ready    .wp-count{ background:#d1fae5;color:#065f46 }
+  .wp-card.wp-watching .wp-count{ background:#fef3c7;color:#92400e }
+  .wp-card.wp-demoted  .wp-count{ background:#fee2e2;color:#991b1b }
+  .wp-body{ display:flex;flex-wrap:wrap;gap:5px }
+  .wp-empty{ font-size:9px;color:#c2c7ce;font-style:italic }
+  .wp-chip{
+    display:inline-flex;align-items:center;gap:5px;
+    background:#fff;border:1px solid #e4e7eb;border-radius:5px;
+    padding:3px 4px 3px 8px;font-size:9.5px;font-weight:600;color:var(--ink);
+    cursor:pointer;transition:all .1s;
   }
+  .wp-chip:hover{ border-color:#9ca3af }
+  .wp-card.wp-ready    .wp-chip{ background:#ecfdf5;border-color:#a7f3d0 }
+  .wp-card.wp-watching .wp-chip{ background:#fffbeb;border-color:#fde68a }
+  .wp-card.wp-demoted  .wp-chip{ background:#fef2f2;border-color:#fecaca }
+  .wp-chip-reason{ color:var(--ink-faint);font-weight:500;font-size:8.5px;margin-left:3px }
+  .wp-x{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:13px;height:13px;border-radius:3px;background:rgba(0,0,0,.05);
+    color:var(--ink-faint);font-size:10px;line-height:1;font-weight:700;
+  }
+  .wp-x:hover{ background:rgba(239,68,68,.15);color:#991b1b }
 
   /* Legacy-data hazard — row has stale data, awaiting fresh Rescan fetch */
   tbody tr.legacy td:not(.co-cell):not(:first-child){
@@ -969,13 +999,8 @@
 
 <!-- ===== SHORT TERM VIEW (FMP-only, swing trading 1wk-3mo) ===== -->
 <div id="shortView" class="hidden">
-  <div id="stFilterBar">
-    <span class="lbl">Show</span>
-    <button data-stfilter="all" class="active">All</button>
-    <button data-stfilter="watching">● Watching</button>
-    <button data-stfilter="ready">✓ Ready</button>
-    <span class="count" id="stFilterCount"></span>
-  </div>
+  <!-- Unified watchlist panel — populated by renderWatchPanel() -->
+  <div id="watchPanel"></div>
   <div class="card">
     <table>
       <thead>
@@ -1053,8 +1078,8 @@
       <div class="wf-step">
         <div class="wf-step-n">4</div>
         <div class="wf-step-body">
-          <div class="wf-step-title">Filter the view to act</div>
-          <p>Use the pill bar at the top (<b>All / Watching / Ready</b>) to focus. <b>Ready</b> shows only stocks that just triggered. Pin order is preserved everywhere — flags never reorder your rows.</p>
+          <div class="wf-step-title">Read the Watchlist panel at the top</div>
+          <p>Three live cards: <span class="wf-pill wf-ready">✓ Ready</span> stocks that just hit criteria, <span class="wf-pill wf-watching">● Watching</span> your queue, and <span class="wf-pill wf-demoted">⚠ Demoted</span> stocks that <i>were</i> Ready but fell back — with the specific reason. Click a ticker to jump to its row.</p>
         </div>
       </div>
     </div>
@@ -1072,7 +1097,8 @@
         <div class="wf-foot-ttl">Tips for using it well</div>
         <ul>
           <li>Mark <b>everything that looks interesting but isn't quite there</b>. The flag costs you nothing.</li>
-          <li>Stocks that drop back below the criteria <b>auto-demote</b> back to Watching. A "Ready" flag is always current.</li>
+          <li>When a stock falls back from Ready, it lands in the red <b>Demoted</b> card with the exact reason — so you know whether to take it off the list or just keep watching.</li>
+          <li>Click the <b>×</b> on a demoted chip to dismiss the alert (the stock stays in Watching).</li>
           <li>Click the flag again at any time to <b>clear it</b> entirely.</li>
           <li>Treat the green flash as a <b>"check this now"</b> signal, not an autopilot buy.</li>
         </ul>
@@ -2777,25 +2803,46 @@ function shortScoreClass(s){
 }
 
 // ── Watch flags ───────────────────────────────────────────────────────
-// State: { SYM: 'watching' | 'ready' }. Persisted to localStorage.
+// State:
+//   watchFlags  = { SYM: 'watching' | 'ready' }
+//   demotedRecent = { SYM: { at, reasons[] } }  — was ready, fell out
+// Both persisted to localStorage.
 // User clicks the flag to toggle "watching" on/off. The render loop
-// auto-promotes to "ready" when the stock meets entry criteria
-// (score ≥ 22, Catalyst good/ok, Vol Surge good/ok) and demotes back
-// to "watching" if it falls out. A row that promotes during a render
-// gets a brief green flash so the user sees the trigger fire.
+// auto-promotes to "ready" when score ≥ 22, Catalyst good/ok, Vol Surge
+// good/ok. When a "ready" stock falls back, it's demoted to "watching"
+// AND a demoted record is captured with the failure reasons so the user
+// sees what changed in the red card.
 let watchFlags = (() => {
   try { return JSON.parse(localStorage.getItem('gn_st_watch') || '{}'); }
+  catch(e) { return {}; }
+})();
+let demotedRecent = (() => {
+  try { return JSON.parse(localStorage.getItem('gn_st_demoted') || '{}'); }
   catch(e) { return {}; }
 })();
 function saveWatchFlags(){
   try { localStorage.setItem('gn_st_watch', JSON.stringify(watchFlags)); } catch(e){}
 }
+function saveDemoted(){
+  try { localStorage.setItem('gn_st_demoted', JSON.stringify(demotedRecent)); } catch(e){}
+}
 function toggleWatchFlag(sym){
   sym = (sym || '').toUpperCase();
   if (!sym) return;
-  if (watchFlags[sym]) delete watchFlags[sym];
-  else watchFlags[sym] = 'watching';
+  if (watchFlags[sym]) {
+    delete watchFlags[sym];
+    delete demotedRecent[sym];
+    saveDemoted();
+  } else {
+    watchFlags[sym] = 'watching';
+  }
   saveWatchFlags();
+  renderShortWatchlist();
+}
+function dismissDemoted(sym){
+  sym = (sym || '').toUpperCase();
+  delete demotedRecent[sym];
+  saveDemoted();
   renderShortWatchlist();
 }
 function meetsReadyCriteria(r){
@@ -2807,15 +2854,83 @@ function meetsReadyCriteria(r){
   const ok = x => x === 'good' || x === 'ok';
   return ok(cat) && ok(vol);
 }
-let stFilter = 'all';
+function readyFailureReasons(r){
+  if (!r || !r.score) return ['no data'];
+  const fails = [];
+  const n = parseInt((r.score||'').split('/')[0], 10);
+  if (!isFinite(n) || n < 22) fails.push(`score ${isFinite(n)?n:'—'}/30`);
+  const v = r.verdicts || [];
+  const ok = x => x === 'good' || x === 'ok';
+  if (!ok(v[8])) fails.push('Catalyst weak');
+  if (!ok(v[9])) fails.push('Vol Surge weak');
+  return fails.length ? fails : ['—'];
+}
+// Click handler: ticker chip scrolls to row, X button dismisses (demoted)
+// or clears (watching/ready)
 document.addEventListener('click', e => {
-  const btn = e.target.closest('#stFilterBar button');
-  if (!btn) return;
-  stFilter = btn.dataset.stfilter;
-  document.querySelectorAll('#stFilterBar button').forEach(b =>
-    b.classList.toggle('active', b.dataset.stfilter === stFilter));
-  renderShortWatchlist();
+  const x = e.target.closest('.wp-x');
+  if (x) {
+    e.stopPropagation();
+    const sym = x.dataset.sym;
+    const kind = x.dataset.kind;
+    if (kind === 'demoted') dismissDemoted(sym);
+    else toggleWatchFlag(sym);
+    return;
+  }
+  const chip = e.target.closest('.wp-chip');
+  if (chip && chip.dataset.sym) {
+    const row = document.querySelector(`#stBody tr[data-sym="${chip.dataset.sym}"]`);
+    if (row) {
+      row.scrollIntoView({ behavior:'smooth', block:'center' });
+      row.classList.add('flash');
+      setTimeout(()=>row.classList.remove('flash'), 1400);
+    }
+  }
 });
+
+function renderWatchPanel(){
+  const el = document.getElementById('watchPanel');
+  if (!el) return;
+  const ready = [], watching = [], demoted = [];
+  for (const sym of Object.keys(watchFlags)) {
+    if (watchFlags[sym] === 'ready') ready.push(sym);
+    else if (watchFlags[sym] === 'watching') watching.push(sym);
+  }
+  for (const sym of Object.keys(demotedRecent)) demoted.push(sym);
+  // Hide entirely when there's nothing to show
+  if (!ready.length && !watching.length && !demoted.length) {
+    el.innerHTML = '';
+    return;
+  }
+  const chip = (sym, kind, reason) => {
+    const reasonHtml = reason ? `<span class="wp-chip-reason">${escHtml(reason)}</span>` : '';
+    return `<span class="wp-chip" data-sym="${sym}" data-tip="${escHtml('Click to jump to '+sym+' in the table below')}">${sym}${reasonHtml}<span class="wp-x" data-sym="${sym}" data-kind="${kind}" data-tip="${escHtml(kind==='demoted'?'Dismiss this alert':'Clear watchlist flag')}">×</span></span>`;
+  };
+  const section = (cls, label, items, emptyMsg, kind) => {
+    const body = items.length
+      ? items.map(s => {
+          const reason = kind === 'demoted'
+            ? (demotedRecent[s]?.reasons || []).join(', ')
+            : '';
+          return chip(s, kind, reason);
+        }).join('')
+      : `<span class="wp-empty">${emptyMsg}</span>`;
+    return `<div class="wp-card wp-${cls}">
+      <div class="wp-card-head">${label}<span class="wp-count">${items.length}</span></div>
+      <div class="wp-body">${body}</div>
+    </div>`;
+  };
+  el.innerHTML = `
+    <div class="wp-head">
+      <span class="wp-title">Watchlist</span>
+      <span class="wp-sub">Click a ticker to jump to its row · × to clear</span>
+    </div>
+    <div class="wp-cards">
+      ${section('ready',    '✓ Ready',    ready,    'No stocks ready to trade yet', 'ready')}
+      ${section('watching', '● Watching', watching, 'Click a flag in the table to add', 'watching')}
+      ${section('demoted',  '⚠ Demoted',  demoted,  'Nothing fell out recently',     'demoted')}
+    </div>`;
+}
 
 function renderShortWatchlist(){
   const tb = document.getElementById('stBody');
@@ -2823,8 +2938,11 @@ function renderShortWatchlist(){
   tb.innerHTML = '';
 
   // Auto-promote / demote watch flags based on current scores. Track which
-  // syms just transitioned so we can flash their row.
+  // syms just transitioned so we can flash their row and surface demotions
+  // in the red card.
   const justPromoted = new Set();
+  let flagsDirty = false;
+  let demotedDirty = false;
   for (const wl of watchlist) {
     const sym = (wl.sym || '').toUpperCase();
     const state = watchFlags[sym];
@@ -2835,30 +2953,27 @@ function renderShortWatchlist(){
     if (state === 'watching' && ready) {
       watchFlags[sym] = 'ready';
       justPromoted.add(sym);
+      flagsDirty = true;
+      // If this sym was demoted earlier, the alert is no longer relevant
+      if (demotedRecent[sym]) { delete demotedRecent[sym]; demotedDirty = true; }
     } else if (state === 'ready' && !ready) {
       watchFlags[sym] = 'watching';
+      flagsDirty = true;
+      demotedRecent[sym] = { at: Date.now(), reasons: readyFailureReasons(r) };
+      demotedDirty = true;
     }
   }
-  if (justPromoted.size) saveWatchFlags();
+  if (flagsDirty)  saveWatchFlags();
+  if (demotedDirty) saveDemoted();
 
-  // Pin order is sacred — flags do NOT reorder rows. They highlight in place;
-  // the filter pill is the way to drill into Watching / Ready when you want.
+  // Pin order is sacred — flags never reorder rows. The watch panel above
+  // surfaces Ready / Watching / Demoted; the table just highlights in place.
   const pinned   = watchlist.filter(r => pinnedSyms.has(r.sym));
   const unpinned = watchlist.filter(r => !pinnedSyms.has(r.sym));
   let ordered = [...pinned, ...unpinned];
+  const dividerAt = (pinned.length > 0 && unpinned.length > 0) ? pinned.length : -1;
 
-  // Apply filter (flag-based view)
-  if (stFilter !== 'all') {
-    ordered = ordered.filter(r => watchFlags[(r.sym||'').toUpperCase()] === stFilter);
-  }
-  const dividerAt = (stFilter === 'all' && pinned.length > 0 && unpinned.length > 0) ? pinned.length : -1;
-  // Update count label
-  const cntEl = document.getElementById('stFilterCount');
-  if (cntEl) {
-    const watching = Object.values(watchFlags).filter(v => v === 'watching').length;
-    const ready    = Object.values(watchFlags).filter(v => v === 'ready').length;
-    cntEl.textContent = `${ready} ready · ${watching} watching`;
-  }
+  renderWatchPanel();
 
   ordered.forEach((wl, i) => {
     if (i === dividerAt) {
