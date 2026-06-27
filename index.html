@@ -112,7 +112,6 @@
   }
   thead th .sub{display:block; font-weight:400; text-transform:none; letter-spacing:0; color:#c2c7ce; font-size:7.5px}
   tbody td{padding:3px 5px; vertical-align:middle; border-top:1px solid #f4f5f7}
-  tbody tr{transition:background .12s}
   tbody tr:hover{background:#fafbfc}
   tbody tr.flash{background:#eef6fb}
 
@@ -120,7 +119,7 @@
   tbody tr[draggable]{cursor:grab}
   tbody tr[draggable]:active{cursor:grabbing}
   tbody tr.drag-src{opacity:0.25;transition:opacity .1s}
-  tbody tr.drag-blur{filter:blur(1.5px);opacity:0.35;transition:filter .15s,opacity .15s}
+  tbody tr.drag-blur{opacity:0.25;transition:opacity .15s}
   tbody tr.drop-above td{border-top:2px solid #3b82f6!important}
   tbody tr.drop-below td{border-bottom:2px solid #3b82f6!important}
 
@@ -140,8 +139,8 @@
   thead th:last-child,  tbody td:last-child {padding-right:20px}
 
   /* 1 — sticky first two columns */
-  thead th:nth-child(1), tbody td:nth-child(1){position:sticky;left:0;z-index:2;background:var(--card)}
-  thead th:nth-child(2), tbody td:nth-child(2){position:sticky;left:32px;z-index:2;background:var(--card);box-shadow:4px 0 8px -2px rgba(0,0,0,.08)}
+  thead th:nth-child(1), tbody td:nth-child(1){position:sticky;left:0;z-index:2;background:var(--card);will-change:transform}
+  thead th:nth-child(2), tbody td:nth-child(2){position:sticky;left:32px;z-index:2;background:var(--card);box-shadow:4px 0 8px -2px rgba(0,0,0,.08);will-change:transform}
   tbody tr:hover td:nth-child(1),
   tbody tr:hover td:nth-child(2){background:#fafbfc}
 
@@ -493,8 +492,7 @@
 
   /* Legacy-data hazard — row has stale data, awaiting fresh Rescan fetch */
   tbody tr.legacy td:not(.co-cell):not(:first-child){
-    filter:blur(3.5px);opacity:0.25;
-    transition:filter .25s,opacity .25s;pointer-events:none;
+    opacity:0.15;pointer-events:none;
   }
   tbody tr.legacy .co-cell{position:relative;overflow:visible}
   .legacy-badge{
