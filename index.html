@@ -802,14 +802,14 @@
 }
 
 /* ── theme swatch strip ───────────────────────────────────────────────── */
-#themeSwatch{display:flex;flex-direction:row;align-items:center;gap:5px}
+#themeSwatch{display:flex;flex-direction:row;align-items:center;gap:5px;align-self:center}
 #themeSwatch button{
   width:16px;height:16px;border-radius:50%;padding:0;
   cursor:pointer;border:2px solid transparent;
   transition:transform .15s,box-shadow .15s,opacity .15s;
   flex-shrink:0;
 }
-#themeSwatch button[data-t="dark"] {background:#1a1c23}
+#themeSwatch button[data-t="dark"] {background:#111}
 #themeSwatch button[data-t="warm"] {background:#d4c4a8}
 #themeSwatch button[data-t="white"]{background:#fff;border-color:#ccc}
 #themeSwatch button:not(.active){opacity:.55}
