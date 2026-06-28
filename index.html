@@ -661,6 +661,62 @@
 [data-theme="white"] #themeSwatch button:not(.active){background:#fff;color:#000;border:1px solid #000;border-radius:0;padding:8px 15px;font-size:11px;font-weight:600;opacity:1}
 [data-theme="white"] #themeSwatch button.active{background:#000;color:#fff;border-color:#000;opacity:1}
 
+/* ── Clean (minimal, sharp, lots of white space) ──────────────────────── */
+[data-theme="clean"]{
+  --ink:#0f172a; --ink-soft:#475569; --ink-faint:#94a3b8;
+  --page:#f1f5f9; --card:#ffffff;
+  --good-bg:#f0fdf4; --good-fg:#166534;
+  --bad-bg:#fef2f2;  --bad-fg:#991b1b;
+  --yel-bg:#fefce8;  --yel-fg:#854d0e;
+  --neu-bg:#eff6ff;  --neu-fg:#1e40af;
+  --gray-bg:#f1f5f9; --gray-fg:#475569;
+  --pur-bg:#faf5ff;  --pur-fg:#6b21a8;
+  --radius:4px;
+}
+[data-theme="clean"] body{background:var(--page);color:var(--ink)}
+[data-theme="clean"] header.bar{background:linear-gradient(var(--card) 72%,transparent)}
+[data-theme="clean"] .card{background:var(--card);border-radius:var(--radius)}
+[data-theme="clean"] .btn,[data-theme="clean"] .net-link{
+  background:var(--card);color:var(--ink);
+  border:1px solid #e2e8f0;border-radius:var(--radius);
+}
+[data-theme="clean"] .btn:hover,[data-theme="clean"] .net-link:hover{border-color:#94a3b8}
+[data-theme="clean"] .search{background:var(--card);border:1px solid #e2e8f0;border-radius:var(--radius)}
+[data-theme="clean"] .search input{color:var(--ink)}
+[data-theme="clean"] table{border-spacing:0}
+[data-theme="clean"] tbody td{border-top-color:#f1f5f9}
+[data-theme="clean"] tbody tr:hover{background:#f8fafc}
+[data-theme="clean"] tbody tr:hover td:nth-child(1),
+[data-theme="clean"] tbody tr:hover td:nth-child(2){background:#f8fafc}
+[data-theme="clean"] tbody tr.flash{background:#eff6ff}
+[data-theme="clean"] thead tr.grphdr th{border-bottom:1px solid #e2e8f0;background:var(--card)}
+[data-theme="clean"] thead tr:nth-child(2) th{border-bottom:1px solid #e2e8f0}
+[data-theme="clean"] thead tr:nth-child(2) th.grp-start,
+[data-theme="clean"] tbody td.grp-start{border-left-color:#e2e8f0}
+[data-theme="clean"] thead th:nth-child(1),[data-theme="clean"] tbody td:nth-child(1),
+[data-theme="clean"] thead th:nth-child(2),[data-theme="clean"] tbody td:nth-child(2){background:var(--card)}
+[data-theme="clean"] tbody tr.pin-last td{border-bottom-color:#cbd5e1}
+[data-theme="clean"] .num{color:#475569}
+[data-theme="clean"] .sym{color:#0f172a;font-weight:700;letter-spacing:.2px}
+[data-theme="clean"] .price-cell{color:#0f172a;font-weight:600}
+[data-theme="clean"] .pill{border-radius:var(--radius)}
+[data-theme="clean"] .legend span b{background:var(--card);border:1px solid #e2e8f0;border-radius:var(--radius)}
+[data-theme="clean"] #ctx{background:var(--card);border:1px solid #e2e8f0;border-radius:var(--radius);color:var(--ink);box-shadow:0 4px 24px rgba(15,23,42,.08)}
+[data-theme="clean"] #scoreHist{background:#f8fafc;border-radius:var(--radius)}
+[data-theme="clean"] #acDrop{background:var(--card);border:1px solid #e2e8f0;border-radius:var(--radius);box-shadow:0 4px 16px rgba(15,23,42,.08)}
+[data-theme="clean"] .ac-item:hover,[data-theme="clean"] .ac-item.sel{background:#f8fafc}
+[data-theme="clean"] #pipelineModal > div{background:var(--card);border:1px solid #e2e8f0;border-radius:var(--radius);box-shadow:0 8px 40px rgba(15,23,42,.10)}
+[data-theme="clean"] #themeSwatch button{
+  background:var(--card);color:var(--ink);
+  border:1px solid #e2e8f0;border-radius:var(--radius);
+  font-weight:600;opacity:1;
+}
+[data-theme="clean"] #themeSwatch button.active{background:#0f172a;color:#fff;border-color:#0f172a}
+[data-theme="clean"] #themeSwatch button:not(.active){opacity:.6}
+[data-theme="clean"] #themeSwatch button:hover{opacity:1}
+[data-theme="clean"] #viewSwitch button{border-radius:var(--radius);border:1px solid #e2e8f0;background:var(--card);color:var(--ink)}
+[data-theme="clean"] #viewSwitch button.active{background:#0f172a;color:#fff;border-color:#0f172a;font-weight:700;box-shadow:none}
+
 /* ── Mobile: shrink text + hide lower-value columns ──────────────────── */
 @media (max-width: 700px){
   tbody td{padding:2px 3px}
@@ -969,6 +1025,7 @@
       <button data-t="dark">Dark</button>
       <button data-t="warm">Warm</button>
       <button data-t="white">White</button>
+      <button data-t="clean">Clean</button>
     </div>
 
     <button id="healthBtn" class="btn" title="Probe FMP's data feed for a CDN sym-flip">FMP health</button>
