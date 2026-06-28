@@ -80,6 +80,18 @@ export async function incrHaikuUsage() {
 }
 
 /* ---------- Pinned tickers (server-side, shared across devices) ---------- */
+export async function getWatchState() {
+  const v = await settingsStore().get("watch-state", { type: "json" }).catch(() => null);
+  return {
+    flags:    (v && typeof v.flags    === 'object' && !Array.isArray(v.flags))    ? v.flags    : {},
+    demoted:  (v && typeof v.demoted  === 'object' && !Array.isArray(v.demoted))  ? v.demoted  : {},
+    activity: Array.isArray(v?.activity) ? v.activity : [],
+  };
+}
+export async function setWatchState({ flags, demoted, activity }) {
+  await settingsStore().setJSON("watch-state", { flags, demoted, activity, updated: Date.now() });
+}
+
 export async function getPins() {
   const v = await settingsStore().get("pins", { type: "json" }).catch(() => null);
   return Array.isArray(v?.pins) ? v.pins : [];

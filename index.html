@@ -2828,7 +2828,8 @@ function shortScoreClass(s){
 // State:
 //   watchFlags  = { SYM: 'watching' | 'ready' }
 //   demotedRecent = { SYM: { at, reasons[] } }  — was ready, fell out
-// Both persisted to localStorage.
+// Persisted to Netlify Blobs (/api/watch-state) so all visitors share state.
+// localStorage is used as a fast local cache / offline fallback.
 // User clicks the flag to toggle "watching" on/off. The render loop
 // auto-promotes to "ready" when score ≥ 22, Catalyst good/ok, Vol Surge
 // good/ok. When a "ready" stock falls back, it's demoted to "watching"
@@ -2850,14 +2851,39 @@ let activityLog = (() => {
 })();
 let activityExpanded = false;
 const ACTIVITY_CAP = 50;
+
+// Debounced blob save — batches rapid changes into one PUT
+let _watchSaveTimer = null;
+function scheduleWatchSave(){
+  if(_watchSaveTimer) clearTimeout(_watchSaveTimer);
+  _watchSaveTimer = setTimeout(()=>{
+    _watchSaveTimer = null;
+    if(typeof API_LIVE !== 'undefined' && API_LIVE)
+      api.send('/api/watch-state','PUT',{flags:watchFlags,demoted:demotedRecent,activity:activityLog}).catch(()=>{});
+  }, 800);
+}
 function saveWatchFlags(){
   try { localStorage.setItem('gn_st_watch', JSON.stringify(watchFlags)); } catch(e){}
+  scheduleWatchSave();
 }
 function saveDemoted(){
   try { localStorage.setItem('gn_st_demoted', JSON.stringify(demotedRecent)); } catch(e){}
+  scheduleWatchSave();
 }
 function saveActivity(){
   try { localStorage.setItem('gn_st_activity', JSON.stringify(activityLog)); } catch(e){}
+  scheduleWatchSave();
+}
+
+// Load latest watch state from blob on startup (overrides stale localStorage)
+if(typeof API_LIVE !== 'undefined' && API_LIVE){
+  api.send('/api/watch-state','GET').then(data => {
+    if(!data) return;
+    if(data.flags    && typeof data.flags    === 'object') { watchFlags    = data.flags;    try{localStorage.setItem('gn_st_watch',    JSON.stringify(watchFlags));}catch(e){} }
+    if(data.demoted  && typeof data.demoted  === 'object') { demotedRecent = data.demoted;  try{localStorage.setItem('gn_st_demoted',  JSON.stringify(demotedRecent));}catch(e){} }
+    if(Array.isArray(data.activity))                       { activityLog   = data.activity; try{localStorage.setItem('gn_st_activity', JSON.stringify(activityLog));}catch(e){} }
+    renderShortWatchlist();
+  }).catch(()=>{});
 }
 function logActivity(sym, type, reason){
   activityLog.unshift({ ts: Date.now(), sym: (sym||'').toUpperCase(), type, reason: reason || '' });
