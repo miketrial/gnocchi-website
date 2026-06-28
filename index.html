@@ -489,6 +489,24 @@
     color:var(--ink-faint);font-size:10px;line-height:1;font-weight:700;
   }
   .wp-x:hover{ background:rgba(239,68,68,.15);color:#991b1b }
+  /* Entry signal dots on Ready chips */
+  .wp-sig{ display:inline-flex;align-items:center;gap:2px;margin-left:5px;vertical-align:middle }
+  .wp-sig-dot{
+    display:inline-block;width:6px;height:6px;border-radius:50%;
+    font-size:0;line-height:0;flex-shrink:0;
+  }
+  .wp-sig-dot.sig-on  { background:#10b981 }
+  .wp-sig-dot.sig-off { background:#e5e7eb }
+  .wp-sig-dot.sig-warn{ background:#ef4444 }
+  /* Key below the three cards */
+  .wp-key{
+    font-size:8px;color:var(--ink-faint);margin-top:6px;
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0 2px;
+  }
+  .wp-key-dot{
+    display:inline-block;width:6px;height:6px;border-radius:50%;
+    vertical-align:middle;margin-right:2px;
+  }
 
   /* Legacy-data hazard — row has stale data, awaiting fresh Rescan fetch */
   tbody tr.legacy td:not(.co-cell):not(:first-child){
@@ -3004,13 +3022,46 @@ function renderWatchPanel(){
     const d = new Date(ts);
     return d.toLocaleDateString(undefined, { month:'short', day:'numeric' });
   };
+  // Entry signal dots for Ready chips: Trend (idx 0), Vol Surge (idx 9)
+  // Near-50DMA: parse raw[0] which is the vs50 percent string from reasons
+  const entrySigs = sym => {
+    const r = shortRowsBySym[sym];
+    if (!r) return null;
+    const v = r.verdicts || [];
+    const reasons = r.reasons || [];
+    const trendOk  = v[0] === 'good' || v[0] === 'ok';
+    const volUp    = (reasons[9] || '').includes('↑');
+    const volWarn  = (reasons[9] || '').includes('↓');
+    const volGood  = v[9] === 'good' || v[9] === 'ok';
+    // Near 50DMA: trend reason contains "above" or parse raw[0] as a number
+    const raw0 = r.raw?.[0];
+    const vsNum = typeof raw0 === 'number' ? raw0 : parseFloat(raw0);
+    const near50 = !isNaN(vsNum) && vsNum >= 0 && vsNum <= 5; // 0–5% above 50DMA = pullback zone
+    return { trendOk, volUp, volWarn, volGood, near50 };
+  };
+  const sigDots = sym => {
+    const s = entrySigs(sym);
+    if (!s) return '';
+    const trendCls  = s.trendOk  ? 'sig-on' : 'sig-off';
+    const volCls    = s.volWarn  ? 'sig-warn' : (s.volGood && s.volUp ? 'sig-on' : 'sig-off');
+    const nearCls   = s.near50   ? 'sig-on' : 'sig-off';
+    const trendTip  = s.trendOk  ? 'Trend: price above 50DMA ✓' : 'Trend: below 50DMA — avoid entry';
+    const volTip    = s.volWarn  ? 'Vol Surge: down-day distribution ✗' : (s.volGood && s.volUp ? 'Vol Surge: up-day accumulation ✓' : 'Vol Surge: no strong signal yet');
+    const nearTip   = s.near50   ? 'Near 50DMA: pullback zone — good entry risk/reward ✓' : 'Not near 50DMA — may be extended';
+    return `<span class="wp-sig">` +
+      `<span class="wp-sig-dot ${trendCls}" data-tip="${escHtml(trendTip)}"></span>` +
+      `<span class="wp-sig-dot ${volCls}"   data-tip="${escHtml(volTip)}"></span>` +
+      `<span class="wp-sig-dot ${nearCls}"  data-tip="${escHtml(nearTip)}"></span>` +
+      `</span>`;
+  };
   const chip = (sym, kind, reason) => {
     const reasonHtml = reason ? `<span class="wp-chip-reason">${escHtml(reason)}</span>` : '';
     const ts = chipDate(sym, kind);
     const dateHtml = ts
       ? `<span class="wp-chip-date" data-tip="${escHtml(new Date(ts).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}">${fmtChipDate(ts)}</span>`
       : '';
-    return `<span class="wp-chip" data-sym="${sym}" data-tip="${escHtml('Click for '+sym+' history · entered this state '+(ts?relTime(ts)+' ago':'recently'))}">${sym}${dateHtml}${reasonHtml}<span class="wp-x" data-sym="${sym}" data-kind="${kind}" data-tip="${escHtml(kind==='demoted'?'Dismiss this alert':'Clear watchlist flag')}">×</span></span>`;
+    const dotsHtml = kind === 'ready' ? sigDots(sym) : '';
+    return `<span class="wp-chip" data-sym="${sym}" data-tip="${escHtml('Click for '+sym+' history · entered this state '+(ts?relTime(ts)+' ago':'recently'))}">${sym}${dateHtml}${dotsHtml}${reasonHtml}<span class="wp-x" data-sym="${sym}" data-kind="${kind}" data-tip="${escHtml(kind==='demoted'?'Dismiss this alert':'Clear watchlist flag')}">×</span></span>`;
   };
   const section = (cls, label, items, emptyMsg, kind) => {
     const body = items.length
@@ -3026,6 +3077,14 @@ function renderWatchPanel(){
       <div class="wp-body">${body}</div>
     </div>`;
   };
+  const sigKey = `<div class="wp-key">
+    <span style="font-weight:700;color:var(--ink-soft)">3/3 green = enter.</span>
+    <span><span class="wp-key-dot" style="background:#10b981"></span>Trend above 50DMA</span>
+    <span><span class="wp-key-dot" style="background:#10b981"></span>Vol Surge ↑ accumulation</span>
+    <span><span class="wp-key-dot" style="background:#10b981"></span>Pullback to 50DMA zone</span>
+    <span><span class="wp-key-dot" style="background:#ef4444"></span>Distribution warning</span>
+    <span><span class="wp-key-dot" style="background:#e5e7eb"></span>Signal not met</span>
+  </div>`;
   el.innerHTML = `
     <div class="wp-head">
       <span class="wp-title">Watchlist</span>
@@ -3035,7 +3094,8 @@ function renderWatchPanel(){
       ${section('ready',    '✓ Ready',    ready,    'No stocks ready to trade yet', 'ready')}
       ${section('watching', '● Watching', watching, 'Click a flag in the table to add', 'watching')}
       ${section('demoted',  '⚠ Demoted',  demoted,  'Nothing fell out recently',     'demoted')}
-    </div>`;
+    </div>
+    ${sigKey}`;
 }
 
 // ── Column-header rule cards (hover) ──────────────────────────────────
