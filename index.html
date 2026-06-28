@@ -587,7 +587,6 @@
 [data-theme="dark"] .num{color:#8a95a8}
 [data-theme="dark"] .sym{color:#c8d0dc}
 [data-theme="dark"] .price-cell{color:#c8d0dc}
-[data-theme="dark"] #themeSwatch button{background:#2a2e38;color:var(--ink);border-color:#3a3e4a}
 
 /* ── Warm ─────────────────────────────────────────────────────────────── */
 [data-theme="warm"]{
@@ -617,7 +616,6 @@
 [data-theme="warm"] .sym{color:#1e1510}
 [data-theme="warm"] .price-cell{color:#1e1510}
 [data-theme="warm"] .legend span b{background:#e4ddd4;color:#584e44}
-[data-theme="warm"] #themeSwatch button{background:#e4ddd4;color:var(--ink);border-color:#ccc4b8}
 
 /* ── White (sharp B&W technical) ──────────────────────────────────────── */
 [data-theme="white"]{
@@ -657,9 +655,6 @@
 [data-theme="white"] #acDrop{background:#fff;border:1px solid #000;border-radius:0}
 [data-theme="white"] .ac-item:hover,[data-theme="white"] .ac-item.sel{background:#f0f0f0}
 [data-theme="white"] #pipelineModal > div{background:#fff;border:1px solid #000;border-radius:0}
-[data-theme="white"] #themeSwatch button,
-[data-theme="white"] #themeSwatch button:not(.active){background:#fff;color:#000;border:1px solid #000;border-radius:0;padding:8px 15px;font-size:11px;font-weight:600;opacity:1}
-[data-theme="white"] #themeSwatch button.active{background:#000;color:#fff;border-color:#000;opacity:1}
 
 /* ── Mobile: shrink text + hide lower-value columns ──────────────────── */
 @media (max-width: 700px){
@@ -710,7 +705,7 @@
 /* ── Touch devices: bigger tap targets (Apple HIG ≥36px) ─────────────── */
 @media (pointer: coarse){
   .btn, .net-link{min-height:36px; padding:9px 16px; display:inline-flex; align-items:center}
-  #themeSwatch button{min-height:36px; padding:9px 14px}
+  #themeSwatch button{min-height:unset; padding:0; width:20px; height:20px}
   .search{min-height:36px; padding:9px 12px 9px 30px}
   .search input{font-size:13px}
   .chk{min-width:14px; min-height:18px}
@@ -807,17 +802,20 @@
 }
 
 /* ── theme swatch strip ───────────────────────────────────────────────── */
-#themeSwatch{display:flex;align-items:center;gap:6px}
+#themeSwatch{display:flex;flex-direction:row;align-items:center;gap:5px;align-self:stretch;margin-top:-25px}
 #themeSwatch button{
-  border:1.5px solid #dde2e8; border-radius:7px;
-  padding:5px 9px; font-size:10px; font-weight:600;
-  cursor:pointer; background:#f3f4f6; color:#464d57;
-  transition:border-color .15s, opacity .15s;
-  white-space:nowrap;
+  width:13px;height:13px;border-radius:50%;padding:0;
+  cursor:pointer;border:2px solid transparent;
+  transition:transform .15s,box-shadow .15s,opacity .15s;
+  flex-shrink:0;
 }
-#themeSwatch button.active{border-color:#4a525e;opacity:1}
-#themeSwatch button:not(.active){opacity:.65}
-#themeSwatch button:hover{opacity:1}
+#themeSwatch button[data-t="dark"] {background:#111}
+#themeSwatch button[data-t="warm"] {background:#d4c4a8}
+#themeSwatch button[data-t="white"]{background:#fff;border-color:#ccc}
+#themeSwatch button:not(.active){opacity:.55}
+#themeSwatch button:hover{opacity:1;transform:scale(1.15)}
+#themeSwatch button.active{opacity:1;transform:scale(1.1);box-shadow:0 0 0 2px #4a525e}
+#themeSwatch button[data-t="white"].active{box-shadow:0 0 0 2px #999}
 </style>
 
 <!-- ================= APP ================= -->
@@ -955,7 +953,8 @@
 
     <div class="grow"></div>
 
-    <div id="wlControls" style="display:flex; gap:12px; align-items:flex-start;">
+    <div id="wlControls" style="display:flex; gap:8px; align-items:center;">
+      <button id="healthBtn" class="btn" title="Probe FMP's data feed for a CDN sym-flip">FMP health</button>
       <div class="ac-wrap">
         <div class="search">
           <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
@@ -966,12 +965,10 @@
     </div>
 
     <div id="themeSwatch">
-      <button data-t="dark">Dark</button>
-      <button data-t="warm">Warm</button>
-      <button data-t="white">White</button>
+      <button data-t="dark"  title="Dark"></button>
+      <button data-t="warm"  title="Warm"></button>
+      <button data-t="white" title="White"></button>
     </div>
-
-    <button id="healthBtn" class="btn" title="Probe FMP's data feed for a CDN sym-flip">FMP health</button>
 
     <div class="net-link" id="navToggle">Net</div>
   </header>
