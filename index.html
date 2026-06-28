@@ -497,9 +497,10 @@
     font-size:7px;font-weight:800;letter-spacing:0;line-height:1;
     flex-shrink:0;color:#fff;
   }
-  .wp-sig-dot.sig-on  { background:#10b981 }
-  .wp-sig-dot.sig-off { background:#d1d5db;color:#9ca3af }
-  .wp-sig-dot.sig-warn{ background:#ef4444 }
+  .wp-sig-dot.sig-on   { background:#10b981 }
+  .wp-sig-dot.sig-off  { background:#d1d5db;color:#9ca3af }
+  .wp-sig-dot.sig-warn { background:#ef4444 }
+  .wp-sig-dot.sig-stale{ background:#f59e0b }
   /* Key below the three cards */
   .wp-key{
     font-size:8px;color:var(--ink-faint);margin-top:6px;
@@ -3022,17 +3023,20 @@ function renderWatchPanel(){
       ? (raw0.price - raw0.sma50) / raw0.sma50 * 100
       : NaN;
     const near50 = !isNaN(pctAbove50) && pctAbove50 >= 0 && pctAbove50 <= 5; // 0–5% above 50DMA = pullback zone
-    return { trendOk, volUp, volWarn, volGood, near50 };
+    const isStale = r.scored_at ? (Date.now() - new Date(r.scored_at).getTime() > 24 * 3600 * 1000) : false;
+    return { trendOk, volUp, volWarn, volGood, near50, isStale };
   };
   const sigDots = sym => {
     const s = entrySigs(sym);
     if (!s) return '';
-    const trendCls  = s.trendOk  ? 'sig-on' : 'sig-off';
-    const volCls    = s.volWarn  ? 'sig-warn' : (s.volGood && s.volUp ? 'sig-on' : 'sig-off');
-    const nearCls   = s.near50   ? 'sig-on' : 'sig-off';
-    const trendTip  = s.trendOk  ? 'Trend: price above 50DMA ✓' : 'Trend: below 50DMA — avoid entry';
-    const volTip    = s.volWarn  ? 'Vol Surge: down-day distribution ✗' : (s.volGood && s.volUp ? 'Vol Surge: up-day accumulation ✓' : 'Vol Surge: no strong signal yet');
-    const nearTip   = s.near50   ? 'Near 50DMA: pullback zone — good entry risk/reward ✓' : 'Not near 50DMA — may be extended';
+    const on = s.isStale ? 'sig-stale' : 'sig-on';
+    const trendCls  = s.trendOk  ? on : 'sig-off';
+    const volCls    = s.volWarn  ? 'sig-warn' : (s.volGood && s.volUp ? on : 'sig-off');
+    const nearCls   = s.near50   ? on : 'sig-off';
+    const staleNote = s.isStale ? ' (data >24h old — rescan to confirm)' : '';
+    const trendTip  = s.trendOk  ? `Trend: price above 50DMA ✓${staleNote}` : 'Trend: below 50DMA — avoid entry';
+    const volTip    = s.volWarn  ? 'Vol Surge: down-day distribution ✗' : (s.volGood && s.volUp ? `Vol Surge: up-day accumulation ✓${staleNote}` : 'Vol Surge: no strong signal yet');
+    const nearTip   = s.near50   ? `Near 50DMA: pullback zone — good entry risk/reward ✓${staleNote}` : 'Not near 50DMA — may be extended';
     return `<span class="wp-sig">` +
       `<span class="wp-sig-dot ${trendCls}" data-tip="${escHtml(trendTip)}">T</span>` +
       `<span class="wp-sig-dot ${volCls}"   data-tip="${escHtml(volTip)}">V</span>` +
@@ -3067,6 +3071,7 @@ function renderWatchPanel(){
     <span><span class="wp-key-dot" style="background:#10b981">T</span>Trend above 50DMA</span>
     <span><span class="wp-key-dot" style="background:#10b981">V</span>Vol Surge ↑ accumulation</span>
     <span><span class="wp-key-dot" style="background:#10b981">P</span>Pullback to 50DMA zone</span>
+    <span><span class="wp-key-dot" style="background:#f59e0b">T</span>Signal stale — rescan</span>
     <span><span class="wp-key-dot" style="background:#ef4444">V</span>Distribution warning</span>
     <span><span class="wp-key-dot" style="background:#d1d5db;color:#9ca3af">T</span>Signal not met</span>
   </div>`;
