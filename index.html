@@ -587,7 +587,6 @@
 [data-theme="dark"] .num{color:#8a95a8}
 [data-theme="dark"] .sym{color:#c8d0dc}
 [data-theme="dark"] .price-cell{color:#c8d0dc}
-[data-theme="dark"] #themeSwatch button{background:#2a2e38;color:var(--ink);border-color:#3a3e4a}
 
 /* ── Warm ─────────────────────────────────────────────────────────────── */
 [data-theme="warm"]{
@@ -617,7 +616,6 @@
 [data-theme="warm"] .sym{color:#1e1510}
 [data-theme="warm"] .price-cell{color:#1e1510}
 [data-theme="warm"] .legend span b{background:#e4ddd4;color:#584e44}
-[data-theme="warm"] #themeSwatch button{background:#e4ddd4;color:var(--ink);border-color:#ccc4b8}
 
 /* ── White (sharp B&W technical) ──────────────────────────────────────── */
 [data-theme="white"]{
@@ -657,65 +655,6 @@
 [data-theme="white"] #acDrop{background:#fff;border:1px solid #000;border-radius:0}
 [data-theme="white"] .ac-item:hover,[data-theme="white"] .ac-item.sel{background:#f0f0f0}
 [data-theme="white"] #pipelineModal > div{background:#fff;border:1px solid #000;border-radius:0}
-[data-theme="white"] #themeSwatch button,
-[data-theme="white"] #themeSwatch button:not(.active){background:#fff;color:#000;border:1px solid #000;border-radius:0;padding:8px 15px;font-size:11px;font-weight:600;opacity:1}
-[data-theme="white"] #themeSwatch button.active{background:#000;color:#fff;border-color:#000;opacity:1}
-
-/* ── Clean (minimal, sharp, lots of white space) ──────────────────────── */
-[data-theme="clean"]{
-  --ink:#0f172a; --ink-soft:#475569; --ink-faint:#94a3b8;
-  --page:#f1f5f9; --card:#ffffff;
-  --good-bg:#f0fdf4; --good-fg:#166534;
-  --bad-bg:#fef2f2;  --bad-fg:#991b1b;
-  --yel-bg:#fefce8;  --yel-fg:#854d0e;
-  --neu-bg:#eff6ff;  --neu-fg:#1e40af;
-  --gray-bg:#f1f5f9; --gray-fg:#475569;
-  --pur-bg:#faf5ff;  --pur-fg:#6b21a8;
-  --radius:4px;
-}
-[data-theme="clean"] body{background:var(--page);color:var(--ink)}
-[data-theme="clean"] header.bar{background:linear-gradient(var(--card) 72%,transparent)}
-[data-theme="clean"] .card{background:var(--card);border-radius:var(--radius)}
-[data-theme="clean"] .btn,[data-theme="clean"] .net-link{
-  background:var(--card);color:var(--ink);
-  border:1px solid #e2e8f0;border-radius:var(--radius);
-}
-[data-theme="clean"] .btn:hover,[data-theme="clean"] .net-link:hover{border-color:#94a3b8}
-[data-theme="clean"] .search{background:var(--card);border:1px solid #e2e8f0;border-radius:var(--radius)}
-[data-theme="clean"] .search input{color:var(--ink)}
-[data-theme="clean"] table{border-spacing:0}
-[data-theme="clean"] tbody td{border-top-color:#f1f5f9}
-[data-theme="clean"] tbody tr:hover{background:#f8fafc}
-[data-theme="clean"] tbody tr:hover td:nth-child(1),
-[data-theme="clean"] tbody tr:hover td:nth-child(2){background:#f8fafc}
-[data-theme="clean"] tbody tr.flash{background:#eff6ff}
-[data-theme="clean"] thead tr.grphdr th{border-bottom:1px solid #e2e8f0;background:var(--card)}
-[data-theme="clean"] thead tr:nth-child(2) th{border-bottom:1px solid #e2e8f0}
-[data-theme="clean"] thead tr:nth-child(2) th.grp-start,
-[data-theme="clean"] tbody td.grp-start{border-left-color:#e2e8f0}
-[data-theme="clean"] thead th:nth-child(1),[data-theme="clean"] tbody td:nth-child(1),
-[data-theme="clean"] thead th:nth-child(2),[data-theme="clean"] tbody td:nth-child(2){background:var(--card)}
-[data-theme="clean"] tbody tr.pin-last td{border-bottom-color:#cbd5e1}
-[data-theme="clean"] .num{color:#475569}
-[data-theme="clean"] .sym{color:#0f172a;font-weight:700;letter-spacing:.2px}
-[data-theme="clean"] .price-cell{color:#0f172a;font-weight:600}
-[data-theme="clean"] .pill{border-radius:var(--radius)}
-[data-theme="clean"] .legend span b{background:var(--card);border:1px solid #e2e8f0;border-radius:var(--radius)}
-[data-theme="clean"] #ctx{background:var(--card);border:1px solid #e2e8f0;border-radius:var(--radius);color:var(--ink);box-shadow:0 4px 24px rgba(15,23,42,.08)}
-[data-theme="clean"] #scoreHist{background:#f8fafc;border-radius:var(--radius)}
-[data-theme="clean"] #acDrop{background:var(--card);border:1px solid #e2e8f0;border-radius:var(--radius);box-shadow:0 4px 16px rgba(15,23,42,.08)}
-[data-theme="clean"] .ac-item:hover,[data-theme="clean"] .ac-item.sel{background:#f8fafc}
-[data-theme="clean"] #pipelineModal > div{background:var(--card);border:1px solid #e2e8f0;border-radius:var(--radius);box-shadow:0 8px 40px rgba(15,23,42,.10)}
-[data-theme="clean"] #themeSwatch button{
-  background:var(--card);color:var(--ink);
-  border:1px solid #e2e8f0;border-radius:var(--radius);
-  font-weight:600;opacity:1;
-}
-[data-theme="clean"] #themeSwatch button.active{background:#0f172a;color:#fff;border-color:#0f172a}
-[data-theme="clean"] #themeSwatch button:not(.active){opacity:.6}
-[data-theme="clean"] #themeSwatch button:hover{opacity:1}
-[data-theme="clean"] #viewSwitch button{border-radius:var(--radius);border:1px solid #e2e8f0;background:var(--card);color:var(--ink)}
-[data-theme="clean"] #viewSwitch button.active{background:#0f172a;color:#fff;border-color:#0f172a;font-weight:700;box-shadow:none}
 
 /* ── Mobile: shrink text + hide lower-value columns ──────────────────── */
 @media (max-width: 700px){
@@ -766,7 +705,7 @@
 /* ── Touch devices: bigger tap targets (Apple HIG ≥36px) ─────────────── */
 @media (pointer: coarse){
   .btn, .net-link{min-height:36px; padding:9px 16px; display:inline-flex; align-items:center}
-  #themeSwatch button{min-height:36px; padding:9px 14px}
+  #themeSwatch button{min-height:unset; padding:0; width:20px; height:20px}
   .search{min-height:36px; padding:9px 12px 9px 30px}
   .search input{font-size:13px}
   .chk{min-width:14px; min-height:18px}
@@ -863,17 +802,20 @@
 }
 
 /* ── theme swatch strip ───────────────────────────────────────────────── */
-#themeSwatch{display:flex;align-items:center;gap:6px}
+#themeSwatch{display:flex;align-items:center;gap:5px}
 #themeSwatch button{
-  border:1.5px solid #dde2e8; border-radius:7px;
-  padding:5px 9px; font-size:10px; font-weight:600;
-  cursor:pointer; background:#f3f4f6; color:#464d57;
-  transition:border-color .15s, opacity .15s;
-  white-space:nowrap;
+  width:16px;height:16px;border-radius:50%;padding:0;
+  cursor:pointer;border:2px solid transparent;
+  transition:transform .15s,box-shadow .15s,opacity .15s;
+  flex-shrink:0;
 }
-#themeSwatch button.active{border-color:#4a525e;opacity:1}
-#themeSwatch button:not(.active){opacity:.65}
-#themeSwatch button:hover{opacity:1}
+#themeSwatch button[data-t="dark"] {background:#1a1c23}
+#themeSwatch button[data-t="warm"] {background:#d4c4a8}
+#themeSwatch button[data-t="white"]{background:#fff;border-color:#888}
+#themeSwatch button:not(.active){opacity:.55}
+#themeSwatch button:hover{opacity:1;transform:scale(1.15)}
+#themeSwatch button.active{opacity:1;transform:scale(1.1);box-shadow:0 0 0 2px #fff,0 0 0 4px #4a525e}
+#themeSwatch button[data-t="white"].active{box-shadow:0 0 0 2px #fff,0 0 0 4px #000}
 </style>
 
 <!-- ================= APP ================= -->
@@ -1022,10 +964,9 @@
     </div>
 
     <div id="themeSwatch">
-      <button data-t="dark">Dark</button>
-      <button data-t="warm">Warm</button>
-      <button data-t="white">White</button>
-      <button data-t="clean">Clean</button>
+      <button data-t="dark"  title="Dark"></button>
+      <button data-t="warm"  title="Warm"></button>
+      <button data-t="white" title="White"></button>
     </div>
 
     <button id="healthBtn" class="btn" title="Probe FMP's data feed for a CDN sym-flip">FMP health</button>
