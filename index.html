@@ -3033,7 +3033,7 @@ function renderWatchPanel(){
     const trendCls  = s.trendOk  ? on : 'sig-off';
     const volCls    = s.volWarn  ? 'sig-warn' : (s.volGood && s.volUp ? on : 'sig-off');
     const nearCls   = s.near50   ? on : 'sig-off';
-    const staleNote = s.isStale ? ' (data >24h old — rescan to confirm)' : '';
+    const staleNote = s.isStale ? ' (signal may have changed — rescan to confirm)' : '';
     const trendTip  = s.trendOk  ? `Trend: price above 50DMA ✓${staleNote}` : 'Trend: below 50DMA — avoid entry';
     const volTip    = s.volWarn  ? 'Vol Surge: down-day distribution ✗' : (s.volGood && s.volUp ? `Vol Surge: up-day accumulation ✓${staleNote}` : 'Vol Surge: no strong signal yet');
     const nearTip   = s.near50   ? `Near 50DMA: pullback zone — good entry risk/reward ✓${staleNote}` : 'Not near 50DMA — may be extended';
@@ -3071,7 +3071,7 @@ function renderWatchPanel(){
     <span><span class="wp-key-dot" style="background:#10b981">T</span>Trend above 50DMA</span>
     <span><span class="wp-key-dot" style="background:#10b981">V</span>Vol Surge ↑ accumulation</span>
     <span><span class="wp-key-dot" style="background:#10b981">P</span>Pullback to 50DMA zone</span>
-    <span><span class="wp-key-dot" style="background:#f59e0b">T</span>Signal stale — rescan</span>
+    <span><span class="wp-key-dot" style="background:#f59e0b">T</span>Signal changed — rescan</span>
     <span><span class="wp-key-dot" style="background:#ef4444">V</span>Distribution warning</span>
     <span><span class="wp-key-dot" style="background:#d1d5db;color:#9ca3af"> </span>Signal not met</span>
   </div>`;
