@@ -3016,10 +3016,12 @@ function renderWatchPanel(){
     const volUp    = (reasons[9] || '').includes('↑');
     const volWarn  = (reasons[9] || '').includes('↓');
     const volGood  = v[9] === 'good' || v[9] === 'ok';
-    // Near 50DMA: trend reason contains "above" or parse raw[0] as a number
+    // Near 50DMA: raw[0] is { price, sma50, sma200 } — compute pct directly
     const raw0 = r.raw?.[0];
-    const vsNum = typeof raw0 === 'number' ? raw0 : parseFloat(raw0);
-    const near50 = !isNaN(vsNum) && vsNum >= 0 && vsNum <= 5; // 0–5% above 50DMA = pullback zone
+    const pctAbove50 = (raw0?.price != null && raw0?.sma50 != null)
+      ? (raw0.price - raw0.sma50) / raw0.sma50 * 100
+      : NaN;
+    const near50 = !isNaN(pctAbove50) && pctAbove50 >= 0 && pctAbove50 <= 5; // 0–5% above 50DMA = pullback zone
     return { trendOk, volUp, volWarn, volGood, near50 };
   };
   const sigDots = sym => {

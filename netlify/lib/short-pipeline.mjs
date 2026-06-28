@@ -459,7 +459,7 @@ function checkVolumeSurge(quote, hist) {
   const recentDir = Math.sign(recentClose - priorClose);
   const isUp   = recentDir > 0;
   const isDown = recentDir < 0;
-  const dirLabel = isUp ? "up" : isDown ? "down" : "flat";
+  const dirLabel = isUp ? "↑" : isDown ? "↓" : "→";
 
   // 10-day money flow — sum up$/down$ over the 10 most recent complete days.
   // Loop starts at i=0 (yesterday) paired with i+1 (day before) — earlier
@@ -538,7 +538,7 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   // Cache check
   if (!skipCache) {
     const cached = await getShortFmpCache(sym);
-    if (cached && cached._v === 8) {
+    if (cached && cached._v === 9) {
       return cached.row;
     }
   } else {
@@ -647,6 +647,6 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     scored_at: new Date().toISOString(),
   };
 
-  await putShortFmpCache(sym, { _v: 8, row }).catch(() => {});
+  await putShortFmpCache(sym, { _v: 9, row }).catch(() => {});
   return row;
 }
