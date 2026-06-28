@@ -489,14 +489,16 @@
     color:var(--ink-faint);font-size:10px;line-height:1;font-weight:700;
   }
   .wp-x:hover{ background:rgba(239,68,68,.15);color:#991b1b }
-  /* Entry signal dots on Ready chips */
+  /* Entry signal badges on Ready chips */
   .wp-sig{ display:inline-flex;align-items:center;gap:2px;margin-left:5px;vertical-align:middle }
   .wp-sig-dot{
-    display:inline-block;width:6px;height:6px;border-radius:50%;
-    font-size:0;line-height:0;flex-shrink:0;
+    display:inline-flex;align-items:center;justify-content:center;
+    width:13px;height:13px;border-radius:3px;
+    font-size:7px;font-weight:800;letter-spacing:0;line-height:1;
+    flex-shrink:0;color:#fff;
   }
   .wp-sig-dot.sig-on  { background:#10b981 }
-  .wp-sig-dot.sig-off { background:#e5e7eb }
+  .wp-sig-dot.sig-off { background:#d1d5db;color:#9ca3af }
   .wp-sig-dot.sig-warn{ background:#ef4444 }
   /* Key below the three cards */
   .wp-key{
@@ -504,8 +506,9 @@
     display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0 2px;
   }
   .wp-key-dot{
-    display:inline-block;width:6px;height:6px;border-radius:50%;
-    vertical-align:middle;margin-right:2px;
+    display:inline-flex;align-items:center;justify-content:center;
+    width:13px;height:13px;border-radius:3px;font-size:7px;font-weight:800;
+    color:#fff;vertical-align:middle;margin-right:2px;
   }
 
   /* Legacy-data hazard — row has stale data, awaiting fresh Rescan fetch */
@@ -3029,9 +3032,9 @@ function renderWatchPanel(){
     const volTip    = s.volWarn  ? 'Vol Surge: down-day distribution ✗' : (s.volGood && s.volUp ? 'Vol Surge: up-day accumulation ✓' : 'Vol Surge: no strong signal yet');
     const nearTip   = s.near50   ? 'Near 50DMA: pullback zone — good entry risk/reward ✓' : 'Not near 50DMA — may be extended';
     return `<span class="wp-sig">` +
-      `<span class="wp-sig-dot ${trendCls}" data-tip="${escHtml(trendTip)}"></span>` +
-      `<span class="wp-sig-dot ${volCls}"   data-tip="${escHtml(volTip)}"></span>` +
-      `<span class="wp-sig-dot ${nearCls}"  data-tip="${escHtml(nearTip)}"></span>` +
+      `<span class="wp-sig-dot ${trendCls}" data-tip="${escHtml(trendTip)}">T</span>` +
+      `<span class="wp-sig-dot ${volCls}"   data-tip="${escHtml(volTip)}">V</span>` +
+      `<span class="wp-sig-dot ${nearCls}"  data-tip="${escHtml(nearTip)}">P</span>` +
       `</span>`;
   };
   const chip = (sym, kind, reason) => {
@@ -3059,11 +3062,11 @@ function renderWatchPanel(){
   };
   const sigKey = `<div class="wp-key">
     <span style="font-weight:700;color:var(--ink-soft)">3/3 green = enter.</span>
-    <span><span class="wp-key-dot" style="background:#10b981"></span>Trend above 50DMA</span>
-    <span><span class="wp-key-dot" style="background:#10b981"></span>Vol Surge ↑ accumulation</span>
-    <span><span class="wp-key-dot" style="background:#10b981"></span>Pullback to 50DMA zone</span>
-    <span><span class="wp-key-dot" style="background:#ef4444"></span>Distribution warning</span>
-    <span><span class="wp-key-dot" style="background:#e5e7eb"></span>Signal not met</span>
+    <span><span class="wp-key-dot" style="background:#10b981">T</span>Trend above 50DMA</span>
+    <span><span class="wp-key-dot" style="background:#10b981">V</span>Vol Surge ↑ accumulation</span>
+    <span><span class="wp-key-dot" style="background:#10b981">P</span>Pullback to 50DMA zone</span>
+    <span><span class="wp-key-dot" style="background:#ef4444">V</span>Distribution warning</span>
+    <span><span class="wp-key-dot" style="background:#d1d5db;color:#9ca3af">T</span>Signal not met</span>
   </div>`;
   el.innerHTML = `
     <div class="wp-head">
