@@ -1084,69 +1084,6 @@
     <span style="color:var(--ink-soft)">Hover any chip to read what it measures, why it matters, the pass rule, and your computed value.</span>
   </div>
 
-  <!-- ── Watchlist (Watch flag) walkthrough ─────────────────────────────── -->
-  <div class="wf-guide">
-    <div class="wf-guide-head">
-      <span class="wf-guide-eyebrow">How to use</span>
-      <div class="wf-guide-title">The Watch Flag — your entry-trigger alarm</div>
-      <div class="wf-guide-sub">Mark a stock now, get a green flash the moment it becomes actionable.</div>
-    </div>
-
-    <div class="wf-guide-grid">
-      <div class="wf-step">
-        <div class="wf-step-n">1</div>
-        <div class="wf-step-body">
-          <div class="wf-step-title">Spot a stock with a strong setup</div>
-          <p>Scan the table for names with <b>Trend, 3M Mom, and Near Hi</b> all green. These are stocks already in confirmed uptrends — the foundation of every good swing trade.</p>
-        </div>
-      </div>
-
-      <div class="wf-step">
-        <div class="wf-step-n">2</div>
-        <div class="wf-step-body">
-          <div class="wf-step-title">Click the dashed box next to its ticker</div>
-          <p>The flag turns yellow (<span class="wf-pill wf-watching">● Watching</span>). The stock is now on your radar. Your selection is saved locally — refresh, close the tab, come back tomorrow, your watchlist stays.</p>
-        </div>
-      </div>
-
-      <div class="wf-step">
-        <div class="wf-step-n">3</div>
-        <div class="wf-step-body">
-          <div class="wf-step-title">Wait for the auto-promote</div>
-          <p>The screener checks every render. When your watched stock crosses the entry threshold — <b>score ≥ 22</b>, <b>Catalyst</b> good or ok, <b>Vol Surge</b> good or ok — the flag flips to green (<span class="wf-pill wf-ready">✓ Ready</span>) and the entire row flashes briefly.</p>
-        </div>
-      </div>
-
-      <div class="wf-step">
-        <div class="wf-step-n">4</div>
-        <div class="wf-step-body">
-          <div class="wf-step-title">Read the Watchlist panel at the top</div>
-          <p>Three live cards: <span class="wf-pill wf-ready">✓ Ready</span> stocks that just hit criteria, <span class="wf-pill wf-watching">● Watching</span> your queue, and <span class="wf-pill wf-demoted">⚠ Demoted</span> stocks that <i>were</i> Ready but fell back — with the specific reason. Click a ticker to jump to its row.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="wf-guide-foot">
-      <div class="wf-foot-col">
-        <div class="wf-foot-ttl">What makes a stock "Ready"</div>
-        <ul>
-          <li><b>Score ≥ 22 of 30</b> — at least 7–8 of the 10 factors are healthy.</li>
-          <li><b>Catalyst chip green or ok</b> — earnings 14–60 days out. A known event that will re-rate the stock inside your hold.</li>
-          <li><b>Vol Surge chip green or ok</b> — today's volume is high AND the price is moving up, with 10-day money flow confirming buying (not distribution).</li>
-        </ul>
-      </div>
-      <div class="wf-foot-col">
-        <div class="wf-foot-ttl">Tips for using it well</div>
-        <ul>
-          <li>Mark <b>everything that looks interesting but isn't quite there</b>. The flag costs you nothing.</li>
-          <li>When a stock falls back from Ready, it lands in the red <b>Demoted</b> card with the exact reason — so you know whether to take it off the list or just keep watching.</li>
-          <li>Click the <b>×</b> on a demoted chip to dismiss the alert (the stock stays in Watching).</li>
-          <li>Click the flag again at any time to <b>clear it</b> entirely.</li>
-          <li>Treat the green flash as a <b>"check this now"</b> signal, not an autopilot buy.</li>
-        </ul>
-      </div>
-    </div>
-  </div>
 </div>
 
 <!-- ===== TRAINING WHEEL VIEW ===== -->
@@ -1271,6 +1208,23 @@
 </div>
 
 <!-- Vol Surge column-header info popover -->
+<!-- Watchlist how-to popover -->
+<div id="wlHelp" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:9.5px;line-height:1.6;padding:14px 16px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:320px;max-width:400px;pointer-events:none;white-space:normal;border:0.5px solid rgba(255,255,255,.08)">
+  <div style="font-size:11px;font-weight:700;color:#e8eaf0;margin-bottom:4px">The Watch Flag — your entry-trigger alarm</div>
+  <div style="font-size:9px;color:#a8b0bc;margin-bottom:10px">Mark a stock now, get a green flash the moment it becomes actionable.</div>
+  <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:11px">
+    <div style="display:flex;gap:8px"><span style="font-weight:700;color:#e8eaf0;min-width:14px">1</span><span><b style="color:#e8eaf0">Spot a setup</b> — look for Trend, 3M Mom, and Near Hi all green in the table.</span></div>
+    <div style="display:flex;gap:8px"><span style="font-weight:700;color:#e8eaf0;min-width:14px">2</span><span><b style="color:#e8eaf0">Click the flag</b> next to the ticker — it turns yellow (Watching). Saved locally; survives refresh.</span></div>
+    <div style="display:flex;gap:8px"><span style="font-weight:700;color:#e8eaf0;min-width:14px">3</span><span><b style="color:#e8eaf0">Wait for auto-promote</b> — screener checks every render. When score ≥ 22, Catalyst ok+, Vol Surge ok+, it flips green (Ready) and the row flashes.</span></div>
+    <div style="display:flex;gap:8px"><span style="font-weight:700;color:#e8eaf0;min-width:14px">4</span><span><b style="color:#e8eaf0">Check the 3 dots</b> on the Ready chip — all green means the entry timing is right. Wait for 3/3.</span></div>
+  </div>
+  <div style="border-top:1px solid rgba(255,255,255,.08);padding-top:8px;display:flex;flex-direction:column;gap:3px;font-size:8.5px;color:#a8b0bc">
+    <div><b style="color:#e8eaf0">Ready requires:</b> Score ≥ 22 · Catalyst good/ok · Vol Surge good/ok</div>
+    <div>Demoted = was Ready, fell back. × dismisses the alert (stays in Watching).</div>
+    <div>Treat the green flash as a <b style="color:#e8eaf0">"check this now"</b> signal, not an autopilot buy.</div>
+  </div>
+</div>
+
 <!-- Generic column-header rule card (hover) -->
 <div id="ruleCard" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.55;padding:14px 16px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:300px;max-width:360px;pointer-events:none;white-space:normal;border:0.5px solid rgba(255,255,255,.08)"></div>
 
@@ -3087,7 +3041,7 @@ function renderWatchPanel(){
   </div>`;
   el.innerHTML = `
     <div class="wp-head">
-      <span class="wp-title">Watchlist</span>
+      <span class="wp-title" id="wlHelpTrigger" style="cursor:help;border-bottom:1px dashed currentColor">Watchlist ?</span>
       <span class="wp-sub">Click a ticker to see its history · × to clear</span>
     </div>
     <div class="wp-cards">
@@ -3097,6 +3051,24 @@ function renderWatchPanel(){
     </div>
     ${sigKey}`;
 }
+
+// ── Watchlist how-to hover (delegated — survives re-renders) ─────────
+const wlHelp = document.getElementById('wlHelp');
+document.addEventListener('mouseover', e => {
+  if (!e.target.closest('#wlHelpTrigger')) return;
+  wlHelp.style.display = 'block';
+  const r = e.target.getBoundingClientRect();
+  const pw = wlHelp.offsetWidth || 360, ph = wlHelp.offsetHeight || 260;
+  let x = r.left, y = r.bottom + 6;
+  if (x + pw > window.innerWidth - 8) x = window.innerWidth - pw - 8;
+  if (y + ph > window.innerHeight - 8) y = r.top - ph - 6;
+  wlHelp.style.left = Math.max(8, x) + 'px';
+  wlHelp.style.top  = Math.max(8, y) + 'px';
+});
+document.addEventListener('mouseout', e => {
+  if (!e.target.closest('#wlHelpTrigger')) return;
+  wlHelp.style.display = 'none';
+});
 
 // ── Column-header rule cards (hover) ──────────────────────────────────
 const ruleCard = document.getElementById('ruleCard');
