@@ -802,7 +802,7 @@
 }
 
 /* ── theme swatch strip ───────────────────────────────────────────────── */
-#themeSwatch{display:flex;flex-direction:column;align-items:center;gap:4px}
+#themeSwatch{display:flex;flex-direction:row;align-items:center;gap:5px}
 #themeSwatch button{
   width:16px;height:16px;border-radius:50%;padding:0;
   cursor:pointer;border:2px solid transparent;
@@ -814,8 +814,8 @@
 #themeSwatch button[data-t="white"]{background:#fff;border-color:#ccc}
 #themeSwatch button:not(.active){opacity:.55}
 #themeSwatch button:hover{opacity:1;transform:scale(1.15)}
-#themeSwatch button.active{opacity:1;transform:scale(1.1);box-shadow:0 0 0 2px #fff,0 0 0 4px #4a525e}
-#themeSwatch button[data-t="white"].active{box-shadow:0 0 0 2px #fff,0 0 0 4px #000}
+#themeSwatch button.active{opacity:1;transform:scale(1.1);box-shadow:0 0 0 2px #4a525e}
+#themeSwatch button[data-t="white"].active{box-shadow:0 0 0 2px #999}
 </style>
 
 <!-- ================= APP ================= -->
@@ -954,6 +954,7 @@
     <div class="grow"></div>
 
     <div id="wlControls" style="display:flex; gap:8px; align-items:center;">
+      <button id="healthBtn" class="btn" title="Probe FMP's data feed for a CDN sym-flip">FMP health</button>
       <div class="ac-wrap">
         <div class="search">
           <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
@@ -961,7 +962,6 @@
         </div>
         <div id="acDrop"></div>
       </div>
-      <button id="healthBtn" class="btn" title="Probe FMP's data feed for a CDN sym-flip">FMP health</button>
     </div>
 
     <div id="themeSwatch">
