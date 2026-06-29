@@ -1044,6 +1044,10 @@
 <div id="shortView" class="hidden">
   <!-- Unified watchlist panel — populated by renderWatchPanel() -->
   <div id="watchPanel"></div>
+  <div class="wp-head" style="margin-top:18px">
+    <span class="wp-title" style="border-bottom:1px dashed currentColor">Screener</span>
+    <span class="wp-sub">Click a column header to sort · click a row to see details</span>
+  </div>
   <div class="card">
     <table>
       <thead>
@@ -3536,12 +3540,16 @@ function renderShortWatchlist(){
   let flagsDirty = false;
   let demotedDirty = false;
   let histDirty = false;
-  for (const wl of watchlist) {
-    const sym = (wl.sym || '').toUpperCase();
+  // Iterate watchFlags (not watchlist) — stocks can be flagged without being
+  // in the watchlist table array. Without this, flag-only entries never
+  // auto-promote even when they meet Ready criteria.
+  for (const sym of Object.keys(watchFlags)) {
     const state = watchFlags[sym];
     if (!state) continue;
     const r = shortRowsBySym[sym];
-    if (!r || r.scoring || wl.legacy) continue;
+    if (!r || r.scoring) continue;
+    const wl = watchlist.find(w => (w.sym || '').toUpperCase() === sym);
+    if (wl && wl.legacy) continue;
     const tvp = tvpFor(r);
     if (!tvp) continue;
     // Record this scan in per-ticker TVP history (dedupes on scored_at).
