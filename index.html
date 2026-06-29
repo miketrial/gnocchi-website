@@ -1216,12 +1216,12 @@
   <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:11px">
     <div style="display:flex;gap:8px"><span style="font-weight:700;color:#e8eaf0;min-width:14px">1</span><span><b style="color:#e8eaf0">Spot a setup</b> — look for Trend, 3M Mom, and Near Hi all green in the table.</span></div>
     <div style="display:flex;gap:8px"><span style="font-weight:700;color:#e8eaf0;min-width:14px">2</span><span><b style="color:#e8eaf0">Click the flag</b> next to the ticker — it turns yellow (Watching). Saved locally; survives refresh.</span></div>
-    <div style="display:flex;gap:8px"><span style="font-weight:700;color:#e8eaf0;min-width:14px">3</span><span><b style="color:#e8eaf0">Wait for auto-promote</b> — screener checks every render. When score ≥ 22, Catalyst ok+, Vol Surge ok+, it flips green (Ready) and the row flashes.</span></div>
-    <div style="display:flex;gap:8px"><span style="font-weight:700;color:#e8eaf0;min-width:14px">4</span><span><b style="color:#e8eaf0">Check the 3 dots</b> on the Ready chip — all green means the entry timing is right. Wait for 3/3.</span></div>
+    <div style="display:flex;gap:8px"><span style="font-weight:700;color:#e8eaf0;min-width:14px">3</span><span><b style="color:#e8eaf0">Wait for auto-promote</b> — screener checks every render. When score ≥ 22 and any of T/V/P is green, it flips green (Ready) and the row flashes.</span></div>
+    <div style="display:flex;gap:8px"><span style="font-weight:700;color:#e8eaf0;min-width:14px">4</span><span><b style="color:#e8eaf0">Check the 3 dots</b> on the Ready chip — all green means the entry timing is right. Wait for 3/3. Yellow = signal was green within the last 24h, rescan to confirm.</span></div>
   </div>
   <div style="border-top:1px solid rgba(255,255,255,.08);padding-top:8px;display:flex;flex-direction:column;gap:3px;font-size:8.5px;color:#a8b0bc">
-    <div><b style="color:#e8eaf0">Ready requires:</b> Score ≥ 22 · Catalyst good/ok · Vol Surge good/ok</div>
-    <div>Demoted = was Ready, fell back. × dismisses the alert (stays in Watching).</div>
+    <div><b style="color:#e8eaf0">Ready requires:</b> Score ≥ 22 · at least one of T/V/P green (or green within last 24h)</div>
+    <div>Demoted = score fell below 22 or all 3 signals lost for 24h. × dismisses the alert.</div>
     <div>Treat the green flash as a <b style="color:#e8eaf0">"check this now"</b> signal, not an autopilot buy.</div>
   </div>
 </div>
@@ -1230,7 +1230,7 @@
 <div id="ruleCard" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.55;padding:14px 16px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:300px;max-width:360px;pointer-events:none;white-space:normal;border:0.5px solid rgba(255,255,255,.08)"></div>
 
 <!-- Per-ticker watchlist history popover -->
-<div id="tickerHist" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.5;padding:12px 14px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:280px;max-width:340px;pointer-events:auto;white-space:normal;border:0.5px solid rgba(255,255,255,.08)">
+<div id="tickerHist" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.5;padding:12px 14px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:340px;max-width:400px;pointer-events:auto;white-space:normal;border:0.5px solid rgba(255,255,255,.08)">
   <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
     <span id="tickerHistTitle" style="font-size:11px;font-weight:700;color:#e8eaf0;letter-spacing:.2px"></span>
     <span id="tickerHistClose" style="cursor:pointer;color:#8a95a8;font-size:13px;line-height:1;padding:0 2px">✕</span>
@@ -1239,7 +1239,8 @@
     <span id="tickerHistStats"></span>
     <span id="tickerHistJump" style="cursor:pointer;color:#a7f3d0;text-transform:uppercase;letter-spacing:.4px;font-weight:600">Jump to row →</span>
   </div>
-  <div id="tickerHistRows" style="max-height:240px;overflow-y:auto;scrollbar-width:thin"></div>
+  <div id="tickerHistChart" style="margin-bottom:10px"></div>
+  <div id="tickerHistRows" style="max-height:200px;overflow-y:auto;scrollbar-width:thin"></div>
 </div>
 
 <!-- context menu -->
@@ -2856,6 +2857,29 @@ let activityLog = (() => {
 let activityExpanded = false;
 const ACTIVITY_CAP = 50;
 
+// Per-ticker TVP signal history: { [SYM]: [{ts, T, V, P}, ...] }, cap 100/sym.
+// Cross-device shared via /api/watch-state. Powers the timeline chart and
+// the 24h yellow "was green, now off" badge state.
+const SIG_HIST_CAP = 100;
+const SIG_STALE_MS = 24 * 60 * 60 * 1000;
+let sigHistory = (() => {
+  try { return JSON.parse(localStorage.getItem('gn_st_sighist') || '{}'); }
+  catch(e) { return {}; }
+})();
+function saveSigHistory(){
+  try { localStorage.setItem('gn_st_sighist', JSON.stringify(sigHistory)); } catch(e){}
+  scheduleWatchSave();
+}
+// Most recent ts where the signal was true. Computed from sigHistory.
+function lastGreenAt(sym, signal){
+  const h = sigHistory[sym];
+  if (!h || !h.length) return null;
+  for (let i = h.length - 1; i >= 0; i--) {
+    if (h[i][signal]) return h[i].ts;
+  }
+  return null;
+}
+
 // Debounced blob save — batches rapid changes into one PUT
 let _watchSaveTimer = null;
 function scheduleWatchSave(){
@@ -2863,7 +2887,7 @@ function scheduleWatchSave(){
   _watchSaveTimer = setTimeout(()=>{
     _watchSaveTimer = null;
     if(typeof API_LIVE !== 'undefined' && API_LIVE)
-      api.send('/api/watch-state','PUT',{flags:watchFlags,demoted:demotedRecent,activity:activityLog}).catch(()=>{});
+      api.send('/api/watch-state','PUT',{flags:watchFlags,demoted:demotedRecent,activity:activityLog,sigHistory}).catch(()=>{});
   }, 800);
 }
 function saveWatchFlags(){
@@ -2886,9 +2910,10 @@ function loadWatchState(){
   if(typeof API_LIVE === 'undefined' || !API_LIVE) return;
   api.get('/api/watch-state').then(data => {
     if(!data) return;
-    if(data.flags    && typeof data.flags    === 'object') { watchFlags    = data.flags;    try{localStorage.setItem('gn_st_watch',    JSON.stringify(watchFlags));}catch(e){} }
-    if(data.demoted  && typeof data.demoted  === 'object') { demotedRecent = data.demoted;  try{localStorage.setItem('gn_st_demoted',  JSON.stringify(demotedRecent));}catch(e){} }
-    if(Array.isArray(data.activity))                       { activityLog   = data.activity; try{localStorage.setItem('gn_st_activity', JSON.stringify(activityLog));}catch(e){} }
+    if(data.flags      && typeof data.flags      === 'object') { watchFlags    = data.flags;      try{localStorage.setItem('gn_st_watch',    JSON.stringify(watchFlags));}catch(e){} }
+    if(data.demoted    && typeof data.demoted    === 'object') { demotedRecent = data.demoted;    try{localStorage.setItem('gn_st_demoted',  JSON.stringify(demotedRecent));}catch(e){} }
+    if(Array.isArray(data.activity))                           { activityLog   = data.activity;   try{localStorage.setItem('gn_st_activity', JSON.stringify(activityLog));}catch(e){} }
+    if(data.sigHistory && typeof data.sigHistory === 'object') { sigHistory    = data.sigHistory; try{localStorage.setItem('gn_st_sighist',  JSON.stringify(sigHistory));}catch(e){} }
     renderShortWatchlist();
   }).catch(()=>{});
 }
@@ -2926,25 +2951,56 @@ function dismissDemoted(sym){
   saveDemoted();
   renderShortWatchlist();
 }
-function meetsReadyCriteria(r){
-  if (!r || !r.score) return false;
-  const n = parseInt((r.score||'').split('/')[0], 10);
-  if (!isFinite(n) || n < 22) return false;
-  const v = r.verdicts || [];
-  const cat = v[8], vol = v[9];
-  const ok = x => x === 'good' || x === 'ok';
-  return ok(cat) && ok(vol);
+// Compute the live T/V/P booleans for a row. Returns null if the row isn't
+// scored yet. These three signals drive both the Ready/Watching/Demoted state
+// transitions AND the badge colors. A signal is "currently green" only when
+// its boolean is true here; the yellow badge comes from history (see
+// lastGreenAt). V also has a separate "warn" red-distribution state.
+function tvpFor(r){
+  if (!r || !r.verdicts) return null;
+  const v = r.verdicts;
+  const reasons = r.reasons || [];
+  const trendOk = v[0] === 'good' || v[0] === 'ok';
+  const volUp   = (reasons[9] || '').includes('↑');
+  const volWarn = (reasons[9] || '').includes('↓');
+  const volGood = v[9] === 'good' || v[9] === 'ok';
+  const raw0    = r.raw?.[0];
+  const pctAbove50 = (raw0?.price != null && raw0?.sma50 != null)
+    ? (raw0.price - raw0.sma50) / raw0.sma50 * 100
+    : NaN;
+  const near50 = !isNaN(pctAbove50) && pctAbove50 >= 0 && pctAbove50 <= 5;
+  return {
+    T: trendOk,
+    V: volGood && volUp && !volWarn,
+    P: near50,
+    volWarn,
+    pctAbove50: isNaN(pctAbove50) ? null : pctAbove50,
+  };
+}
+// Append a new sigHistory entry for sym when scored_at advances. Returns true
+// if anything was written (so callers know to persist).
+function recordSigHistory(sym, scoredAtMs, tvp){
+  if (!sym || !scoredAtMs || !tvp) return false;
+  const arr = sigHistory[sym] || (sigHistory[sym] = []);
+  const last = arr[arr.length - 1];
+  if (last && last.ts === scoredAtMs) return false; // already recorded this scan
+  arr.push({ ts: scoredAtMs, T: !!tvp.T, V: !!tvp.V, P: !!tvp.P });
+  if (arr.length > SIG_HIST_CAP) arr.splice(0, arr.length - SIG_HIST_CAP);
+  return true;
 }
 function readyFailureReasons(r){
-  if (!r || !r.score) return ['no data'];
-  const fails = [];
-  const n = parseInt((r.score||'').split('/')[0], 10);
-  if (!isFinite(n) || n < 22) fails.push(`score ${isFinite(n)?n:'—'}/30`);
-  const v = r.verdicts || [];
-  const ok = x => x === 'good' || x === 'ok';
-  if (!ok(v[8])) fails.push('Catalyst weak');
-  if (!ok(v[9])) fails.push('Vol Surge weak');
-  return fails.length ? fails : ['—'];
+  const tvp = tvpFor(r);
+  if (!tvp) return ['no data'];
+  if ((r.score ?? 0) < 22) return [`score ${r.score ?? '—'}/30 below 22 threshold`];
+  const lost = [];
+  if (!tvp.T) lost.push('T');
+  if (!tvp.V) lost.push(tvp.volWarn ? 'V (distribution)' : 'V');
+  if (!tvp.P) lost.push('P');
+  return lost.length === 3
+    ? ['all 3 entry signals lost for 24h — T, V, P']
+    : lost.length
+      ? [`entry signals lost — ${lost.join(', ')}`]
+      : ['—'];
 }
 // Click handler: ticker chip opens per-ticker history popover.
 // X button dismisses (demoted) or clears (watching/ready).
@@ -3014,32 +3070,39 @@ function renderWatchPanel(){
   const entrySigs = sym => {
     const r = shortRowsBySym[sym];
     if (!r) return null;
-    const v = r.verdicts || [];
-    const reasons = r.reasons || [];
-    const trendOk  = v[0] === 'good' || v[0] === 'ok';
-    const volUp    = (reasons[9] || '').includes('↑');
-    const volWarn  = (reasons[9] || '').includes('↓');
-    const volGood  = v[9] === 'good' || v[9] === 'ok';
-    // Near 50DMA: raw[0] is { price, sma50, sma200 } — compute pct directly
-    const raw0 = r.raw?.[0];
-    const pctAbove50 = (raw0?.price != null && raw0?.sma50 != null)
-      ? (raw0.price - raw0.sma50) / raw0.sma50 * 100
-      : NaN;
-    const near50 = !isNaN(pctAbove50) && pctAbove50 >= 0 && pctAbove50 <= 5; // 0–5% above 50DMA = pullback zone
-    const isStale = r.scored_at ? (Date.now() - new Date(r.scored_at).getTime() > 24 * 3600 * 1000) : false;
-    return { trendOk, volUp, volWarn, volGood, near50, isStale };
+    const tvp = tvpFor(r);
+    if (!tvp) return null;
+    // Yellow = the signal was green within the last 24h but isn't now. We
+    // read that from sigHistory rather than the row itself so the colour
+    // persists across renders even after the signal flips off.
+    const now = Date.now();
+    const recentLossT = !tvp.T && (lastGreenAt(sym, 'T') ?? 0) > now - SIG_STALE_MS;
+    const recentLossV = !tvp.V && (lastGreenAt(sym, 'V') ?? 0) > now - SIG_STALE_MS;
+    const recentLossP = !tvp.P && (lastGreenAt(sym, 'P') ?? 0) > now - SIG_STALE_MS;
+    return { ...tvp, recentLossT, recentLossV, recentLossP };
   };
   const sigDots = sym => {
     const s = entrySigs(sym);
     if (!s) return '';
-    const on = s.isStale ? 'sig-stale' : 'sig-on';
-    const trendCls  = s.trendOk  ? on : 'sig-off';
-    const volCls    = s.volWarn  ? 'sig-warn' : (s.volGood && s.volUp ? on : 'sig-off');
-    const nearCls   = s.near50   ? on : 'sig-off';
-    const staleNote = s.isStale ? ' (signal may have changed — rescan to confirm)' : '';
-    const trendTip  = s.trendOk  ? `Trend: price above 50DMA ✓${staleNote}` : 'Trend: below 50DMA — avoid entry';
-    const volTip    = s.volWarn  ? 'Vol Surge: down-day distribution ✗' : (s.volGood && s.volUp ? `Vol Surge: up-day accumulation ✓${staleNote}` : 'Vol Surge: no strong signal yet');
-    const nearTip   = s.near50   ? `Near 50DMA: pullback zone — good entry risk/reward ✓${staleNote}` : 'Not near 50DMA — may be extended';
+    // Each signal: green if currently met; yellow if it was green within
+    // the last 24h but isn't now; red if active distribution warning (V
+    // only); grey otherwise.
+    const trendCls = s.T ? 'sig-on' : (s.recentLossT ? 'sig-stale' : 'sig-off');
+    const volCls   = s.volWarn ? 'sig-warn'
+                  : s.V        ? 'sig-on'
+                  : s.recentLossV ? 'sig-stale'
+                                  : 'sig-off';
+    const nearCls  = s.P ? 'sig-on' : (s.recentLossP ? 'sig-stale' : 'sig-off');
+    const trendTip = s.T ? 'Trend: price above 50DMA ✓'
+                   : s.recentLossT ? 'Trend: was above 50DMA recently — rescan to confirm'
+                                   : 'Trend: below 50DMA — avoid entry';
+    const volTip   = s.volWarn ? 'Vol Surge: down-day distribution ✗'
+                   : s.V       ? 'Vol Surge: up-day accumulation ✓'
+                   : s.recentLossV ? 'Vol Surge: accumulation lost — rescan to confirm'
+                                   : 'Vol Surge: no strong signal yet';
+    const nearTip  = s.P ? 'Near 50DMA: pullback zone — good entry risk/reward ✓'
+                   : s.recentLossP ? 'Near 50DMA: pullback zone lost — rescan to confirm'
+                                   : 'Not near 50DMA — may be extended';
     return `<span class="wp-sig">` +
       `<span class="wp-sig-dot ${trendCls}" data-tip="${escHtml(trendTip)}">T</span>` +
       `<span class="wp-sig-dot ${volCls}"   data-tip="${escHtml(volTip)}">V</span>` +
@@ -3347,10 +3410,58 @@ document.getElementById('tickerHistJump').addEventListener('click', () => {
   }
 });
 
+// Render a 3-row strip chart of the per-ticker T/V/P signal history into the
+// popover. Time on X (left = oldest, right = newest); rows = T / V / P; each
+// cell colored green (on) / grey (off) / yellow (off but green within 24h of
+// that scan). One cell per recorded scan, sized to fit the popover width.
+function renderSigHistoryChart(sym){
+  const el = document.getElementById('tickerHistChart');
+  if (!el) return;
+  const arr = sigHistory[sym] || [];
+  if (!arr.length) {
+    el.innerHTML = `<div style="font-size:8.5px;color:#6b7280;padding:6px 0">No scan history yet — rescan to start the timeline.</div>`;
+    return;
+  }
+  const W = 360, H = 56, labelW = 16, padR = 4, rowH = 14, rowGap = 4;
+  const cellsW = W - labelW - padR;
+  const cellW  = Math.max(2, cellsW / arr.length);
+  const colorFor = (entry, signal, idx) => {
+    if (entry[signal]) return '#10b981';
+    // Was this signal green within 24h leading up to this scan?
+    const cutoff = entry.ts - SIG_STALE_MS;
+    for (let i = idx - 1; i >= 0; i--) {
+      if (arr[i].ts < cutoff) break;
+      if (arr[i][signal]) return '#f59e0b';
+    }
+    return '#3a3e4a';
+  };
+  const rowSvg = (signal, rowIdx) => {
+    const y = rowIdx * (rowH + rowGap);
+    const cells = arr.map((e, i) =>
+      `<rect x="${labelW + i * cellW}" y="${y}" width="${cellW - 0.5}" height="${rowH}" fill="${colorFor(e, signal, i)}" rx="1"/>`
+    ).join('');
+    return `<text x="0" y="${y + rowH - 3}" font-size="9" font-weight="700" fill="#a8b0bc">${signal}</text>${cells}`;
+  };
+  const oldest = new Date(arr[0].ts);
+  const newest = new Date(arr[arr.length - 1].ts);
+  const fmt = d => d.toLocaleDateString(undefined, { month:'short', day:'numeric' });
+  el.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block">
+      ${rowSvg('T', 0)}
+      ${rowSvg('V', 1)}
+      ${rowSvg('P', 2)}
+    </svg>
+    <div style="display:flex;justify-content:space-between;font-size:8px;color:#6b7280;margin-top:2px;padding:0 ${padR}px 0 ${labelW}px">
+      <span>${fmt(oldest)}</span>
+      <span>${arr.length} scans</span>
+      <span>${fmt(newest)}</span>
+    </div>`;
+}
 function showTickerHistory(sym, anchorEl){
   sym = (sym || '').toUpperCase();
   if (!sym) return;
   tickerHist.dataset.sym = sym;
+  renderSigHistoryChart(sym);
   const events = activityLog.filter(e => e.sym === sym);
 
   // Stats summary
@@ -3424,21 +3535,40 @@ function renderShortWatchlist(){
   const justPromoted = new Set();
   let flagsDirty = false;
   let demotedDirty = false;
+  let histDirty = false;
   for (const wl of watchlist) {
     const sym = (wl.sym || '').toUpperCase();
     const state = watchFlags[sym];
     if (!state) continue;
     const r = shortRowsBySym[sym];
     if (!r || r.scoring || wl.legacy) continue;
-    const ready = meetsReadyCriteria(r);
-    if (state === 'watching' && ready) {
+    const tvp = tvpFor(r);
+    if (!tvp) continue;
+    // Record this scan in per-ticker TVP history (dedupes on scored_at).
+    const scoredAtMs = r.scored_at ? new Date(r.scored_at).getTime() : Date.now();
+    if (recordSigHistory(sym, scoredAtMs, tvp)) histDirty = true;
+    // Ready criteria, in priority order:
+    //   1. score ≥ 22 (quality gate — junk tickers can't sit in Ready)
+    //   2. ≥1 of T/V/P is currently green OR was green within the last 24h
+    //      (yellow counts: gives the user a 24h alert window to react before
+    //      the stock auto-demotes).
+    // Promote only happens on a currently-green signal — yellow can keep a
+    // stock in Ready but can't pull a Watching stock up.
+    const greenCount = (tvp.T?1:0) + (tvp.V?1:0) + (tvp.P?1:0);
+    const now = Date.now();
+    const yellowCount =
+      (!tvp.T && (lastGreenAt(sym,'T') ?? 0) > now - SIG_STALE_MS ? 1 : 0) +
+      (!tvp.V && (lastGreenAt(sym,'V') ?? 0) > now - SIG_STALE_MS ? 1 : 0) +
+      (!tvp.P && (lastGreenAt(sym,'P') ?? 0) > now - SIG_STALE_MS ? 1 : 0);
+    const scoreOk = (r.score ?? 0) >= 22;
+    const qualifiesReady = scoreOk && (greenCount >= 1 || yellowCount >= 1);
+    if (state === 'watching' && scoreOk && greenCount >= 1) {
       watchFlags[sym] = 'ready';
       justPromoted.add(sym);
       flagsDirty = true;
-      // If this sym was demoted earlier, the alert is no longer relevant
       if (demotedRecent[sym]) { delete demotedRecent[sym]; demotedDirty = true; }
-      logActivity(sym, 'promote', 'Watching → Ready');
-    } else if (state === 'ready' && !ready) {
+      logActivity(sym, 'promote', `${greenCount}/3 entry signals · score ${r.score}/30`);
+    } else if (state === 'ready' && !qualifiesReady) {
       watchFlags[sym] = 'watching';
       flagsDirty = true;
       const reasons = readyFailureReasons(r);
@@ -3449,6 +3579,7 @@ function renderShortWatchlist(){
   }
   if (flagsDirty)  saveWatchFlags();
   if (demotedDirty) saveDemoted();
+  if (histDirty)   saveSigHistory();
 
   // Pin order is sacred — flags never reorder rows. The watch panel above
   // surfaces Ready / Watching / Demoted; the table just highlights in place.
