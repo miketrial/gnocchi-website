@@ -2995,7 +2995,8 @@ function recordSigHistory(sym, scoredAtMs, tvp){
 function readyFailureReasons(r){
   const tvp = tvpFor(r);
   if (!tvp) return ['no data'];
-  if ((r.score ?? 0) < 22) return [`score ${r.score ?? '—'}/30 below 22 threshold`];
+  const scoreNum = parseInt(r.score) || 0;
+  if (scoreNum < 22) return [`score ${scoreNum}/30 below 22 threshold`];
   const lost = [];
   if (!tvp.T) lost.push('T');
   if (!tvp.V) lost.push(tvp.volWarn ? 'V (distribution)' : 'V');
@@ -3568,14 +3569,16 @@ function renderShortWatchlist(){
       (!tvp.T && (lastGreenAt(sym,'T') ?? 0) > now - SIG_STALE_MS ? 1 : 0) +
       (!tvp.V && (lastGreenAt(sym,'V') ?? 0) > now - SIG_STALE_MS ? 1 : 0) +
       (!tvp.P && (lastGreenAt(sym,'P') ?? 0) > now - SIG_STALE_MS ? 1 : 0);
-    const scoreOk = (r.score ?? 0) >= 22;
+    // r.score is "NN/30" (string) from the pipeline — parse before comparing.
+    const scoreNum = parseInt(r.score) || 0;
+    const scoreOk = scoreNum >= 22;
     const qualifiesReady = scoreOk && (greenCount >= 1 || yellowCount >= 1);
     if (state === 'watching' && scoreOk && greenCount >= 1) {
       watchFlags[sym] = 'ready';
       justPromoted.add(sym);
       flagsDirty = true;
       if (demotedRecent[sym]) { delete demotedRecent[sym]; demotedDirty = true; }
-      logActivity(sym, 'promote', `${greenCount}/3 entry signals · score ${r.score}/30`);
+      logActivity(sym, 'promote', `${greenCount}/3 entry signals · score ${scoreNum}/30`);
     } else if (state === 'ready' && !qualifiesReady) {
       watchFlags[sym] = 'watching';
       flagsDirty = true;
