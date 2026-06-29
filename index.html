@@ -1967,6 +1967,9 @@ async function init(){
         }
       }
     }catch(e){/* keep localStorage pins */}
+    // Watch state (flags/demoted/activity) lives server-side too — load it now
+    // that API_LIVE is true so a second device sees the shared watchlist.
+    loadWatchState();
   }catch{ API_LIVE=false; /* offline / static open → keep seed data */ }
   try{
     const saved=JSON.parse(localStorage.getItem('gn_sort')||'null');
@@ -2876,9 +2879,12 @@ function saveActivity(){
   scheduleWatchSave();
 }
 
-// Load latest watch state from blob on startup (overrides stale localStorage)
-if(typeof API_LIVE !== 'undefined' && API_LIVE){
-  api.send('/api/watch-state','GET').then(data => {
+// Load latest watch state from blob on startup (overrides stale localStorage).
+// Called from init() once API_LIVE is known true — must NOT run at module-eval
+// time, when API_LIVE is still false and the GET would be skipped.
+function loadWatchState(){
+  if(typeof API_LIVE === 'undefined' || !API_LIVE) return;
+  api.get('/api/watch-state').then(data => {
     if(!data) return;
     if(data.flags    && typeof data.flags    === 'object') { watchFlags    = data.flags;    try{localStorage.setItem('gn_st_watch',    JSON.stringify(watchFlags));}catch(e){} }
     if(data.demoted  && typeof data.demoted  === 'object') { demotedRecent = data.demoted;  try{localStorage.setItem('gn_st_demoted',  JSON.stringify(demotedRecent));}catch(e){} }
