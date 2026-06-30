@@ -420,7 +420,7 @@
     display:inline-flex;align-items:center;justify-content:center;
     width:14px;height:14px;border-radius:3px;
     background:transparent;border:1px dashed #d4d8de;
-    color:transparent;font-size:9px;line-height:1;
+    color:transparent;font-size:10px;font-weight:700;line-height:1;
     cursor:pointer;vertical-align:middle;margin-right:5px;
     transition:all .12s ease;flex-shrink:0;
   }
@@ -428,7 +428,8 @@
   .wflag.watching{background:#fef3c7;border:1px solid #f59e0b;color:#92400e}
   .wflag.ready{background:#d1fae5;border:1px solid #10b981;color:#065f46}
   .wflag.watching::before{content:"●"}
-  .wflag.ready::before{content:"✓"}
+  /* .ready content is injected per-row as the TVP green count (0–3),
+     so don't use ::before here — the count text lives inside the span. */
   @keyframes wflashPromote{
     0%   {background:rgba(209,250,229,0)}
     30%  {background:rgba(209,250,229,.65)}
@@ -501,9 +502,14 @@
   .wp-sig-dot.sig-off  { background:#d1d5db;color:#9ca3af }
   .wp-sig-dot.sig-warn { background:#ef4444 }
   .wp-sig-dot.sig-stale{ background:#f59e0b }
-  /* Vol Surge intensity: pale (1.0-1.5x), normal (default), strong glow (>2.5x) */
-  .wp-sig-dot.sig-on.sig-on-mild  { background:#6ee7b7 }
-  .wp-sig-dot.sig-on.sig-on-strong{ background:#10b981;box-shadow:0 0 0 2px rgba(16,185,129,.35),0 0 8px rgba(16,185,129,.55) }
+  /* Vol Surge intensity (V badge only):
+       mild   <1.5x = pale, hollow look
+       normal 1.5–2.5x = default solid emerald
+       strong >2.5x   = deep saturated emerald + ring + glow */
+  .wp-sig-dot.sig-on.sig-on-mild  { background:#a7f3d0;color:#065f46;
+    box-shadow:inset 0 0 0 1px #34d399 }
+  .wp-sig-dot.sig-on.sig-on-strong{ background:#059669;color:#fff;
+    box-shadow:0 0 0 2px #ecfdf5, 0 0 0 3px #10b981, 0 0 10px rgba(5,150,105,.55) }
   /* Days-in-Ready badge (stale Ready entries that haven't been acted on) */
   .wp-chip-days{ font-size:9.5px;font-weight:600;padding:1px 5px;border-radius:6px;
     background:rgba(245,158,11,.18);color:#92400e;margin-left:2px;letter-spacing:.02em }
@@ -3269,6 +3275,10 @@ function renderWatchPanel(){
     <span><span class="wp-key-dot" style="background:#f59e0b">T</span>Signal changed — rescan</span>
     <span><span class="wp-key-dot" style="background:#ef4444">V</span>Distribution warning</span>
     <span><span class="wp-key-dot" style="background:#d1d5db;color:#9ca3af"> </span>Signal not met</span>
+    <span data-tip="V badge intensity reflects the volume-surge multiplier — pale = mild surge under 1.5x avg vol; solid = normal 1.5–2.5x; bright with glow = strong conviction >2.5x avg vol.">
+      <span class="wp-key-dot" style="background:#a7f3d0;color:#065f46;box-shadow:inset 0 0 0 1px #34d399">V</span><span class="wp-key-dot" style="background:#10b981">V</span><span class="wp-key-dot" style="background:#059669;box-shadow:0 0 0 2px #ecfdf5,0 0 0 3px #10b981,0 0 10px rgba(5,150,105,.55);margin-left:4px">V</span>
+      V intensity: &lt;1.5x · 1.5–2.5x · &gt;2.5x
+    </span>
   </div>`;
   el.innerHTML = `
     <div class="wp-head">
@@ -3960,12 +3970,22 @@ function renderShortWatchlist(){
       ? `<span class="warn-badge" data-tip="${escHtml('Data-integrity check flagged this row:\n• '+r.warnings.join('\n• ')+'\n\nAffected factors show as purple until a clean rescan. Right-click → Force rescan to retry.')}">⚠</span>`
       : '';
     const wfState = watchFlags[sym] || '';
+    // For Ready rows, the flag content is the live TVP green count (0–3)
+    // instead of a ✓ — easier to see how close a setup is at a glance.
+    let wfContent = '';
+    let wfTipExtra = '';
+    if (wfState === 'ready') {
+      const tvpRow = tvpFor(r);
+      const greensRow = tvpRow ? (tvpRow.T?1:0)+(tvpRow.V?1:0)+(tvpRow.P?1:0) : 0;
+      wfContent = String(greensRow);
+      wfTipExtra = ` (currently ${greensRow}/3 entry signals green)`;
+    }
     const wfTitle = wfState === 'ready'
-      ? 'Ready to trade — criteria met. Click to clear.'
+      ? 'Ready to trade — criteria met. Click to clear.' + wfTipExtra
       : wfState === 'watching'
         ? 'Watching — auto-promotes to Ready when score ≥22 and Catalyst + Vol Surge are healthy. Click to clear.'
         : 'Click to add to watch list — get a green flash when entry criteria fire.';
-    const wfBtn = `<span class="wflag ${wfState}" data-wflag="${sym}" data-tip="${escHtml(wfTitle)}"></span>`;
+    const wfBtn = `<span class="wflag ${wfState}" data-wflag="${sym}" data-tip="${escHtml(wfTitle)}">${wfContent}</span>`;
     const coCell = isScoring
       ? `<td class="co-cell">${wfBtn}<span class="sym" style="opacity:0.3">${sym}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
       : isLegacy
