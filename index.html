@@ -2731,6 +2731,13 @@ document.getElementById('ctxDel').onclick=async()=>{
   const sym=ctxSym;
   watchlist=watchlist.filter(r=>r.sym!==sym);
   delete shortRowsBySym[sym];
+  // Also clear flag + demoted state so the chip doesn't linger in the
+  // Ready/Watching/Demoted panel as an orphan (and re-sync to other devices).
+  let flagDirty = false, demDirty = false;
+  if (watchFlags[sym])    { delete watchFlags[sym];    flagDirty = true; }
+  if (demotedRecent[sym]) { delete demotedRecent[sym]; demDirty  = true; }
+  if (flagDirty) saveWatchFlags();
+  if (demDirty)  saveDemoted();
   ctx.style.display='none';
   renderWatchlist();
   if(currentView==='short') renderShortWatchlist();
@@ -3541,9 +3548,20 @@ function renderShortWatchlist(){
   let flagsDirty = false;
   let demotedDirty = false;
   let histDirty = false;
-  // Iterate watchFlags (not watchlist) — stocks can be flagged without being
-  // in the watchlist table array. Without this, flag-only entries never
-  // auto-promote even when they meet Ready criteria.
+  // Orphan sweep: every Ready/Watching/Demoted chip must correspond to a row
+  // in the Screener table. Prune flags + demotedRecent whose sym is not in
+  // watchlist. Guarded on watchlist.length so the very first render (before
+  // /api/watchlist returns) doesn't wipe state — once any row arrives, drift
+  // is cleaned up and the cleanup re-syncs to other devices.
+  if (watchlist.length > 0) {
+    const live = new Set(watchlist.map(w => (w.sym || '').toUpperCase()));
+    for (const sym of Object.keys(watchFlags)) {
+      if (!live.has(sym)) { delete watchFlags[sym]; flagsDirty = true; }
+    }
+    for (const sym of Object.keys(demotedRecent)) {
+      if (!live.has(sym)) { delete demotedRecent[sym]; demotedDirty = true; }
+    }
+  }
   for (const sym of Object.keys(watchFlags)) {
     const state = watchFlags[sym];
     if (!state) continue;
