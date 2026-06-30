@@ -3263,9 +3263,9 @@ function renderWatchPanel(){
   };
   const sigKey = `<div class="wp-key">
     <span style="font-weight:700;color:var(--ink-soft)">3/3 green = enter.</span>
-    <span><span class="wp-key-dot" style="background:#10b981">T</span>Trend above 50DMA</span>
-    <span><span class="wp-key-dot" style="background:#10b981">V</span>Vol Surge ↑ accumulation</span>
-    <span><span class="wp-key-dot" style="background:#10b981">P</span>Pullback to 50DMA zone</span>
+    <span data-tip="Price above 50DMA, AND 50DMA above 200DMA — confirms an established uptrend (50DMA crossing above 200DMA = &quot;golden cross&quot;). Without the 50&gt;200 ordering, an above-50DMA move is just a bounce inside a longer downtrend."><span class="wp-key-dot" style="background:#10b981">T</span>Trend: 50DMA &gt; 200DMA</span>
+    <span data-tip="Today's volume is above the 20-day average AND price closed up — institutional buyers stepping in. Multiplier shows conviction (e.g. 2.5x = heavy accumulation).">​<span class="wp-key-dot" style="background:#10b981">V</span>Vol Surge ↑ accumulation</span>
+    <span data-tip="Price sits 0–5% above 50DMA. In an uptrend the 50DMA acts as dynamic support — buying near it gives the best risk/reward: a tight stop just below 50DMA and lots of upside before the next resistance. Buying way above 50DMA means chasing an extended move with no clear stop."><span class="wp-key-dot" style="background:#10b981">P</span>Pullback to 50DMA zone</span>
     <span><span class="wp-key-dot" style="background:#f59e0b">T</span>Signal changed — rescan</span>
     <span><span class="wp-key-dot" style="background:#ef4444">V</span>Distribution warning</span>
     <span><span class="wp-key-dot" style="background:#d1d5db;color:#9ca3af"> </span>Signal not met</span>
