@@ -1406,10 +1406,16 @@ function applyStSortHeaders() {
   });
 }
 function applyStSort() {
+  // justAdded rows always sink to the bottom (regardless of user sort) so a
+  // newly-added ticker is easy to find while its score is loading. Cleared
+  // on the next Rescan.
+  const sinkJustAdded = (a, b) => (a.justAdded?1:0) - (b.justAdded?1:0);
   // Default sort (no user column picked): TVP green count desc, score desc.
   // Pushes 3/3 to the top, then 2/3, then 1/3, then 0/3 — score breaks ties.
   if (!stSortCol) {
     watchlist.sort((a,b) => {
+      const ja = sinkJustAdded(a, b);
+      if (ja !== 0) return ja;
       const ra = shortRowsBySym[(a.sym||'').toUpperCase()];
       const rb = shortRowsBySym[(b.sym||'').toUpperCase()];
       const ga = tvpFor(ra); const gb = tvpFor(rb);
@@ -1423,6 +1429,8 @@ function applyStSort() {
     return;
   }
   watchlist.sort((a,b) => {
+    const ja = sinkJustAdded(a, b);
+    if (ja !== 0) return ja;
     const av=stSortVal(a,stSortCol), bv=stSortVal(b,stSortCol);
     return (av<bv?-1:av>bv?1:0)*stSortDir;
   });
@@ -2533,9 +2541,12 @@ addInput.addEventListener('keydown',async e=>{
   const sym=addInput.value.trim().toUpperCase();
   if(!sym) return;
   addInput.value='';
-  // placeholder row while the scoring pipeline runs
+  // placeholder row while the scoring pipeline runs.
+  // justAdded keeps the row pinned to the bottom of the default-sorted screener
+  // so the user can see it scoring without scrolling. Cleared on the next
+  // Rescan so normal TVP/score ranking takes over.
   if(!watchlist.find(r=>r.sym===sym))
-    watchlist.push({sym,name:'Scoring…',scoring:true,v:[0,0,0,0,0,0,0,0],score:'–/8',
+    watchlist.push({sym,name:'Scoring…',scoring:true,justAdded:true,v:[0,0,0,0,0,0,0,0],score:'–/8',
       vs:'…',vsc:'n',fwd:'…',ttm:'…',yr5:'…',ft:'…',ftc:'n',trend:'pending',exp:'pending',cat:'pending',ps:'…',ar:'…',arGrades:[]});
   renderWatchlist(); flash(sym);
   startCheckAnim(sym);
@@ -4040,7 +4051,9 @@ async function rescanShort(e){
   btn.innerHTML = 'Rescanning…';
   // Mark ALL rows as legacy immediately — their displayed data is now stale.
   // The hazard badge + blur shows until each row's fresh data comes back.
-  watchlist.forEach(w => { w.legacy = true; w.shortScoring = false; });
+  // Also clear justAdded so newly-added rows rejoin the normal sort once
+  // they've been through a full Rescan.
+  watchlist.forEach(w => { w.legacy = true; w.shortScoring = false; w.justAdded = false; });
   renderShortWatchlist();
   if (!API_LIVE) {
     setTimeout(() => {
