@@ -501,6 +501,21 @@
   .wp-sig-dot.sig-off  { background:#d1d5db;color:#9ca3af }
   .wp-sig-dot.sig-warn { background:#ef4444 }
   .wp-sig-dot.sig-stale{ background:#f59e0b }
+  /* Vol Surge intensity: pale (1.0-1.5x), normal (default), strong glow (>2.5x) */
+  .wp-sig-dot.sig-on.sig-on-mild  { background:#6ee7b7 }
+  .wp-sig-dot.sig-on.sig-on-strong{ background:#10b981;box-shadow:0 0 0 2px rgba(16,185,129,.35),0 0 8px rgba(16,185,129,.55) }
+  /* Days-in-Ready badge (stale Ready entries that haven't been acted on) */
+  .wp-chip-days{ font-size:9.5px;font-weight:600;padding:1px 5px;border-radius:6px;
+    background:rgba(245,158,11,.18);color:#92400e;margin-left:2px;letter-spacing:.02em }
+  /* Ready sub-tier divider headings (Premium / Standard) */
+  .wp-tier-head{ width:100%;display:flex;align-items:center;gap:6px;
+    font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--ink-soft);padding:4px 2px 2px;margin-top:2px;border-bottom:1px dashed rgba(0,0,0,.08) }
+  .wp-tier-head:first-child{ margin-top:0 }
+  .wp-tier-head .wp-tier-sub{ font-weight:500;font-size:9px;color:#94a3b8;letter-spacing:0;text-transform:none }
+  .wp-tier-head .wp-tier-count{ margin-left:auto;font-weight:700;color:var(--ink-soft) }
+  .wp-tier-prem{ color:#047857 }
+  .wp-tier-std{ color:#6b7280 }
   /* Key below the three cards */
   .wp-key{
     font-size:8px;color:var(--ink-faint);margin-top:6px;
@@ -1234,6 +1249,15 @@
 <div id="ruleCard" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.55;padding:14px 16px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:300px;max-width:360px;pointer-events:none;white-space:normal;border:0.5px solid rgba(255,255,255,.08)"></div>
 
 <!-- Per-ticker watchlist history popover -->
+<!-- Backtest popover: aggregate hit rate / avg return on 3/3 entry signals -->
+<div id="backtestPop" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10.5px;line-height:1.45;padding:14px 16px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:380px;max-width:480px;max-height:70vh;overflow-y:auto;pointer-events:auto;border:0.5px solid rgba(255,255,255,.08);top:80px;left:50%;transform:translateX(-50%)">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+    <span style="font-size:12px;font-weight:700;letter-spacing:.3px">Backtest · 3/3 Entry Signals</span>
+    <span id="backtestClose" style="cursor:pointer;color:#8a95a8;font-size:13px;padding:0 2px">✕</span>
+  </div>
+  <div id="backtestBody"></div>
+</div>
+
 <div id="tickerHist" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.5;padding:12px 14px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:340px;max-width:400px;pointer-events:auto;white-space:normal;border:0.5px solid rgba(255,255,255,.08)">
   <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
     <span id="tickerHistTitle" style="font-size:11px;font-weight:700;color:#e8eaf0;letter-spacing:.2px"></span>
@@ -1382,10 +1406,16 @@ function applyStSortHeaders() {
   });
 }
 function applyStSort() {
+  // justAdded rows always sink to the bottom (regardless of user sort) so a
+  // newly-added ticker is easy to find while its score is loading. Cleared
+  // on the next Rescan.
+  const sinkJustAdded = (a, b) => (a.justAdded?1:0) - (b.justAdded?1:0);
   // Default sort (no user column picked): TVP green count desc, score desc.
   // Pushes 3/3 to the top, then 2/3, then 1/3, then 0/3 — score breaks ties.
   if (!stSortCol) {
     watchlist.sort((a,b) => {
+      const ja = sinkJustAdded(a, b);
+      if (ja !== 0) return ja;
       const ra = shortRowsBySym[(a.sym||'').toUpperCase()];
       const rb = shortRowsBySym[(b.sym||'').toUpperCase()];
       const ga = tvpFor(ra); const gb = tvpFor(rb);
@@ -1399,6 +1429,8 @@ function applyStSort() {
     return;
   }
   watchlist.sort((a,b) => {
+    const ja = sinkJustAdded(a, b);
+    if (ja !== 0) return ja;
     const av=stSortVal(a,stSortCol), bv=stSortVal(b,stSortCol);
     return (av<bv?-1:av>bv?1:0)*stSortDir;
   });
@@ -1990,6 +2022,9 @@ async function init(){
     // Watch state (flags/demoted/activity) lives server-side too — load it now
     // that API_LIVE is true so a second device sees the shared watchlist.
     loadWatchState();
+    // Site lands on Short Term by default — kick off its data load now that
+    // API_LIVE is true. Wrapped in catch so a failure here doesn't break init.
+    ensureShortDataLoaded().catch(()=>{});
   }catch{ API_LIVE=false; /* offline / static open → keep seed data */ }
   try{
     const saved=JSON.parse(localStorage.getItem('gn_sort')||'null');
@@ -2183,8 +2218,13 @@ document.querySelectorAll('#viewSwitch button').forEach(b=>{
     else if(v==='short'){ setView('short'); ensureShortDataLoaded(); }
   });
 });
-// Sync segmented pill + view chrome with the initial state ('watchlist').
-setView('watchlist');
+// Default landing view = Short Term — but the setView('short') call itself
+// is deferred until after all state declarations (watchFlags / sigHistory /
+// shortRowsBySym, etc.) lower in the file. setView triggers
+// renderShortWatchlist when isShort, and renderShortWatchlist touches those
+// let-bindings — calling it here would hit a TDZ ReferenceError and halt
+// the rest of module-eval (breaking the Add-to-watchlist handler etc.).
+// The deferred call lives at the bottom of the script.
 
 /* ---------------- Training Wheels content ---------------- */
 const TW_DATA={
@@ -2501,9 +2541,12 @@ addInput.addEventListener('keydown',async e=>{
   const sym=addInput.value.trim().toUpperCase();
   if(!sym) return;
   addInput.value='';
-  // placeholder row while the scoring pipeline runs
+  // placeholder row while the scoring pipeline runs.
+  // justAdded keeps the row pinned to the bottom of the default-sorted screener
+  // so the user can see it scoring without scrolling. Cleared on the next
+  // Rescan so normal TVP/score ranking takes over.
   if(!watchlist.find(r=>r.sym===sym))
-    watchlist.push({sym,name:'Scoring…',scoring:true,v:[0,0,0,0,0,0,0,0],score:'–/8',
+    watchlist.push({sym,name:'Scoring…',scoring:true,justAdded:true,v:[0,0,0,0,0,0,0,0],score:'–/8',
       vs:'…',vsc:'n',fwd:'…',ttm:'…',yr5:'…',ft:'…',ftc:'n',trend:'pending',exp:'pending',cat:'pending',ps:'…',ar:'…',arGrades:[]});
   renderWatchlist(); flash(sym);
   startCheckAnim(sym);
@@ -2995,22 +3038,29 @@ function tvpFor(r){
     ? (raw0.price - raw0.sma50) / raw0.sma50 * 100
     : NaN;
   const near50 = !isNaN(pctAbove50) && pctAbove50 >= 0 && pctAbove50 <= 5;
+  // Parse the surge multiplier from reasons[9] (e.g. "↑1.16 vs 200d avg" → 1.16).
+  // Used to color-grade the V badge by conviction level.
+  const volMatch = (reasons[9] || '').match(/[↑↓]\s*([\d.]+)/);
+  const volMult  = volMatch ? parseFloat(volMatch[1]) : null;
   return {
     T: trendOk,
     V: volGood && volUp && !volWarn,
     P: near50,
     volWarn,
+    volMult,
     pctAbove50: isNaN(pctAbove50) ? null : pctAbove50,
   };
 }
 // Append a new sigHistory entry for sym when scored_at advances. Returns true
 // if anything was written (so callers know to persist).
-function recordSigHistory(sym, scoredAtMs, tvp){
+function recordSigHistory(sym, scoredAtMs, tvp, price){
   if (!sym || !scoredAtMs || !tvp) return false;
   const arr = sigHistory[sym] || (sigHistory[sym] = []);
   const last = arr[arr.length - 1];
   if (last && last.ts === scoredAtMs) return false; // already recorded this scan
-  arr.push({ ts: scoredAtMs, T: !!tvp.T, V: !!tvp.V, P: !!tvp.P });
+  const entry = { ts: scoredAtMs, T: !!tvp.T, V: !!tvp.V, P: !!tvp.P };
+  if (typeof price === 'number' && isFinite(price)) entry.price = price;
+  arr.push(entry);
   if (arr.length > SIG_HIST_CAP) arr.splice(0, arr.length - SIG_HIST_CAP);
   return true;
 }
@@ -3061,11 +3111,34 @@ function renderWatchPanel(){
   const el = document.getElementById('watchPanel');
   if (!el) return;
   pruneDemoted();
-  const ready = [], watching = [], demoted = [];
+  const readyPremium = [], readyStandard = [], watching = [], demoted = [];
+  // Sort key per ready sym: { sym, greens, score } so we can rank chips
+  // within each tier by green count desc, then score desc.
+  const readyMeta = {};
   for (const sym of Object.keys(watchFlags)) {
-    if (watchFlags[sym] === 'ready') ready.push(sym);
+    if (watchFlags[sym] === 'ready') {
+      const r = shortRowsBySym[sym];
+      const tvp = r ? tvpFor(r) : null;
+      const greens = tvp ? (tvp.T?1:0)+(tvp.V?1:0)+(tvp.P?1:0) : 0;
+      const score  = r?.score ? parseInt(r.score) || 0 : 0;
+      readyMeta[sym] = { greens, score };
+      // Premium = high-conviction setup: either a full 3/3 hit, OR ≥2 greens
+      // with a strong score (≥26). Standard = everything else still in Ready.
+      const isPremium = greens === 3 || (greens >= 2 && score >= 26);
+      if (isPremium) readyPremium.push(sym);
+      else readyStandard.push(sym);
+    }
     else if (watchFlags[sym] === 'watching') watching.push(sym);
   }
+  // Rank within each tier: greens desc, then score desc.
+  const rankReady = (a, b) => {
+    const ma = readyMeta[a], mb = readyMeta[b];
+    if (mb.greens !== ma.greens) return mb.greens - ma.greens;
+    return mb.score - ma.score;
+  };
+  readyPremium.sort(rankReady);
+  readyStandard.sort(rankReady);
+  const ready = [...readyPremium, ...readyStandard];
   for (const sym of Object.keys(demotedRecent)) demoted.push(sym);
   // Hide entirely when there's nothing to show — no flags AND no history
   if (!ready.length && !watching.length && !demoted.length && !activityLog.length) {
@@ -3115,16 +3188,26 @@ function renderWatchPanel(){
     // the last 24h but isn't now; red if active distribution warning (V
     // only); grey otherwise.
     const trendCls = s.T ? 'sig-on' : (s.recentLossT ? 'sig-stale' : 'sig-off');
+    // V intensity: <1.5x = mild, 1.5-2.5x = normal, >2.5x = strong (glow)
+    const volIntensity = s.V && s.volMult != null
+      ? (s.volMult > 2.5 ? ' sig-on-strong' : s.volMult < 1.5 ? ' sig-on-mild' : '')
+      : '';
     const volCls   = s.volWarn ? 'sig-warn'
-                  : s.V        ? 'sig-on'
+                  : s.V        ? ('sig-on' + volIntensity)
                   : s.recentLossV ? 'sig-stale'
                                   : 'sig-off';
     const nearCls  = s.P ? 'sig-on' : (s.recentLossP ? 'sig-stale' : 'sig-off');
     const trendTip = s.T ? 'Trend: price above 50DMA ✓'
                    : s.recentLossT ? 'Trend: was above 50DMA recently — rescan to confirm'
                                    : 'Trend: below 50DMA — avoid entry';
-    const volTip   = s.volWarn ? 'Vol Surge: down-day distribution ✗'
-                   : s.V       ? 'Vol Surge: up-day accumulation ✓'
+    const volMultStr = s.volMult != null ? ` (${s.volMult.toFixed(2)}x avg vol)` : '';
+    const intensityStr = s.V && s.volMult != null
+      ? (s.volMult > 2.5 ? ' — strong conviction'
+        : s.volMult < 1.5 ? ' — mild'
+        : '')
+      : '';
+    const volTip   = s.volWarn ? `Vol Surge: down-day distribution ✗${volMultStr}`
+                   : s.V       ? `Vol Surge: up-day accumulation ✓${volMultStr}${intensityStr}`
                    : s.recentLossV ? 'Vol Surge: accumulation lost — rescan to confirm'
                                    : 'Vol Surge: no strong signal yet';
     const nearTip  = s.P ? 'Near 50DMA: pullback zone — good entry risk/reward ✓'
@@ -3143,17 +3226,36 @@ function renderWatchPanel(){
       ? `<span class="wp-chip-date" data-tip="${escHtml(new Date(ts).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}">${fmtChipDate(ts)}</span>`
       : '';
     const dotsHtml = kind === 'ready' ? sigDots(sym) : '';
-    return `<span class="wp-chip" data-sym="${sym}" data-tip="${escHtml('Click for '+sym+' history · entered this state '+(ts?relTime(ts)+' ago':'recently'))}">${sym}${dateHtml}${dotsHtml}${reasonHtml}<span class="wp-x" data-sym="${sym}" data-kind="${kind}" data-tip="${escHtml(kind==='demoted'?'Dismiss this alert':'Clear watchlist flag')}">×</span></span>`;
+    // Days-in-Ready badge: warn when a Ready setup has been sitting > 3 days
+    // without being acted on — either you missed the entry or the signal is stale.
+    let daysBadge = '';
+    if (kind === 'ready' && ts) {
+      const days = Math.floor((Date.now() - ts) / 86400000);
+      if (days >= 3) daysBadge = `<span class="wp-chip-days" data-tip="${escHtml(`In Ready ${days}d — consider entering or clearing`)}">${days}d</span>`;
+    }
+    const miniHist = kind === 'demoted' ? renderMiniSigHistory(sym) : '';
+    return `<span class="wp-chip" data-sym="${sym}" data-tip="${escHtml('Click for '+sym+' history · entered this state '+(ts?relTime(ts)+' ago':'recently'))}">${sym}${dateHtml}${dotsHtml}${daysBadge}${miniHist}${reasonHtml}<span class="wp-x" data-sym="${sym}" data-kind="${kind}" data-tip="${escHtml(kind==='demoted'?'Dismiss this alert':'Clear watchlist flag')}">×</span></span>`;
   };
   const section = (cls, label, items, emptyMsg, kind) => {
-    const body = items.length
-      ? items.map(s => {
-          const reason = kind === 'demoted'
-            ? (demotedRecent[s]?.reasons || []).join(', ')
-            : '';
-          return chip(s, kind, reason);
-        }).join('')
-      : `<span class="wp-empty">${emptyMsg}</span>`;
+    const renderItems = list => list.map(s => {
+      const reason = kind === 'demoted' ? (demotedRecent[s]?.reasons || []).join(', ') : '';
+      return chip(s, kind, reason);
+    }).join('');
+    let body;
+    if (kind === 'ready' && items.length) {
+      // Split Ready into Premium (3/3 + score≥26) and Standard sub-groups.
+      const prem = renderItems(readyPremium);
+      const std  = renderItems(readyStandard);
+      const premHead = readyPremium.length
+        ? `<div class="wp-tier-head wp-tier-prem">★ Premium <span class="wp-tier-sub">3/3 · or 2/3 with score ≥ 26</span><span class="wp-tier-count">${readyPremium.length}</span></div>${prem}`
+        : '';
+      const stdHead = readyStandard.length
+        ? `<div class="wp-tier-head wp-tier-std">Standard <span class="wp-tier-sub">1–2 green with score 22–25</span><span class="wp-tier-count">${readyStandard.length}</span></div>${std}`
+        : '';
+      body = premHead + stdHead;
+    } else {
+      body = items.length ? renderItems(items) : `<span class="wp-empty">${emptyMsg}</span>`;
+    }
     return `<div class="wp-card wp-${cls}">
       <div class="wp-card-head">${label}<span class="wp-count">${items.length}</span></div>
       <div class="wp-body">${body}</div>
@@ -3161,9 +3263,9 @@ function renderWatchPanel(){
   };
   const sigKey = `<div class="wp-key">
     <span style="font-weight:700;color:var(--ink-soft)">3/3 green = enter.</span>
-    <span><span class="wp-key-dot" style="background:#10b981">T</span>Trend above 50DMA</span>
-    <span><span class="wp-key-dot" style="background:#10b981">V</span>Vol Surge ↑ accumulation</span>
-    <span><span class="wp-key-dot" style="background:#10b981">P</span>Pullback to 50DMA zone</span>
+    <span data-tip="Price above 50DMA, AND 50DMA above 200DMA — confirms an established uptrend (50DMA crossing above 200DMA = &quot;golden cross&quot;). Without the 50&gt;200 ordering, an above-50DMA move is just a bounce inside a longer downtrend."><span class="wp-key-dot" style="background:#10b981">T</span>Trend: 50DMA &gt; 200DMA</span>
+    <span data-tip="Today's volume is above the 20-day average AND price closed up — institutional buyers stepping in. Multiplier shows conviction (e.g. 2.5x = heavy accumulation).">​<span class="wp-key-dot" style="background:#10b981">V</span>Vol Surge ↑ accumulation</span>
+    <span data-tip="Price sits 0–5% above 50DMA. In an uptrend the 50DMA acts as dynamic support — buying near it gives the best risk/reward: a tight stop just below 50DMA and lots of upside before the next resistance. Buying way above 50DMA means chasing an extended move with no clear stop."><span class="wp-key-dot" style="background:#10b981">P</span>Pullback to 50DMA zone</span>
     <span><span class="wp-key-dot" style="background:#f59e0b">T</span>Signal changed — rescan</span>
     <span><span class="wp-key-dot" style="background:#ef4444">V</span>Distribution warning</span>
     <span><span class="wp-key-dot" style="background:#d1d5db;color:#9ca3af"> </span>Signal not met</span>
@@ -3172,6 +3274,7 @@ function renderWatchPanel(){
     <div class="wp-head">
       <span class="wp-title" id="wlHelpTrigger" style="cursor:help;border-bottom:1px dashed currentColor">Watchlist ?</span>
       <span class="wp-sub">Click a ticker to see its history · × to clear</span>
+      <span id="backtestBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none" data-tip="Hit rate + avg return on 3/3 entry signals">▢ Backtest</span>
     </div>
     <div class="wp-cards">
       ${section('ready',    '✓ Ready',    ready,    'No stocks ready to trade yet', 'ready')}
@@ -3441,6 +3544,128 @@ document.getElementById('tickerHistJump').addEventListener('click', () => {
 // popover. Time on X (left = oldest, right = newest); rows = T / V / P; each
 // cell colored green (on) / grey (off) / yellow (off but green within 24h of
 // that scan). One cell per recorded scan, sized to fit the popover width.
+// Backtest: walks sigHistory for every ticker, finds "entry events" — scans
+// where TVP first hits 3/3 after being below — pairs each with an "exit"
+// (the next scan where green count drops below 3, or the latest scan if it
+// stayed 3/3). Returns per-event rows and aggregate stats.
+//
+// Caveat: prices were only added recently. Events whose entry scan predates
+// that change have no price and get filtered out — the sample size grows
+// over time as more scans accumulate.
+function computeBacktest(){
+  const events = [];
+  const greens = e => (e.T?1:0)+(e.V?1:0)+(e.P?1:0);
+  for (const sym of Object.keys(sigHistory)) {
+    const arr = sigHistory[sym] || [];
+    let prevG = 0;
+    for (let i = 0; i < arr.length; i++) {
+      const g = greens(arr[i]);
+      if (g === 3 && prevG < 3) {
+        // Found an entry — look for the exit (first non-3/3 after this)
+        let exitIdx = -1;
+        for (let j = i + 1; j < arr.length; j++) {
+          if (greens(arr[j]) < 3) { exitIdx = j; break; }
+        }
+        const entry = arr[i];
+        const exit  = exitIdx >= 0 ? arr[exitIdx] : arr[arr.length - 1];
+        const isOpen = exitIdx < 0;
+        // If the trade is still "open" (signal still 3/3), use the live price
+        // from shortRowsBySym for the exit so unrealized P&L shows.
+        let exitPrice = exit?.price;
+        if (isOpen) {
+          const live = shortRowsBySym[sym]?.raw?.[0]?.price;
+          if (typeof live === 'number') exitPrice = live;
+        }
+        if (typeof entry.price === 'number' && typeof exitPrice === 'number' && entry.price > 0) {
+          events.push({
+            sym, isOpen,
+            entryTs: entry.ts, exitTs: exit.ts,
+            entryPrice: entry.price, exitPrice,
+            returnPct: (exitPrice - entry.price) / entry.price * 100,
+            holdDays: Math.max(0, Math.round((exit.ts - entry.ts) / 86400000)),
+          });
+        }
+      }
+      prevG = g;
+    }
+  }
+  events.sort((a,b) => b.returnPct - a.returnPct);
+  const n = events.length;
+  if (!n) return { events, stats: null };
+  const wins = events.filter(e => e.returnPct > 0).length;
+  const avg  = events.reduce((s,e) => s + e.returnPct, 0) / n;
+  const best = events[0];
+  const worst = events[n-1];
+  return {
+    events,
+    stats: { n, wins, hitRate: wins/n*100, avg, best, worst,
+             openCount: events.filter(e=>e.isOpen).length },
+  };
+}
+function showBacktest(){
+  const { events, stats } = computeBacktest();
+  const el = document.getElementById('backtestBody');
+  if (!stats) {
+    el.innerHTML = `<div style="padding:20px 4px;color:#8a95a8;font-size:11px">
+      No 3/3 entry signals with price data yet. Price snapshots started recording
+      this release — rescan a few times across days to build the sample.</div>`;
+    document.getElementById('backtestPop').style.display = 'block';
+    return;
+  }
+  const pct = v => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
+  const color = v => v > 0 ? '#34d399' : v < 0 ? '#f87171' : '#cbd5e1';
+  const date = ts => new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric'});
+  const summary = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;padding:10px;background:rgba(255,255,255,.04);border-radius:8px">
+      <div><div style="font-size:8.5px;color:#8a95a8;text-transform:uppercase;letter-spacing:.4px">Signals</div><div style="font-size:16px;font-weight:700">${stats.n}</div></div>
+      <div><div style="font-size:8.5px;color:#8a95a8;text-transform:uppercase;letter-spacing:.4px">Hit rate</div><div style="font-size:16px;font-weight:700;color:${color(stats.hitRate-50)}">${stats.hitRate.toFixed(0)}%</div></div>
+      <div><div style="font-size:8.5px;color:#8a95a8;text-transform:uppercase;letter-spacing:.4px">Avg return</div><div style="font-size:16px;font-weight:700;color:${color(stats.avg)}">${pct(stats.avg)}</div></div>
+      <div><div style="font-size:8.5px;color:#8a95a8;text-transform:uppercase;letter-spacing:.4px">Open</div><div style="font-size:16px;font-weight:700">${stats.openCount}</div></div>
+    </div>`;
+  const row = e => `
+    <tr>
+      <td style="padding:4px 6px;font-weight:600">${e.sym}${e.isOpen?'<span style="font-size:8px;color:#fbbf24;margin-left:4px">●OPEN</span>':''}</td>
+      <td style="padding:4px 6px;color:#8a95a8;font-size:9.5px">${date(e.entryTs)} → ${date(e.exitTs)}</td>
+      <td style="padding:4px 6px;text-align:right;color:#cbd5e1">$${e.entryPrice.toFixed(2)} → $${e.exitPrice.toFixed(2)}</td>
+      <td style="padding:4px 6px;text-align:right;color:#8a95a8">${e.holdDays}d</td>
+      <td style="padding:4px 6px;text-align:right;font-weight:700;color:${color(e.returnPct)}">${pct(e.returnPct)}</td>
+    </tr>`;
+  el.innerHTML = summary + `
+    <div style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#8a95a8;margin-bottom:4px">All signals · sorted by return</div>
+    <table style="width:100%;border-collapse:collapse;font-size:10px">
+      <thead><tr style="color:#8a95a8;font-size:8.5px;text-transform:uppercase;letter-spacing:.4px">
+        <th style="text-align:left;padding:2px 6px;font-weight:600">Sym</th>
+        <th style="text-align:left;padding:2px 6px;font-weight:600">Hold</th>
+        <th style="text-align:right;padding:2px 6px;font-weight:600">Entry → Exit</th>
+        <th style="text-align:right;padding:2px 6px;font-weight:600">Days</th>
+        <th style="text-align:right;padding:2px 6px;font-weight:600">Return</th>
+      </tr></thead>
+      <tbody>${events.map(row).join('')}</tbody>
+    </table>`;
+  document.getElementById('backtestPop').style.display = 'block';
+}
+document.getElementById('backtestClose').addEventListener('click', () => {
+  document.getElementById('backtestPop').style.display = 'none';
+});
+document.addEventListener('click', e => {
+  if (e.target.id === 'backtestBtn') showBacktest();
+});
+// Inline mini-history for demoted chips: returns an SVG sparkline string
+// (last ~12 scans) showing T/V/P state at each scan so you can see at a
+// glance which signal died and roughly when.
+function renderMiniSigHistory(sym){
+  const arr = (sigHistory[sym] || []).slice(-12);
+  if (!arr.length) return '';
+  const W = 56, rowH = 4, gap = 1, cellW = Math.max(2, W / arr.length);
+  const color = b => b ? '#10b981' : '#cbd5e1';
+  const row = (sig, y) => arr.map((e,i) =>
+    `<rect x="${i*cellW}" y="${y}" width="${cellW-0.3}" height="${rowH}" fill="${color(e[sig])}" rx="0.5"/>`
+  ).join('');
+  const H = rowH*3 + gap*2;
+  return `<svg class="wp-chip-mini" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" data-tip="${escHtml(`Last ${arr.length} scans · T / V / P`)}" style="vertical-align:middle;margin:0 4px;display:inline-block">
+    ${row('T', 0)}${row('V', rowH+gap)}${row('P', (rowH+gap)*2)}
+  </svg>`;
+}
 function renderSigHistoryChart(sym){
   const el = document.getElementById('tickerHistChart');
   if (!el) return;
@@ -3579,6 +3804,21 @@ function renderShortWatchlist(){
       if (!live.has(sym)) { delete demotedRecent[sym]; demotedDirty = true; }
     }
   }
+  // Record TVP + price for EVERY scored ticker (not just flagged ones) so the
+  // shared backtest sample grows across rescans regardless of whether the user
+  // has added the stock to their watchlist. recordSigHistory dedupes on
+  // scored_at, so re-running this is idempotent within a single scan. The
+  // shared blob (saveSigHistory → /api/watch-state) makes this visible to
+  // anyone who opens the site.
+  for (const sym of Object.keys(shortRowsBySym)) {
+    const r = shortRowsBySym[sym];
+    if (!r || r.scoring) continue;
+    const tvp = tvpFor(r);
+    if (!tvp) continue;
+    const scoredAtMs = r.scored_at ? new Date(r.scored_at).getTime() : Date.now();
+    const price = r.raw?.[0]?.price;
+    if (recordSigHistory(sym, scoredAtMs, tvp, price)) histDirty = true;
+  }
   for (const sym of Object.keys(watchFlags)) {
     const state = watchFlags[sym];
     if (!state) continue;
@@ -3588,9 +3828,6 @@ function renderShortWatchlist(){
     if (wl && wl.legacy) continue;
     const tvp = tvpFor(r);
     if (!tvp) continue;
-    // Record this scan in per-ticker TVP history (dedupes on scored_at).
-    const scoredAtMs = r.scored_at ? new Date(r.scored_at).getTime() : Date.now();
-    if (recordSigHistory(sym, scoredAtMs, tvp)) histDirty = true;
     // Ready criteria, in priority order:
     //   1. score ≥ 22 (quality gate — junk tickers can't sit in Ready)
     //   2. ≥1 of T/V/P is currently green OR was green within the last 24h
@@ -3814,7 +4051,9 @@ async function rescanShort(e){
   btn.innerHTML = 'Rescanning…';
   // Mark ALL rows as legacy immediately — their displayed data is now stale.
   // The hazard badge + blur shows until each row's fresh data comes back.
-  watchlist.forEach(w => { w.legacy = true; w.shortScoring = false; });
+  // Also clear justAdded so newly-added rows rejoin the normal sort once
+  // they've been through a full Rescan.
+  watchlist.forEach(w => { w.legacy = true; w.shortScoring = false; w.justAdded = false; });
   renderShortWatchlist();
   if (!API_LIVE) {
     setTimeout(() => {
@@ -3873,6 +4112,11 @@ async function rescanShort(e){
     showToast('Short rescan failed — try again.');
   }
 }
+
+// Deferred default-view selection: all let/const state above is now
+// initialized, so setView('short') can safely call renderShortWatchlist
+// without hitting TDZ for watchFlags / sigHistory / etc.
+setView('short');
 </script>
 </body>
 </html>
