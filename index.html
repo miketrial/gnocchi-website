@@ -2210,11 +2210,13 @@ document.querySelectorAll('#viewSwitch button').forEach(b=>{
     else if(v==='short'){ setView('short'); ensureShortDataLoaded(); }
   });
 });
-// Default landing view = Short Term — that's the primary workflow.
-// The actual data load (ensureShortDataLoaded) is triggered from init()
-// after API_LIVE flips true; calling it here would mark shortLoaded=true
-// before the API is reachable and silently skip the fetch.
-setView('short');
+// Default landing view = Short Term — but the setView('short') call itself
+// is deferred until after all state declarations (watchFlags / sigHistory /
+// shortRowsBySym, etc.) lower in the file. setView triggers
+// renderShortWatchlist when isShort, and renderShortWatchlist touches those
+// let-bindings — calling it here would hit a TDZ ReferenceError and halt
+// the rest of module-eval (breaking the Add-to-watchlist handler etc.).
+// The deferred call lives at the bottom of the script.
 
 /* ---------------- Training Wheels content ---------------- */
 const TW_DATA={
@@ -4072,6 +4074,11 @@ async function rescanShort(e){
     showToast('Short rescan failed — try again.');
   }
 }
+
+// Deferred default-view selection: all let/const state above is now
+// initialized, so setView('short') can safely call renderShortWatchlist
+// without hitting TDZ for watchFlags / sigHistory / etc.
+setView('short');
 </script>
 </body>
 </html>
