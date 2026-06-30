@@ -2014,6 +2014,9 @@ async function init(){
     // Watch state (flags/demoted/activity) lives server-side too — load it now
     // that API_LIVE is true so a second device sees the shared watchlist.
     loadWatchState();
+    // Site lands on Short Term by default — kick off its data load now that
+    // API_LIVE is true. Wrapped in catch so a failure here doesn't break init.
+    ensureShortDataLoaded().catch(()=>{});
   }catch{ API_LIVE=false; /* offline / static open → keep seed data */ }
   try{
     const saved=JSON.parse(localStorage.getItem('gn_sort')||'null');
@@ -2208,8 +2211,10 @@ document.querySelectorAll('#viewSwitch button').forEach(b=>{
   });
 });
 // Default landing view = Short Term — that's the primary workflow.
+// The actual data load (ensureShortDataLoaded) is triggered from init()
+// after API_LIVE flips true; calling it here would mark shortLoaded=true
+// before the API is reachable and silently skip the fetch.
 setView('short');
-ensureShortDataLoaded();
 
 /* ---------------- Training Wheels content ---------------- */
 const TW_DATA={
