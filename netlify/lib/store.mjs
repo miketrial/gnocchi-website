@@ -83,13 +83,17 @@ export async function incrHaikuUsage() {
 export async function getWatchState() {
   const v = await settingsStore().get("watch-state", { type: "json" }).catch(() => null);
   return {
-    flags:    (v && typeof v.flags    === 'object' && !Array.isArray(v.flags))    ? v.flags    : {},
-    demoted:  (v && typeof v.demoted  === 'object' && !Array.isArray(v.demoted))  ? v.demoted  : {},
-    activity: Array.isArray(v?.activity) ? v.activity : [],
+    flags:      (v && typeof v.flags      === 'object' && !Array.isArray(v.flags))      ? v.flags      : {},
+    demoted:    (v && typeof v.demoted    === 'object' && !Array.isArray(v.demoted))    ? v.demoted    : {},
+    activity:   Array.isArray(v?.activity) ? v.activity : [],
+    sigHistory: (v && typeof v.sigHistory === 'object' && !Array.isArray(v.sigHistory)) ? v.sigHistory : {},
   };
 }
-export async function setWatchState({ flags, demoted, activity }) {
-  await settingsStore().setJSON("watch-state", { flags, demoted, activity, updated: Date.now() });
+export async function setWatchState({ flags, demoted, activity, sigHistory }) {
+  await settingsStore().setJSON("watch-state", {
+    flags, demoted, activity, sigHistory,
+    updated: Date.now(),
+  });
 }
 
 export async function getPins() {

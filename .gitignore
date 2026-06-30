@@ -4,4 +4,6 @@
 Screenshot*.png
 plan.md
 *.skill
-netlify/edge-functions/
+
+# Local Netlify folder
+.netlify
