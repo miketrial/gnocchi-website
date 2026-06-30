@@ -3793,6 +3793,21 @@ function renderShortWatchlist(){
       if (!live.has(sym)) { delete demotedRecent[sym]; demotedDirty = true; }
     }
   }
+  // Record TVP + price for EVERY scored ticker (not just flagged ones) so the
+  // shared backtest sample grows across rescans regardless of whether the user
+  // has added the stock to their watchlist. recordSigHistory dedupes on
+  // scored_at, so re-running this is idempotent within a single scan. The
+  // shared blob (saveSigHistory → /api/watch-state) makes this visible to
+  // anyone who opens the site.
+  for (const sym of Object.keys(shortRowsBySym)) {
+    const r = shortRowsBySym[sym];
+    if (!r || r.scoring) continue;
+    const tvp = tvpFor(r);
+    if (!tvp) continue;
+    const scoredAtMs = r.scored_at ? new Date(r.scored_at).getTime() : Date.now();
+    const price = r.raw?.[0]?.price;
+    if (recordSigHistory(sym, scoredAtMs, tvp, price)) histDirty = true;
+  }
   for (const sym of Object.keys(watchFlags)) {
     const state = watchFlags[sym];
     if (!state) continue;
@@ -3802,10 +3817,6 @@ function renderShortWatchlist(){
     if (wl && wl.legacy) continue;
     const tvp = tvpFor(r);
     if (!tvp) continue;
-    // Record this scan in per-ticker TVP history (dedupes on scored_at).
-    const scoredAtMs = r.scored_at ? new Date(r.scored_at).getTime() : Date.now();
-    const price = r.raw?.[0]?.price;
-    if (recordSigHistory(sym, scoredAtMs, tvp, price)) histDirty = true;
     // Ready criteria, in priority order:
     //   1. score ≥ 22 (quality gate — junk tickers can't sit in Ready)
     //   2. ≥1 of T/V/P is currently green OR was green within the last 24h
