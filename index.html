@@ -513,6 +513,31 @@
   /* Days-in-Ready badge (stale Ready entries that haven't been acted on) */
   .wp-chip-days{ font-size:9.5px;font-weight:600;padding:1px 5px;border-radius:6px;
     background:rgba(245,158,11,.18);color:#92400e;margin-left:2px;letter-spacing:.02em }
+  /* Trade card (Premium-tier Ready visualization) */
+  .wp-trade-card{
+    display:flex;flex-direction:column;
+    background:#fff;border:1px solid #a7f3d0;border-radius:7px;
+    padding:7px 9px 8px;width:300px;max-width:300px;
+    cursor:pointer;transition:border-color .12s ease;font-size:9.5px;
+    box-shadow:0 1px 2px rgba(0,0,0,.04);
+  }
+  .wp-trade-card:hover{ border-color:#10b981 }
+  .wp-tc-head{ display:flex;align-items:center;gap:6px;font-weight:700 }
+  .wp-tc-sym{ font-size:11px;color:var(--ink);letter-spacing:.2px }
+  .wp-tc-sub{ font-size:8.5px;color:var(--ink-soft);font-weight:500;
+    display:inline-flex;align-items:center;gap:4px;flex:1 }
+  .wp-tc-head .wp-x{ margin-left:auto;color:#9ca3af;font-size:11px;cursor:pointer;
+    line-height:1;padding:0 2px }
+  .wp-tc-head .wp-x:hover{ color:#ef4444 }
+  .wp-tc-rr{ display:flex;justify-content:space-between;gap:6px;
+    padding-top:5px;border-top:1px dashed #e5e7eb }
+  .wp-tc-rr > div{ display:flex;flex-direction:column;align-items:flex-start;
+    flex:1;min-width:0 }
+  .wp-tc-lbl{ font-size:7.5px;color:#9ca3af;text-transform:uppercase;
+    letter-spacing:.5px;font-weight:600 }
+  .wp-tc-val{ font-size:11px;font-weight:700;line-height:1.2 }
+  .wp-tc-tag{ font-size:7.5px;font-weight:600;text-transform:uppercase;
+    letter-spacing:.4px;margin-top:1px }
   /* Ready sub-tier divider headings (Premium / Standard) */
   .wp-tier-head{ width:100%;display:flex;align-items:center;gap:6px;
     font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
@@ -3225,6 +3250,102 @@ function renderWatchPanel(){
       `<span class="wp-sig-dot ${nearCls}"  data-tip="${escHtml(nearTip)}">P</span>` +
       `</span>`;
   };
+  // Trade card for Premium-tier Ready tickers: a vertical price ladder that
+  // shows price relative to 50DMA / 200DMA / 52w-high, with a suggested stop
+  // (3% below 50DMA) and a target (the lesser of 52w-high or +8%). The R/R
+  // ratio is the headline number — if it's < 1.5, the trade is mathematically
+  // weak even if the TVP setup is clean.
+  const tradeCard = (sym) => {
+    const r = shortRowsBySym[sym];
+    const tvp = r ? tvpFor(r) : null;
+    const price  = r?.raw?.[0]?.price;
+    const sma50  = r?.raw?.[0]?.sma50;
+    const sma200 = r?.raw?.[0]?.sma200;
+    const high52 = r?.raw?.[2]?.high;
+    if (!price || !sma50 || !sma200 || !tvp) return null;
+    // Stop just below 50DMA (chartist convention) — 3% under so noise wicks
+    // don't trip it. Target: bounded by 52w-high resistance OR +8% from
+    // current, whichever is closer. If price is already at the high, fall
+    // back to +8%.
+    const stop = sma50 * 0.97;
+    const tgtCap = high52 && high52 > price ? high52 : price * 1.08;
+    const target = Math.min(tgtCap, price * 1.08);
+    const upside = (target - price) / price * 100;
+    const downside = (price - stop) / price * 100;
+    const rr = downside > 0 ? upside / downside : 0;
+    const ts = chipDate(sym, 'ready');
+    const days = ts ? Math.floor((Date.now() - ts) / 86400000) : 0;
+    const greens = (tvp.T?1:0)+(tvp.V?1:0)+(tvp.P?1:0);
+    const score = r.score ? parseInt(r.score) || 0 : 0;
+    // Ladder math: stack values, normalize within ladder height.
+    // Dedupe by near-equal price (within 0.1%) — if Target == 52w high, fold
+    // labels into one stacked row instead of overlapping.
+    const rawVals = [
+      { y: high52 || target,  label: '52w high', color:'#94a3b8', dash:false, k:'hi'  },
+      { y: target,            label: 'Target',   color:'#10b981', dash:true,  k:'tg'  },
+      { y: price,             label: 'Now',      color:'#3b82f6', dash:false, k:'now' },
+      { y: sma50,             label: '50DMA',    color:'#f59e0b', dash:false, k:'50'  },
+      { y: stop,              label: 'Stop',     color:'#ef4444', dash:true,  k:'st'  },
+      { y: sma200,            label: '200DMA',   color:'#94a3b8', dash:false, k:'200' },
+    ].filter(v => v.y && isFinite(v.y));
+    // Merge entries whose price is within 0.2% (Target ≈ 52w high case)
+    const vals = [];
+    rawVals.forEach(v => {
+      const dup = vals.find(u => Math.abs(u.y - v.y) / Math.max(u.y, v.y) < 0.002);
+      if (dup) {
+        dup.label += ' · ' + v.label;
+        // Promote "Now" or any dashed line color if merging upgrades visibility.
+        if (v.k === 'now') { dup.color = v.color; dup.k = 'now'; }
+      } else vals.push({ ...v });
+    });
+    const min = Math.min(...vals.map(v=>v.y));
+    const max = Math.max(...vals.map(v=>v.y));
+    const span = max - min || 1;
+    const H = 130, W = 240, padT = 8, padB = 8, padL = 4, padR = 86;
+    const yFor = v => padT + (1 - (v - min) / span) * (H - padT - padB);
+    // Anti-collision pass on text y-positions: sort by line y, then walk and
+    // push labels down so each one has at least minGap vertical room.
+    const minGap = 16;
+    const sorted = vals.map(v => ({ ...v, yLine: yFor(v.y) })).sort((a,b) => a.yLine - b.yLine);
+    sorted.forEach((v, i) => {
+      const prev = sorted[i-1];
+      v.yText = prev ? Math.max(v.yLine, prev.yText + minGap) : Math.max(padT + 8, v.yLine);
+    });
+    // Shade the ideal entry band (50DMA to 5% above) — draw before lines.
+    const zoneTop = sma50 * 1.05, zoneBot = sma50;
+    const zy1 = yFor(zoneTop), zy2 = yFor(zoneBot);
+    const zone = `<rect x="${padL}" y="${Math.min(zy1,zy2)}" width="${W - padR - padL}" height="${Math.abs(zy2-zy1)}" fill="#10b981" opacity="0.08"/>`;
+    const lines = sorted.map(v => {
+      const dash = v.dash ? 'stroke-dasharray="3 3"' : '';
+      const dot = v.k === 'now' ? `<circle cx="${W - padR + 4}" cy="${v.yLine}" r="3.5" fill="#3b82f6"/>` : '';
+      // Leader line connects line-y to label-y when they were pushed apart
+      const leader = Math.abs(v.yLine - v.yText) > 2
+        ? `<line x1="${W - padR}" y1="${v.yLine}" x2="${W - padR + 8}" y2="${v.yText - 3}" stroke="${v.color}" stroke-width="0.6" opacity="0.5"/>`
+        : '';
+      return `<line x1="${padL}" y1="${v.yLine}" x2="${W - padR}" y2="${v.yLine}" stroke="${v.color}" stroke-width="${v.k==='now'?2:1.2}" ${dash}/>${dot}${leader}` +
+             `<text x="${W - padR + 10}" y="${v.yText - 1}" font-size="8.5" fill="${v.color}" font-weight="${v.k==='now'?700:500}">${v.label}</text>` +
+             `<text x="${W - padR + 10}" y="${v.yText + 8}" font-size="7.5" fill="#9ca3af">$${v.y.toFixed(v.y>100?0:2)}</text>`;
+    }).join('');
+    const rrColor = rr >= 2 ? '#10b981' : rr >= 1.5 ? '#f59e0b' : '#ef4444';
+    const rrLabel = rr >= 2 ? 'good' : rr >= 1.5 ? 'ok' : 'weak';
+    const sigPills = sigDots(sym);
+    const daysBadge = days >= 3 ? `<span class="wp-chip-days" data-tip="In Ready ${days}d — consider entering or clearing">${days}d</span>` : '';
+    return `<div class="wp-trade-card" data-sym="${sym}" data-tip="Click for ${sym} history">
+      <div class="wp-tc-head">
+        <span class="wp-tc-sym">${sym}</span>
+        <span class="wp-tc-sub">${score}/30 · ${greens}/3 ${sigPills} ${daysBadge}</span>
+        <span class="wp-x" data-sym="${sym}" data-kind="ready" data-tip="Clear watchlist flag">×</span>
+      </div>
+      <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;margin:4px 0 6px">
+        ${zone}${lines}
+      </svg>
+      <div class="wp-tc-rr">
+        <div><span class="wp-tc-lbl">R/R</span><span class="wp-tc-val" style="color:${rrColor}">${rr.toFixed(1)}:1</span><span class="wp-tc-tag" style="color:${rrColor}">${rrLabel}</span></div>
+        <div><span class="wp-tc-lbl">Stop</span><span class="wp-tc-val" style="color:#ef4444">−${downside.toFixed(1)}%</span></div>
+        <div><span class="wp-tc-lbl">Target</span><span class="wp-tc-val" style="color:#10b981">+${upside.toFixed(1)}%</span></div>
+      </div>
+    </div>`;
+  };
   const chip = (sym, kind, reason) => {
     const reasonHtml = reason ? `<span class="wp-chip-reason">${escHtml(reason)}</span>` : '';
     const ts = chipDate(sym, kind);
@@ -3250,7 +3371,11 @@ function renderWatchPanel(){
     let body;
     if (kind === 'ready' && items.length) {
       // Split Ready into Premium (3/3 + score≥26) and Standard sub-groups.
-      const prem = renderItems(readyPremium);
+      // Premium renders as trade cards (price ladder + R/R) — they're the
+      // actionable ones, so we surface the decision-relevant chart up top.
+      // Standard stays as compact chips. Falls back to chip if a card can't
+      // be built (missing raw price/SMA data on a freshly added ticker).
+      const prem = readyPremium.map(s => tradeCard(s) || chip(s, 'ready', '')).join('');
       const std  = renderItems(readyStandard);
       const premHead = readyPremium.length
         ? `<div class="wp-tier-head wp-tier-prem">★ Premium <span class="wp-tier-sub">3/3 · or 2/3 with score ≥ 26</span><span class="wp-tier-count">${readyPremium.length}</span></div>${prem}`
