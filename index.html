@@ -3101,18 +3101,32 @@ function renderWatchPanel(){
   if (!el) return;
   pruneDemoted();
   const readyPremium = [], readyStandard = [], watching = [], demoted = [];
+  // Sort key per ready sym: { sym, greens, score } so we can rank chips
+  // within each tier by green count desc, then score desc.
+  const readyMeta = {};
   for (const sym of Object.keys(watchFlags)) {
     if (watchFlags[sym] === 'ready') {
-      // Premium = 3/3 green AND score ≥ 26. Surfaces the A-tier setups first.
       const r = shortRowsBySym[sym];
       const tvp = r ? tvpFor(r) : null;
       const greens = tvp ? (tvp.T?1:0)+(tvp.V?1:0)+(tvp.P?1:0) : 0;
       const score  = r?.score ? parseInt(r.score) || 0 : 0;
-      if (greens === 3 && score >= 26) readyPremium.push(sym);
+      readyMeta[sym] = { greens, score };
+      // Premium = high-conviction setup: either a full 3/3 hit, OR ≥2 greens
+      // with a strong score (≥26). Standard = everything else still in Ready.
+      const isPremium = greens === 3 || (greens >= 2 && score >= 26);
+      if (isPremium) readyPremium.push(sym);
       else readyStandard.push(sym);
     }
     else if (watchFlags[sym] === 'watching') watching.push(sym);
   }
+  // Rank within each tier: greens desc, then score desc.
+  const rankReady = (a, b) => {
+    const ma = readyMeta[a], mb = readyMeta[b];
+    if (mb.greens !== ma.greens) return mb.greens - ma.greens;
+    return mb.score - ma.score;
+  };
+  readyPremium.sort(rankReady);
+  readyStandard.sort(rankReady);
   const ready = [...readyPremium, ...readyStandard];
   for (const sym of Object.keys(demotedRecent)) demoted.push(sym);
   // Hide entirely when there's nothing to show — no flags AND no history
@@ -3222,10 +3236,10 @@ function renderWatchPanel(){
       const prem = renderItems(readyPremium);
       const std  = renderItems(readyStandard);
       const premHead = readyPremium.length
-        ? `<div class="wp-tier-head wp-tier-prem">★ Premium <span class="wp-tier-sub">3/3 · score ≥ 26</span><span class="wp-tier-count">${readyPremium.length}</span></div>${prem}`
+        ? `<div class="wp-tier-head wp-tier-prem">★ Premium <span class="wp-tier-sub">3/3 · or 2/3 with score ≥ 26</span><span class="wp-tier-count">${readyPremium.length}</span></div>${prem}`
         : '';
       const stdHead = readyStandard.length
-        ? `<div class="wp-tier-head wp-tier-std">Standard <span class="wp-tier-sub">1–2 green or score 22–25</span><span class="wp-tier-count">${readyStandard.length}</span></div>${std}`
+        ? `<div class="wp-tier-head wp-tier-std">Standard <span class="wp-tier-sub">1–2 green with score 22–25</span><span class="wp-tier-count">${readyStandard.length}</span></div>${std}`
         : '';
       body = premHead + stdHead;
     } else {
