@@ -217,22 +217,50 @@ function validPricePoint(date, close) {
   return Number.isFinite(close) && close > 0;
 }
 
-// Build the rolling, validated 15-day close series (oldest→newest) from FMP's
-// hist feed. Every point is checked; dupes are collapsed; the newest 15 valid
-// sessions win. See the call site for why this makes the window self-rolling.
+// Build the rolling, validated 15-day series (oldest→newest) from FMP's hist
+// feed. Every point is checked; dupes are collapsed; the newest 15 valid
+// sessions win. Each point also carries the trailing 50DMA, 200DMA, and 52w
+// high computed AS OF THAT DAY — so the chart can draw them as moving curves
+// (they change daily), not flat lines. See the call site for why this makes
+// the window self-rolling.
 function buildPriceHist15(hist) {
   const seen = new Set();
-  const cleaned = [];
+  const desc = [];                        // newest-first, validated, deduped
   for (const d of hist || []) {
     const date = d?.date;
     const close = d?.price ?? d?.close;
     if (!validPricePoint(date, close)) continue;
-    if (seen.has(date)) continue;      // FMP occasionally double-lists a session
+    if (seen.has(date)) continue;         // FMP occasionally double-lists a session
     seen.add(date);
-    cleaned.push({ date, close });
+    desc.push({ date, close });
   }
-  cleaned.sort((a, b) => b.date.localeCompare(a.date)); // newest first
-  return cleaned.slice(0, 15).reverse();                 // newest 15, oldest→newest
+  desc.sort((a, b) => b.date.localeCompare(a.date)); // newest first
+  const closes = desc.map(d => d.close);
+  // Trailing average / max of `n` closes starting at index `from` (inclusive),
+  // most-recent-first — so `from=i` looks back from day i. Returns null if no
+  // data (never happens once we're inside the array), partial near the tail.
+  const avgFrom = (from, n) => {
+    let s = 0, c = 0;
+    for (let k = from; k < from + n && k < closes.length; k++) { s += closes[k]; c++; }
+    return c ? s / c : null;
+  };
+  const maxFrom = (from, n) => {
+    let m = -Infinity, c = 0;
+    for (let k = from; k < from + n && k < closes.length; k++) { if (closes[k] > m) m = closes[k]; c++; }
+    return c ? m : null;
+  };
+  const count = Math.min(15, desc.length);
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    out.push({
+      date:   desc[i].date,
+      close:  desc[i].close,
+      sma50:  avgFrom(i, 50),
+      sma200: avgFrom(i, 200),
+      high52: maxFrom(i, 252),
+    });
+  }
+  return out.reverse();                   // newest 15, oldest→newest
 }
 
 // 1. Trend: how cleanly price is above its moving averages
@@ -566,7 +594,7 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   // Cache check
   if (!skipCache) {
     const cached = await getShortFmpCache(sym);
-    if (cached && cached._v === 11) {
+    if (cached && cached._v === 12) {
       return cached.row;
     }
   } else {
@@ -693,6 +721,6 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     scored_at: new Date().toISOString(),
   };
 
-  await putShortFmpCache(sym, { _v: 11, row }).catch(() => {});
+  await putShortFmpCache(sym, { _v: 12, row }).catch(() => {});
   return row;
 }

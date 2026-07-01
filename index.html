@@ -3261,17 +3261,27 @@ function sigDots(sym){
 function sanitizePriceHist15(raw){
   if (!Array.isArray(raw)) return null;
   const ISO = /^\d{4}-\d{2}-\d{2}$/;
+  const num = v => { const n = (typeof v === 'number') ? v : Number(v); return Number.isFinite(n) ? n : null; };
   const seen = new Set();
   const clean = [];
   for (const d of raw) {
     const date = d && d.date;
-    const close = d && (typeof d.close === 'number' ? d.close : Number(d.close));
+    const close = d && num(d.close);
     if (typeof date !== 'string' || !ISO.test(date)) continue;
     if (Number.isNaN(new Date(date + 'T00:00:00Z').getTime())) continue;
     if (!Number.isFinite(close) || close <= 0) continue;
     if (seen.has(date)) continue;
     seen.add(date);
-    clean.push({ date, close });
+    // Per-day moving-average / rolling-high fields (added pipeline v12).
+    // Kept as numbers when valid+positive, else null → those curves fall
+    // back to the current flat level for this row.
+    const sma50  = num(d.sma50),  sma200 = num(d.sma200), high52 = num(d.high52);
+    clean.push({
+      date, close,
+      sma50:  (sma50  != null && sma50  > 0) ? sma50  : null,
+      sma200: (sma200 != null && sma200 > 0) ? sma200 : null,
+      high52: (high52 != null && high52 > 0) ? high52 : null,
+    });
   }
   clean.sort((a, b) => a.date.localeCompare(b.date)); // oldest → newest
   const rolled = clean.slice(-15);                     // keep newest 15
@@ -3312,80 +3322,98 @@ function tradeCard(sym, opts){
   // Drop anything without a real ISO date or a finite positive close, dedupe
   // by date, and re-sort oldest→newest so the path can never render garbage.
   const hist15 = sanitizePriceHist15(r.priceHist15);
-  // Reference lines: horizontal, span the full chart width.
-  const rawRefs = [
-    { y: high52 || target,  label: '52w high', color:'#94a3b8', dash:false, k:'hi'  },
-    { y: target,            label: 'Target',   color:'#10b981', dash:true,  k:'tg'  },
-    { y: sma50,             label: '50DMA',    color:'#f59e0b', dash:false, k:'50'  },
-    { y: stop,              label: 'Stop',     color:'#ef4444', dash:true,  k:'st'  },
-    { y: sma200,            label: '200DMA',   color:'#94a3b8', dash:false, k:'200' },
-  ].filter(v => v.y && isFinite(v.y));
-  // Merge ref lines within 0.2% of each other (e.g. Target ≈ 52w high)
-  const refs = [];
-  rawRefs.forEach(v => {
-    const dup = refs.find(u => Math.abs(u.y - v.y) / Math.max(u.y, v.y) < 0.002);
-    if (dup) dup.label += ' · ' + v.label;
-    else refs.push({ ...v });
-  });
-  // "Now" label always present — either the path's last close or the flat
-  // fallback price — included in the same collision-avoidance pass as refs.
+  const n = hist15 ? hist15.length : 0;
+  // Rich per-day series present? (pipeline v12 attaches sma50/sma200/high52 to
+  // every point). When present each level is drawn as a MOVING CURVE — the
+  // 50/200DMA genuinely change every day, so a flat line misrepresents them.
+  // When absent (older cached rows), each level falls back to a flat line at
+  // its current value.
+  const richSMA  = !!hist15 && hist15.every(d => Number.isFinite(d.sma50) && Number.isFinite(d.sma200));
+  const richHigh = !!hist15 && hist15.every(d => Number.isFinite(d.high52));
+  // Per-day value arrays (oldest→newest) for each level, or null → flat.
+  const tgtOf = d => { const cap = (d.high52 && d.high52 > d.close) ? d.high52 : d.close * 1.08; return Math.min(cap, d.close * 1.08); };
+  const seriesVals = {
+    price:  hist15  ? hist15.map(d => d.close)        : null,
+    sma50:  richSMA ? hist15.map(d => d.sma50)        : null,
+    sma200: richSMA ? hist15.map(d => d.sma200)       : null,
+    high52: richHigh? hist15.map(d => d.high52)       : null,
+    stop:   richSMA ? hist15.map(d => d.sma50 * 0.97) : null,
+    target: richHigh? hist15.map(tgtOf)               : null,
+  };
   const nowVal = hist15 ? hist15[hist15.length - 1].close : price;
-  const nowEntry = { y: nowVal, label: hist15 ? '52w high · Now' : 'Now', color:'#3b82f6', dash:false, k:'now', isPath: !!hist15 };
-  // Only fold "52w high · Now" merge text if they're actually close; otherwise
-  // keep "Now" on its own so the path label doesn't inherit an unrelated tag.
-  const nearHigh52 = refs.find(u => Math.abs(u.y - nowVal) / Math.max(u.y, nowVal) < 0.002 && u.k === 'hi');
-  nowEntry.label = nearHigh52 ? `${nearHigh52.label} · Now` : 'Now';
-  if (nearHigh52) refs.splice(refs.indexOf(nearHigh52), 1);
-  const vals = [...refs, nowEntry];
-  // Y-domain includes every reference level AND the full price path (if
-  // present) so the line never clips outside the chart.
-  const domainYs = vals.map(v=>v.y).concat(hist15 ? hist15.map(d=>d.close) : []);
+  // Draw order: context levels first, price last (on top). `current` is the
+  // flat fallback value + the value shown in the right-edge label.
+  const seriesDefs = [
+    { key:'high52', label:'52w high', color:'#94a3b8', dash:false, width:1.2, current: high52 },
+    { key:'sma200', label:'200DMA',   color:'#94a3b8', dash:false, width:1.2, current: sma200 },
+    { key:'target', label:'Target',   color:'#10b981', dash:true,  width:1.2, current: target },
+    { key:'stop',   label:'Stop',     color:'#ef4444', dash:true,  width:1.2, current: stop },
+    { key:'sma50',  label:'50DMA',    color:'#f59e0b', dash:false, width:1.2, current: sma50 },
+    { key:'price',  label:'Now',      color:'#3b82f6', dash:false, width:1.8, current: nowVal, isPrice:true },
+  ].filter(def => seriesVals[def.key] || Number.isFinite(def.current));
+  // Y-domain spans every point of every drawn series so nothing clips.
+  const domainYs = [];
+  seriesDefs.forEach(def => {
+    const arr = seriesVals[def.key];
+    if (arr) domainYs.push(...arr.filter(Number.isFinite));
+    else if (Number.isFinite(def.current)) domainYs.push(def.current);
+  });
+  if (!domainYs.length) domainYs.push(nowVal);
   const min = Math.min(...domainYs);
   const max = Math.max(...domainYs);
   const span = max - min || 1;
   const H = 130, W = 240, padT = 8, padB = 8, padL = 4, padR = 86;
   const chartW = W - padR - padL;
   const yFor = v => padT + (1 - (v - min) / span) * (H - padT - padB);
-  const xFor = i => padL + (i / (hist15.length - 1)) * chartW;
-  // Anti-collision pass on text y-positions: sort by line y, then walk and
-  // push labels down so each one has at least minGap vertical room.
-  const minGap = 16;
-  const sorted = vals.map(v => ({ ...v, yLine: yFor(v.y) })).sort((a,b) => a.yLine - b.yLine);
-  sorted.forEach((v, i) => {
-    const prev = sorted[i-1];
-    v.yText = prev ? Math.max(v.yLine, prev.yText + minGap) : Math.max(padT + 8, v.yLine);
-  });
+  const xFor = i => padL + (i / Math.max(1, n - 1)) * chartW;
   // Shade the ideal entry band (50DMA to 5% above) — draw before lines.
   const zoneTop = sma50 * 1.05, zoneBot = sma50;
   const zy1 = yFor(zoneTop), zy2 = yFor(zoneBot);
   const zone = `<rect x="${padL}" y="${Math.min(zy1,zy2)}" width="${chartW}" height="${Math.abs(zy2-zy1)}" fill="#10b981" opacity="0.08"/>`;
-  // 15-day price path (blue) — drawn under the reference lines so dashed
-  // resistance/support levels stay visually on top.
-  const path = hist15
-    ? (() => {
-        const pts = hist15.map((d,i) => `${xFor(i)},${yFor(d.close)}`).join(' ');
-        const lastX = xFor(hist15.length - 1), lastY = yFor(nowVal);
-        return `<polyline points="${pts}" fill="none" stroke="#3b82f6" stroke-width="1.8"/>` +
-               `<circle cx="${lastX}" cy="${lastY}" r="3.5" fill="#3b82f6"/>`;
-      })()
-    : `<line x1="${padL}" y1="${yFor(nowVal)}" x2="${W - padR}" y2="${yFor(nowVal)}" stroke="#3b82f6" stroke-width="2"/>` +
-      `<circle cx="${W - padR + 4}" cy="${yFor(nowVal)}" r="3.5" fill="#3b82f6"/>`;
-  const lines = sorted.map(v => {
-    if (v.k === 'now') {
-      // Label only — the path/flat-line + dot were already drawn above.
-      const leader = Math.abs(v.yLine - v.yText) > 2
-        ? `<line x1="${W - padR}" y1="${v.yLine}" x2="${W - padR + 8}" y2="${v.yText - 3}" stroke="${v.color}" stroke-width="0.6" opacity="0.5"/>`
-        : '';
-      return `${leader}<text x="${W - padR + 10}" y="${v.yText - 1}" font-size="8.5" fill="${v.color}" font-weight="700">${v.label}</text>` +
-             `<text x="${W - padR + 10}" y="${v.yText + 8}" font-size="7.5" fill="#9ca3af">$${v.y.toFixed(v.y>100?0:2)}</text>`;
+  // Draw each series as a curve (per-day array) or a flat line (fallback).
+  const curves = seriesDefs.map(def => {
+    const arr = seriesVals[def.key];
+    const dash = def.dash ? 'stroke-dasharray="3 3"' : '';
+    let markup = '';
+    let newestY;
+    if (arr) {
+      const pts = arr.map((v, i) => `${xFor(i)},${yFor(v)}`).join(' ');
+      markup = `<polyline points="${pts}" fill="none" stroke="${def.color}" stroke-width="${def.width}" ${dash}/>`;
+      newestY = yFor(arr[arr.length - 1]);
+      if (def.isPrice) markup += `<circle cx="${xFor(n - 1)}" cy="${newestY}" r="3.5" fill="${def.color}"/>`;
+    } else {
+      const y = yFor(def.current);
+      markup = `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="${def.color}" stroke-width="${def.width}" ${dash}/>`;
+      newestY = y;
+      if (def.isPrice) markup += `<circle cx="${W - padR + 4}" cy="${y}" r="3.5" fill="${def.color}"/>`;
     }
-    const dash = v.dash ? 'stroke-dasharray="3 3"' : '';
-    const leader = Math.abs(v.yLine - v.yText) > 2
-      ? `<line x1="${W - padR}" y1="${v.yLine}" x2="${W - padR + 8}" y2="${v.yText - 3}" stroke="${v.color}" stroke-width="0.6" opacity="0.5"/>`
+    def._labelY = newestY;
+    def._labelVal = arr ? arr[arr.length - 1] : def.current;
+    return markup;
+  }).join('');
+  // Right-edge labels: merge levels whose newest value coincides (e.g. Now ≈
+  // 52w high at the highs), then collision-avoid vertically.
+  let labelEntries = seriesDefs.map(def => ({
+    label: def.label, color: def.color, weight: def.isPrice ? 700 : 500,
+    y: def._labelY, val: def._labelVal,
+  })).sort((a, b) => a.y - b.y);
+  const merged = [];
+  labelEntries.forEach(e => {
+    const dup = merged.find(u => Math.abs(u.val - e.val) / Math.max(u.val, e.val) < 0.004);
+    if (dup) { dup.label += ' · ' + e.label; if (e.weight > dup.weight) { dup.weight = e.weight; dup.color = e.color; } }
+    else merged.push({ ...e });
+  });
+  const minGap = 15;
+  merged.forEach((e, i) => {
+    const prev = merged[i-1];
+    e.yText = prev ? Math.max(e.y, prev.yText + minGap) : Math.max(padT + 8, e.y);
+  });
+  const lines = merged.map(e => {
+    const leader = Math.abs(e.y - e.yText) > 2
+      ? `<line x1="${W - padR}" y1="${e.y}" x2="${W - padR + 8}" y2="${e.yText - 3}" stroke="${e.color}" stroke-width="0.6" opacity="0.5"/>`
       : '';
-    return `<line x1="${padL}" y1="${v.yLine}" x2="${W - padR}" y2="${v.yLine}" stroke="${v.color}" stroke-width="1.2" ${dash}/>${leader}` +
-           `<text x="${W - padR + 10}" y="${v.yText - 1}" font-size="8.5" fill="${v.color}" font-weight="500">${v.label}</text>` +
-           `<text x="${W - padR + 10}" y="${v.yText + 8}" font-size="7.5" fill="#9ca3af">$${v.y.toFixed(v.y>100?0:2)}</text>`;
+    return `${leader}<text x="${W - padR + 10}" y="${e.yText - 1}" font-size="8.5" fill="${e.color}" font-weight="${e.weight}">${e.label}</text>` +
+           `<text x="${W - padR + 10}" y="${e.yText + 8}" font-size="7.5" fill="#9ca3af">$${e.val.toFixed(e.val>100?0:2)}</text>`;
   }).join('');
   const rrColor = rr >= 2 ? '#10b981' : rr >= 1.5 ? '#f59e0b' : '#ef4444';
   const rrLabel = rr >= 2 ? 'good' : rr >= 1.5 ? 'ok' : 'weak';
@@ -3404,7 +3432,7 @@ function tradeCard(sym, opts){
       ${closeBtn}
     </div>
     <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;margin:4px 0 0">
-      ${zone}${path}${lines}
+      ${zone}${curves}${lines}
     </svg>
     ${dateAxis}
     <div class="wp-tc-rr">
