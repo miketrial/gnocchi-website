@@ -517,7 +517,7 @@
   .wp-trade-card{
     display:flex;flex-direction:column;
     background:#fff;border:1px solid #a7f3d0;border-radius:7px;
-    padding:7px 9px 8px;width:300px;max-width:300px;
+    padding:7px 9px 8px;width:340px;max-width:340px;
     cursor:pointer;transition:border-color .12s ease;font-size:9.5px;
     box-shadow:0 1px 2px rgba(0,0,0,.04);
   }
@@ -543,8 +543,16 @@
      popover already owns clicking and close. */
   .wp-trade-card-compact{
     background:transparent;border:none;box-shadow:none;cursor:default;
-    padding:0;width:220px;max-width:220px;flex-shrink:0;
+    padding:0;width:320px;max-width:320px;flex-shrink:0;
   }
+  .wp-tc-legend{ display:flex;flex-wrap:wrap;gap:4px 10px;
+    font-size:8px;color:#9ca3af;margin:6px 0 0;line-height:1.3 }
+  .wp-tc-legend > span{ display:inline-flex;align-items:center;gap:4px;white-space:nowrap }
+  .wp-tc-legend i{ display:inline-block;width:12px;height:2px;border-radius:1px;flex:none }
+  .wp-tc-legend i.dash{ background:transparent;
+    background-image:linear-gradient(to right, currentColor 60%, transparent 40%);
+    background-size:5px 2px;background-repeat:repeat-x }
+  .wp-trade-card-compact .wp-tc-legend{ color:#8a95a8 }
   .wp-trade-card-compact .wp-tc-sym{ color:#e8eaf0 }
   .wp-trade-card-compact .wp-tc-sub{ color:#8a95a8 }
   .wp-trade-card-compact .wp-tc-rr{ border-top-color:rgba(255,255,255,.12) }
@@ -3347,7 +3355,7 @@ function tradeCard(sym, opts){
   // Draw order: context levels first, price last (on top). `current` is the
   // flat fallback value + the value shown in the right-edge label.
   const seriesDefs = [
-    { key:'high52', label:'52w high', color:'#94a3b8', dash:false, width:1.2, current: high52 },
+    { key:'high52', label:'52w high', color:'#7dd3fc', dash:false, width:1.4, current: high52 },
     { key:'sma200', label:'200DMA',   color:'#94a3b8', dash:false, width:1.2, current: sma200 },
     { key:'target', label:'Target',   color:'#10b981', dash:true,  width:1.2, current: target },
     { key:'stop',   label:'Stop',     color:'#ef4444', dash:true,  width:1.2, current: stop },
@@ -3365,7 +3373,7 @@ function tradeCard(sym, opts){
   const min = Math.min(...domainYs);
   const max = Math.max(...domainYs);
   const span = max - min || 1;
-  const H = 130, W = 240, padT = 8, padB = 8, padL = 4, padR = 86;
+  const H = 180, W = 340, padT = 10, padB = 10, padL = 6, padR = 96;
   const chartW = W - padR - padL;
   const yFor = v => padT + (1 - (v - min) / span) * (H - padT - padB);
   const xFor = i => padL + (i / Math.max(1, n - 1)) * chartW;
@@ -3406,7 +3414,7 @@ function tradeCard(sym, opts){
     if (dup) { dup.label += ' · ' + e.label; if (e.weight > dup.weight) { dup.weight = e.weight; dup.color = e.color; } }
     else merged.push({ ...e });
   });
-  const minGap = 15;
+  const minGap = 17;
   merged.forEach((e, i) => {
     const prev = merged[i-1];
     e.yText = prev ? Math.max(e.y, prev.yText + minGap) : Math.max(padT + 8, e.y);
@@ -3415,8 +3423,8 @@ function tradeCard(sym, opts){
     const leader = Math.abs(e.y - e.yText) > 2
       ? `<line x1="${W - padR}" y1="${e.y}" x2="${W - padR + 8}" y2="${e.yText - 3}" stroke="${e.color}" stroke-width="0.6" opacity="0.5"/>`
       : '';
-    return `${leader}<text x="${W - padR + 10}" y="${e.yText - 1}" font-size="8.5" fill="${e.color}" font-weight="${e.weight}">${e.label}</text>` +
-           `<text x="${W - padR + 10}" y="${e.yText + 8}" font-size="7.5" fill="#9ca3af">$${e.val.toFixed(e.val>100?0:2)}</text>`;
+    return `${leader}<text x="${W - padR + 10}" y="${e.yText - 1}" font-size="10" fill="${e.color}" font-weight="${e.weight}">${e.label}</text>` +
+           `<text x="${W - padR + 10}" y="${e.yText + 10}" font-size="9" fill="#9ca3af">$${e.val.toFixed(e.val>100?0:2)}</text>`;
   }).join('');
   const rrColor = rr >= 2 ? '#10b981' : rr >= 1.5 ? '#f59e0b' : '#ef4444';
   const rrLabel = rr >= 2 ? 'good' : rr >= 1.5 ? 'ok' : 'weak';
@@ -3425,9 +3433,17 @@ function tradeCard(sym, opts){
   const outerOpen  = opts.compact ? '<div class="wp-trade-card wp-trade-card-compact">' : `<div class="wp-trade-card" data-sym="${sym}" data-tip="Click for ${sym} history">`;
   const closeBtn   = opts.compact ? '' : `<span class="wp-x" data-sym="${sym}" data-kind="ready" data-tip="Clear watchlist flag">×</span>`;
   const dateAxis = hist15
-    ? `<div style="display:flex;justify-content:space-between;font-size:7px;color:#9ca3af;margin:1px 0 6px;padding:0 ${padR}px 0 ${padL}px">` +
+    ? `<div style="display:flex;justify-content:space-between;font-size:9px;color:#9ca3af;margin:2px 0 4px;padding:0 ${padR}px 0 ${padL}px">` +
       `<span>${fmtAxisDate(hist15[0].date)}</span><span>${fmtAxisDate(hist15[hist15.length-1].date)}</span></div>`
-    : `<div style="font-size:7.5px;color:#9ca3af;margin:1px 0 6px">price path unavailable — rescan to populate</div>`;
+    : `<div style="font-size:9px;color:#9ca3af;margin:2px 0 4px">price path unavailable — rescan to populate</div>`;
+  const legend = `<div class="wp-tc-legend">` +
+    `<span style="color:#3b82f6"><i style="background:#3b82f6"></i>Now (price)</span>` +
+    `<span style="color:#f59e0b"><i style="background:#f59e0b"></i>50DMA</span>` +
+    `<span style="color:#94a3b8"><i style="background:#94a3b8"></i>200DMA</span>` +
+    `<span style="color:#7dd3fc"><i style="background:#7dd3fc"></i>52w high</span>` +
+    `<span style="color:#10b981"><i class="dash"></i>Target (+8% cap)</span>` +
+    `<span style="color:#ef4444"><i class="dash"></i>Stop (−3% of 50DMA)</span>` +
+    `</div>`;
   return `${outerOpen}
     <div class="wp-tc-head">
       <span class="wp-tc-sym">${sym}</span>
@@ -3438,6 +3454,7 @@ function tradeCard(sym, opts){
       ${zone}${curves}${lines}
     </svg>
     ${dateAxis}
+    ${legend}
     <div class="wp-tc-rr">
       <div><span class="wp-tc-lbl">R/R</span><span class="wp-tc-val" style="color:${rrColor}">${rr.toFixed(1)}:1</span><span class="wp-tc-tag" style="color:${rrColor}">${rrLabel}</span></div>
       <div><span class="wp-tc-lbl">Stop</span><span class="wp-tc-val" style="color:#ef4444">−${downside.toFixed(1)}%</span></div>
