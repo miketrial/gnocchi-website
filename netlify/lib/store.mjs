@@ -12,6 +12,9 @@ const settingsStore    = () => getStore("settings");     // key = setting name
 const shortRowStore    = () => getStore("short-rows");   // key = TICKER, per-ticker short-pipeline score blob
 const shortFmpStore    = () => getStore("short-fmp");    // key = TICKER, per-ticker raw FMP fan-out cache (24h TTL)
 const epsSnapStore     = () => getStore("eps-snapshots");// key = TICKER (object: {YYYY-MM-DD: fwdEps})
+const qsRowStore       = () => getStore("qs-rows");      // key = TICKER, per-ticker quickswing-pipeline score blob
+const qsFmpStore       = () => getStore("qs-fmp");       // key = TICKER, per-ticker raw FMP fan-out cache (24h TTL)
+const spyHistStore     = () => getStore("spy-hist");     // key = "SPY", one shared blob for the whole scan batch
 
 /* ---------- FMP cache (24h TTL) ---------- */
 const FMP_TTL_MS = 24 * 60 * 60 * 1000;
@@ -253,6 +256,52 @@ export async function putShortFmpCache(ticker, data) {
 }
 export async function deleteShortFmpCache(ticker) {
   await shortFmpStore().delete(ticker.toUpperCase()).catch(() => {});
+}
+
+/* ---------- Quick Swing: per-ticker score blobs ---------- */
+export async function listQuickswingRows() {
+  const s = qsRowStore();
+  const { blobs } = await s.list();
+  const rows = await Promise.all(blobs.map(b => s.get(b.key, { type: "json" }).catch(() => null)));
+  return rows.filter(Boolean);
+}
+export async function getQuickswingRow(ticker) {
+  return qsRowStore().get(ticker.toUpperCase(), { type: "json" }).catch(() => null);
+}
+export async function putQuickswingRow(ticker, row) {
+  await qsRowStore().setJSON(ticker.toUpperCase(), row);
+}
+export async function deleteQuickswingRow(ticker) {
+  await qsRowStore().delete(ticker.toUpperCase()).catch(() => {});
+}
+
+/* ---------- Quick Swing: raw FMP fan-out cache (separate from Short Term) ---------- */
+const QS_FMP_TTL_MS = 24 * 60 * 60 * 1000;
+export async function getQuickswingFmpCache(ticker) {
+  const entry = await qsFmpStore().get(ticker.toUpperCase(), { type: "json" }).catch(() => null);
+  if (!entry || !entry.ts || Date.now() - entry.ts > QS_FMP_TTL_MS) return null;
+  return entry.data;
+}
+export async function putQuickswingFmpCache(ticker, data) {
+  await qsFmpStore().setJSON(ticker.toUpperCase(), { ts: Date.now(), data });
+}
+export async function deleteQuickswingFmpCache(ticker) {
+  await qsFmpStore().delete(ticker.toUpperCase()).catch(() => {});
+}
+
+/* ---------- Shared SPY history cache ----------
+   Every ticker in a Quick Swing scan needs the same SPY series (for RS-vs-
+   market and the market-regime gate) — fetched and cached ONCE per batch
+   instead of once per ticker. Short TTL since it's cheap to refresh and we'd
+   rather have same-day-fresh index data than stretch a 24h cache. */
+const SPY_HIST_TTL_MS = 6 * 60 * 60 * 1000;
+export async function getSpyHistCache() {
+  const entry = await spyHistStore().get("SPY", { type: "json" }).catch(() => null);
+  if (!entry || !entry.ts || Date.now() - entry.ts > SPY_HIST_TTL_MS) return null;
+  return entry.data;
+}
+export async function putSpyHistCache(hist) {
+  await spyHistStore().setJSON("SPY", { ts: Date.now(), data: hist });
 }
 
 /* ---------- EPS estimate snapshots (for 30-day revision detection) ----------

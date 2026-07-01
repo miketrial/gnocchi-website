@@ -564,6 +564,22 @@
   .wp-trade-card-compact .wp-tc-sub{ color:#8a95a8 }
   .wp-trade-card-compact .wp-tc-rr{ border-top-color:rgba(255,255,255,.12) }
   .wp-trade-card-compact .wp-tc-lbl{ color:#6b7280 }
+  /* ===== QUICK SWING FEATURE ===== */
+  .qs-regime{ display:flex;align-items:center;gap:10px;padding:10px 14px;
+    border-radius:8px;margin-bottom:14px;font-size:11.5px;font-weight:600 }
+  .qs-regime.fav{ background:var(--good-bg);color:var(--good-fg) }
+  .qs-regime.unfav{ background:var(--bad-bg);color:var(--bad-fg) }
+  .qs-regime .qs-regime-dot{ width:8px;height:8px;border-radius:50%;background:currentColor;flex:none }
+  .qs-regime-sub{ font-weight:500;opacity:.85 }
+  .qs-blocked-badge{ font-size:8.5px;font-weight:700;text-transform:uppercase;
+    letter-spacing:.03em;padding:2px 6px;border-radius:5px;
+    background:var(--bad-bg);color:var(--bad-fg);white-space:nowrap }
+  .qs-score-g{ color:var(--good-fg);font-weight:700 }
+  .qs-score-y{ color:#b8860b;font-weight:700 }
+  .qs-score-r{ color:var(--bad-fg);font-weight:700 }
+  .qs-empty{ padding:24px;text-align:center;color:var(--ink-faint);font-size:11px }
+  .qs-row-blocked{ opacity:.55 }
+  /* ===== END QUICK SWING FEATURE ===== */
   /* Ready sub-tier divider headings (Premium / Standard) */
   .wp-tier-head{ width:100%;display:flex;align-items:center;gap:6px;
     font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
@@ -896,6 +912,9 @@
     <div id="viewSwitch" title="Switch between Basic (full screener) and Short Term (1wk-3mo swing setups)">
       <button data-v="basic">Basic</button>
       <button data-v="short">Short Term</button>
+      <!-- ===== QUICK SWING FEATURE ===== -->
+      <button data-v="qs" title="1-2 day mean-reversion setups — separate trade philosophy from Short Term">Quick Swing</button>
+      <!-- ===== END QUICK SWING FEATURE ===== -->
     </div>
     <div class="rescan-wrap" id="wlLeft">
       <div style="display:flex;gap:8px;align-items:center">
@@ -1169,6 +1188,43 @@
   </div>
 
 </div>
+
+<!-- ===== QUICK SWING FEATURE =====
+     1-2 day mean-reversion view — a different trade philosophy from Short
+     Term (that one is trend-following, this one bets on a snap-back).
+     Reuses the same underlying watchlist symbols, scored differently.
+     Removable as a block — see the checklist in
+     netlify/lib/quickswing-pipeline.mjs. -->
+<div id="qsView" class="hidden">
+  <div id="qsRegimeBanner"></div>
+  <div class="wp-head">
+    <span class="wp-title" style="border-bottom:1px dashed currentColor">Quick Swing</span>
+    <span class="wp-sub">1-2 day mean-reversion setups · click a column header to sort</span>
+  </div>
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th class="sortable" data-qssort="sym">Ticker</th>
+          <th class="num sortable" data-qssort="price">Price</th>
+          <th class="num sortable" data-qssort="score" data-tip="Sum of 8 factors (RSI(2), Bollinger %B, volume climax, reversal candle, relative strength vs SPY, volume dry-up, ADR%, liquidity), each 0-3 points, out of 24.">Score<span class="sub">of 24</span></th>
+          <th class="num sortable" data-qssort="rsi" data-tip="2-day RSI — a much more reactive oversold/overbought read than the standard 14-day RSI. Below 10 = oversold.">RSI(2)</th>
+          <th class="num sortable" data-qssort="pctB" data-tip="Bollinger %B(20,2σ) — where price sits inside its own 20-day volatility band. Below 0 = outside the lower band.">%B</th>
+          <th class="num sortable" data-qssort="adr" data-tip="Average Daily Range % — how much this stock typically moves per day. Too low = won't move enough in 1-2 days; too high = whipsaw risk.">ADR%</th>
+          <th class="num sortable" data-qssort="rs" data-tip="Simplified relative strength vs SPY — weighted 3/6/9/12-month return, ticker minus SPY. Positive = beating the market.">RS vs SPY</th>
+          <th data-tip="Hard gate, not a graduated score — a 1-2 day hold can't absorb an earnings-day gap. Blocked inside 5 days of the next print.">Earnings</th>
+        </tr>
+      </thead>
+      <tbody id="qsBody"></tbody>
+    </table>
+  </div>
+  <div class="legend">
+    <div class="ttl">Quick Swing scoring &nbsp;·&nbsp; 8 factors tuned for a 1-2 day mean-reversion hold</div>
+    <span style="color:var(--ink-soft)">This is a genuinely different trade philosophy from Short Term — that view is trend-following (buy strength, ride weeks); this one bets on a snap-back after price gets stretched. Lower hit-rate by design, so earnings and thin liquidity are hard gates, not just docked points.</span>
+  </div>
+</div>
+<!-- ===== END QUICK SWING FEATURE ===== -->
 
 <!-- ===== TRAINING WHEEL VIEW ===== -->
 <div id="twView" class="hidden">
@@ -2252,31 +2308,37 @@ function setView(v){
   document.getElementById('twView').classList.toggle('hidden',v!=='tw');
   const shortEl=document.getElementById('shortView');
   if(shortEl) shortEl.classList.toggle('hidden',v!=='short');
+  // ===== QUICK SWING FEATURE =====
+  const qsEl=document.getElementById('qsView');
+  if(qsEl) qsEl.classList.toggle('hidden',v!=='qs');
+  const isQs=v==='qs';
+  // ===== END QUICK SWING FEATURE =====
   const isWL=v==='watchlist'||v==='net';
   const isShort=v==='short';
-  document.getElementById('wlControls').style.display=(isWL||isShort)?'flex':'none';
-  document.getElementById('wlLeft').style.display=(isWL||isShort)?'flex':'none';
-  // Hide Basics-only buttons on Short Term view
+  document.getElementById('wlControls').style.display=(isWL||isShort||isQs)?'flex':'none';
+  document.getElementById('wlLeft').style.display=(isWL||isShort||isQs)?'flex':'none';
+  // Hide Basics-only buttons on Short Term / Quick Swing views
   const pipeBtn=document.getElementById('pipelineBtn');
-  if(pipeBtn) pipeBtn.style.display=isShort?'none':'';
-  // Force Rescan only meaningful on Basic — Short Term's Rescan already
-  // always force-fetches fresh FMP (see rescanShort).
+  if(pipeBtn) pipeBtn.style.display=(isShort||isQs)?'none':'';
+  // Force Rescan only meaningful on Basic — Short Term / Quick Swing's Rescan
+  // already always force-fetches fresh FMP (see rescanShort / rescanQuickSwing).
   const fr=document.getElementById('forceRescan');
-  if(fr) fr.style.display=isShort?'none':'';
+  if(fr) fr.style.display=(isShort||isQs)?'none':'';
   const navTog=document.getElementById('navToggle');
   if(navTog){
-    navTog.style.display=isShort?'none':'';
+    navTog.style.display=(isShort||isQs)?'none':'';
     navTog.textContent=v==='net'?'Watchlist':'Net';
   }
-  // Reflect current view in the segmented pill (Basic | Short Term)
+  // Reflect current view in the segmented pill (Basic | Short Term | Quick Swing)
   document.querySelectorAll('#viewSwitch button').forEach(b=>{
     const target=b.dataset.v;
-    const active=(target==='short'&&isShort)||(target==='basic'&&!isShort&&v!=='tw');
+    const active=(target==='short'&&isShort)||(target==='qs'&&isQs)||(target==='basic'&&!isShort&&!isQs&&v!=='tw');
     b.classList.toggle('active',active);
   });
   // Per-view rescan timer & render
   updateRescanTimer();
   if(isShort) renderShortWatchlist();
+  if(isQs) renderQuickSwing(); // ===== QUICK SWING FEATURE =====
   window.scrollTo(0,0);
 }
 document.getElementById('navToggle').onclick=()=>setView(currentView==='net'?'watchlist':'net');
@@ -2285,6 +2347,7 @@ document.querySelectorAll('#viewSwitch button').forEach(b=>{
     const v=b.dataset.v;
     if(v==='basic') setView('watchlist');
     else if(v==='short'){ setView('short'); ensureShortDataLoaded(); }
+    else if(v==='qs'){ setView('qs'); ensureQsDataLoaded(); } // ===== QUICK SWING FEATURE =====
   });
 });
 // Default landing view = Short Term — but the setView('short') call itself
@@ -2678,6 +2741,7 @@ if(forceRescanBtn){
 rescanBtn.onclick=async(e)=>{
   // Route to the appropriate scanner based on the active view
   if(currentView==='short'){ return rescanShort(e); }
+  if(currentView==='qs'){ return rescanQuickSwing(e); } // ===== QUICK SWING FEATURE =====
   const force=e.shiftKey;
   localStorage.setItem('gn_last_rescan', Date.now()); updateRescanTimer();
   rescanBtn.disabled=true;
@@ -2708,10 +2772,11 @@ rescanBtn.onclick=async(e)=>{
 };
 
 /* "Last rescan" timer below the button — counts up: minutes → hours → days.
-   Per-view: 'gn_last_rescan' for basics, 'gn_st_last_rescan' for short term. */
+   Per-view: 'gn_last_rescan' for basics, 'gn_st_last_rescan' for short term,
+   'gn_qs_last_rescan' for Quick Swing. */
 function updateRescanTimer(){
   const el=document.getElementById('rescanTimer'); if(!el) return;
-  const key=currentView==='short'?'gn_st_last_rescan':'gn_last_rescan';
+  const key=currentView==='short'?'gn_st_last_rescan':currentView==='qs'?'gn_qs_last_rescan':'gn_last_rescan';
   const ts=Number(localStorage.getItem(key));
   if(!ts){el.textContent='Last rescan:never'; return;}
   const s=Math.floor((Date.now()-ts)/1000);
@@ -2958,6 +3023,165 @@ async function ensureShortDataLoaded(){
   applyStSortHeaders();
   renderShortWatchlist();
 }
+
+/* ===== QUICK SWING FEATURE =====
+   1-2 day mean-reversion view. Reuses the same underlying watchlist symbols
+   as Basic/Short Term (scored differently, not a separate ticker list).
+   Removable as a block — see the checklist in
+   netlify/lib/quickswing-pipeline.mjs. */
+let qsRowsBySym = Object.create(null);
+let qsLoaded = false;
+let qsSortCol = 'score';
+let qsSortDir = -1;
+
+async function ensureQsDataLoaded(){
+  if (qsLoaded) { renderQuickSwing(); return; }
+  qsLoaded = true;
+  if (!API_LIVE) { renderQuickSwing(); return; }
+  try {
+    const rows = await api.get('/api/quickswing/watchlist');
+    if (Array.isArray(rows)) rows.forEach(r => { if (r && r.sym) qsRowsBySym[r.sym.toUpperCase()] = r; });
+  } catch(e) { /* leave empty, render placeholders */ }
+  renderQuickSwing();
+}
+
+function qsScoreClass(score){
+  const n = parseInt((score||'').toString());
+  if (isNaN(n)) return 'na';
+  if (n >= 16) return 'g';   // ≥16/24 (67%)
+  if (n >= 10) return 'y';   // ≥10/24 (42%)
+  return 'r';
+}
+
+function qsSortVal(r, col){
+  if (!r) return null;
+  switch (col) {
+    case 'sym':   return r.sym;
+    case 'price': return r.price;
+    case 'score': { const n = parseInt((r.score||'').toString()); return isNaN(n) ? null : n; }
+    case 'rsi':   return typeof r.raw?.[0] === 'number' ? r.raw[0] : null;
+    case 'pctB':  return r.raw?.[1]?.pctB ?? null;
+    case 'adr':   return typeof r.raw?.[6] === 'number' ? r.raw[6] : null;
+    case 'rs':    return r.raw?.[4]?.delta ?? null;
+    default:      return null;
+  }
+}
+
+function qsRowHtml(r, idx){
+  if (r.error) {
+    return `<tr><td class="idx">${idx}.</td><td>${escHtml(r.sym)}</td><td colspan="7" style="color:var(--bad-fg)">Error: ${escHtml(r.error)}</td></tr>`;
+  }
+  const scoreCls = qsScoreClass(r.score);
+  const rsiVal = r.raw?.[0];
+  const bb = r.raw?.[1];
+  const adr = r.raw?.[6];
+  const rs = r.raw?.[4];
+  const blockedBadge = r.blocked
+    ? `<span class="qs-blocked-badge" data-tip="${escHtml(r.blockedReason||'')}">Blocked</span>`
+    : (r.earnings?.daysUntil != null ? `<span style="color:var(--ink-faint);font-size:10px">${r.earnings.daysUntil}d</span>` : '—');
+  return `<tr class="${r.blocked?'qs-row-blocked':''}" data-sym="${r.sym}">
+    <td class="idx">${idx}.</td>
+    <td><b>${escHtml(r.sym)}</b></td>
+    <td class="num">${r.price!=null?'$'+r.price.toFixed(2):'—'}</td>
+    <td class="num qs-score-${scoreCls}">${escHtml(r.score||'—')}</td>
+    <td class="num">${typeof rsiVal==='number'?rsiVal.toFixed(1):'—'}</td>
+    <td class="num">${bb?.pctB!=null?bb.pctB.toFixed(2):'—'}</td>
+    <td class="num">${typeof adr==='number'?adr.toFixed(1)+'%':'—'}</td>
+    <td class="num" style="color:${(rs?.delta??0)>=0?'var(--good-fg)':'var(--bad-fg)'}">${rs?.delta!=null?(rs.delta>=0?'+':'')+(rs.delta*100).toFixed(1)+'pp':'—'}</td>
+    <td>${blockedBadge}</td>
+  </tr>`;
+}
+
+function renderQuickSwing(){
+  const banner = document.getElementById('qsRegimeBanner');
+  const body = document.getElementById('qsBody');
+  if (!banner || !body) return;
+
+  const rows = Object.values(qsRowsBySym);
+  // Market regime banner — every row carries the same marketRegime object
+  // (computed once per scan batch), so just read it off any row that has one.
+  const regime = rows.find(r => r && r.marketRegime)?.marketRegime;
+  if (regime) {
+    banner.className = 'qs-regime ' + (regime.favorable ? 'fav' : 'unfav');
+    banner.innerHTML = `<span class="qs-regime-dot"></span>` +
+      `<span>Market regime: ${escHtml(regime.label)}</span>` +
+      `<span class="qs-regime-sub">${regime.distributionDays} distribution day${regime.distributionDays===1?'':'s'} in the last 25 sessions</span>`;
+  } else {
+    banner.className = 'qs-regime';
+    banner.innerHTML = '';
+  }
+
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="9"><div class="qs-empty">No Quick Swing data yet — click Rescan to score your watchlist.</div></td></tr>`;
+    return;
+  }
+
+  const sorted = rows.slice().sort((a, b) => {
+    const va = qsSortVal(a, qsSortCol), vb = qsSortVal(b, qsSortCol);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    return (va < vb ? -1 : va > vb ? 1 : 0) * qsSortDir;
+  });
+
+  body.innerHTML = sorted.map((r, i) => qsRowHtml(r, i + 1)).join('');
+}
+
+// Sortable column headers, scoped to this table via data-qssort attributes.
+document.getElementById('qsView')?.addEventListener('click', e => {
+  const th = e.target.closest('th[data-qssort]');
+  if (!th) return;
+  const col = th.dataset.qssort;
+  if (qsSortCol === col) qsSortDir *= -1; else { qsSortCol = col; qsSortDir = -1; }
+  renderQuickSwing();
+});
+
+async function rescanQuickSwing(e){
+  const force = true; // Rescan always force-fetches fresh FMP, same as Short Term.
+  localStorage.setItem('gn_qs_last_rescan', Date.now()); updateRescanTimer();
+  const btn = document.getElementById('rescan');
+  btn.disabled = true;
+  btn.innerHTML = 'Rescanning…';
+  if (!API_LIVE) {
+    setTimeout(() => { btn.disabled = false; btn.innerHTML = 'Rescan'; }, 800);
+    return;
+  }
+  try {
+    const jobId = crypto.randomUUID();
+    await api.send('/api/quickswing/rescan', 'POST', {
+      jobId, force,
+      clientTickers: watchlist.map(r => r.sym),
+    }).catch(() => {});
+    let pollCount = 0;
+    const t = setInterval(async () => {
+      if (++pollCount > 200) {
+        clearInterval(t);
+        btn.disabled = false; btn.innerHTML = 'Rescan';
+        showToast('Quick Swing rescan timed out — some rows may be incomplete. Try again.');
+        return;
+      }
+      const j = await api.get('/api/jobs/' + jobId).catch(() => null);
+      if (!j) return;
+      if (j.rows && j.rows.length) {
+        j.rows.forEach(row => {
+          if (row && row.sym && !row.error) qsRowsBySym[row.sym.toUpperCase()] = row;
+        });
+        renderQuickSwing();
+      }
+      if (j.status === 'done' || j.status === 'error') {
+        clearInterval(t);
+        btn.disabled = false;
+        btn.innerHTML = 'Rescan';
+        if (j.status === 'error') showToast(j.error || 'Quick Swing rescan failed.');
+        else if (j.rows) showToast(`Quick Swing: rescored ${j.rows.filter(r => !r.error && r.score).length} ticker(s).`);
+      }
+    }, 3000);
+  } catch (err) {
+    btn.disabled = false; btn.innerHTML = 'Rescan';
+    showToast('Quick Swing rescan failed — try again.');
+  }
+}
+/* ===== END QUICK SWING FEATURE ===== */
 
 function shortScoreClass(s){
   const n = parseInt((s||'').toString());
