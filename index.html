@@ -574,9 +574,6 @@
   .qs-blocked-badge{ font-size:8.5px;font-weight:700;text-transform:uppercase;
     letter-spacing:.03em;padding:2px 6px;border-radius:5px;
     background:var(--bad-bg);color:var(--bad-fg);white-space:nowrap }
-  .qs-score-g{ color:var(--good-fg);font-weight:700 }
-  .qs-score-y{ color:#b8860b;font-weight:700 }
-  .qs-score-r{ color:var(--bad-fg);font-weight:700 }
   .qs-empty{ padding:24px;text-align:center;color:var(--ink-faint);font-size:11px }
   .qs-row-blocked{ opacity:.55 }
   /* Per-factor cell coloring — same verdict palette/treatment as Short Term's
@@ -1222,10 +1219,14 @@
           <th class="sortable" data-qssort="sym">Ticker</th>
           <th class="num sortable" data-qssort="price">Price</th>
           <th class="num sortable" data-qssort="score" data-tip="Sum of 9 factors (RSI(2), Bollinger %B, volume climax, reversal candle, relative strength vs SPY, volume dry-up, ADR%, liquidity, after-hours move), each 0-3 points, out of 27.">Score<span class="sub">of 27</span></th>
-          <th class="num sortable" data-qssort="rsi" data-tip="2-day RSI — a much more reactive oversold/overbought read than the standard 14-day RSI. Below 10 = oversold.">RSI(2)</th>
-          <th class="num sortable" data-qssort="pctB" data-tip="Bollinger %B(20,2σ) — where price sits inside its own 20-day volatility band. Below 0 = outside the lower band.">%B</th>
-          <th class="num sortable" data-qssort="adr" data-tip="Average Daily Range % — how much this stock typically moves per day. Too low = won't move enough in 1-2 days; too high = whipsaw risk.">ADR%</th>
-          <th class="num sortable" data-qssort="rs" data-tip="Simplified relative strength vs SPY — weighted 3/6/9/12-month return, ticker minus SPY. Positive = beating the market.">RS vs SPY</th>
+          <th class="num sortable" data-qssort="rsi" data-tip="2-day RSI — a much more reactive oversold/overbought read than the standard 14-day RSI, tuned to catch 1-2 day extremes rather than multi-week trend. Lower = more oversold: ≤5 deeply oversold, ≤10 oversold, ≤20 stretched down.">RSI(2)</th>
+          <th class="num sortable" data-qssort="pctB" data-tip="Bollinger %B(20,2σ) — where price sits inside its own 20-day volatility band. The more negative, the further outside the lower band and the more stretched from its own normal range.">%B</th>
+          <th class="num sortable" data-qssort="volclimax" data-tip="Last session's volume vs its own 20-day average, read against direction. A huge spike on a down day often marks capitulation (the sellers who were going to sell, already have); a spike on an up day can mean the bounce is already underway.">Vol Climax</th>
+          <th class="num sortable" data-qssort="reversal" data-tip="Where the close sits within the day's own high-low range. Closing near the day's highs after a down day is a rough 'buyers stepped in' tell.">Reversal</th>
+          <th class="num sortable" data-qssort="rs" data-tip="Simplified relative strength vs SPY — weighted 3/6/9/12-month return, ticker minus SPY. Only fade dips in stocks beating the market — this keeps the system from buying dips in laggards.">RS vs SPY</th>
+          <th class="num sortable" data-qssort="dryup" data-tip="Last 5 days' average volume vs the 20 days before that. Counterintuitively bullish: low volume during a consolidation (nobody's selling) often precedes a move better than a volume spike does.">Vol Dry-Up</th>
+          <th class="num sortable" data-qssort="adr" data-tip="Average Daily Range % — how much this stock typically moves per day. Too low = won't move enough in 1-2 days; too high = whipsaw risk that runs through a tight stop.">ADR%</th>
+          <th class="num sortable" data-qssort="liq" data-tip="20-day average dollar volume. Thin stocks gap on small flows and can trap you on exit — a liquidity floor is the cheapest risk control, same reasoning as Short Term's.">Liquidity</th>
           <th class="num sortable" data-qssort="ah" data-tip="Post-close move vs today's regular-session close, from FMP's live after-hours quote. A sharp drop adds to the 'stretched' read; a sharp pop gets partial credit (the bounce may already be starting). No premarket leg — FMP's stable API doesn't offer one.">AH Move</th>
           <th data-tip="Hard gate, not a graduated score — a 1-2 day hold can't absorb an earnings-day gap. Blocked inside 5 days of the next print.">Earnings</th>
         </tr>
@@ -3082,6 +3083,31 @@ let qsLoaded = false;
 let qsSortCol = 'score';
 let qsSortDir = -1;
 
+// Tooltip text for each of the 9 Quick Swing factors (factor, why it matters,
+// rule) — same "name: computed reason" per-cell convention as Short Term's
+// SHORT_LABELS/tipForChip (see above). Order matches the checks array in
+// netlify/lib/quickswing-pipeline.mjs.
+const QS_LABELS = [
+  { name: "RSI(2)" },
+  { name: "Bollinger %B" },
+  { name: "Volume Climax" },
+  { name: "Reversal Candle" },
+  { name: "Relative Strength vs SPY" },
+  { name: "Volume Dry-Up" },
+  { name: "ADR%" },
+  { name: "Liquidity" },
+  { name: "After-Hours Move" },
+];
+function qsTipForChip(idx, reason){
+  const l = QS_LABELS[idx];
+  if (!reason) return l ? l.name : '';
+  return l ? `${l.name}: ${reason}` : reason;
+}
+function fmtQsDollars(n){
+  if (n == null) return '—';
+  return n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : `$${(n / 1e6).toFixed(1)}M`;
+}
+
 async function ensureQsDataLoaded(){
   if (qsLoaded) { renderQuickSwing(); return; }
   qsLoaded = true;
@@ -3104,27 +3130,35 @@ function qsScoreClass(score){
 function qsSortVal(r, col){
   if (!r) return null;
   switch (col) {
-    case 'sym':   return r.sym;
-    case 'price': return r.price;
-    case 'score': { const n = parseInt((r.score||'').toString()); return isNaN(n) ? null : n; }
-    case 'rsi':   return typeof r.raw?.[0] === 'number' ? r.raw[0] : null;
-    case 'pctB':  return r.raw?.[1]?.pctB ?? null;
-    case 'adr':   return typeof r.raw?.[6] === 'number' ? r.raw[6] : null;
-    case 'rs':    return r.raw?.[4]?.delta ?? null;
-    case 'ah':    return r.raw?.[8]?.chg ?? null;
-    default:      return null;
+    case 'sym':       return r.sym;
+    case 'price':     return r.price;
+    case 'score':     { const n = parseInt((r.score||'').toString()); return isNaN(n) ? null : n; }
+    case 'rsi':       return typeof r.raw?.[0] === 'number' ? r.raw[0] : null;
+    case 'pctB':      return r.raw?.[1]?.pctB ?? null;
+    case 'volclimax': return typeof r.raw?.[2] === 'number' ? r.raw[2] : null;
+    case 'reversal':  return typeof r.raw?.[3] === 'number' ? r.raw[3] : null;
+    case 'rs':        return r.raw?.[4]?.delta ?? null;
+    case 'dryup':     return typeof r.raw?.[5] === 'number' ? r.raw[5] : null;
+    case 'adr':       return typeof r.raw?.[6] === 'number' ? r.raw[6] : null;
+    case 'liq':       return typeof r.raw?.[7] === 'number' ? r.raw[7] : null;
+    case 'ah':        return r.raw?.[8]?.chg ?? null;
+    default:          return null;
   }
 }
 
 function qsRowHtml(r, idx){
   if (r.error) {
-    return `<tr><td class="idx">${idx}.</td><td>${escHtml(r.sym)}</td><td colspan="8" style="color:var(--bad-fg)">Error: ${escHtml(r.error)}</td></tr>`;
+    return `<tr><td class="idx">${idx}.</td><td>${escHtml(r.sym)}</td><td colspan="12" style="color:var(--bad-fg)">Error: ${escHtml(r.error)}</td></tr>`;
   }
   const scoreCls = qsScoreClass(r.score);
   const rsiVal = r.raw?.[0];
   const bb = r.raw?.[1];
-  const adr = r.raw?.[6];
+  const volClimax = r.raw?.[2];
+  const reversal = r.raw?.[3];
   const rs = r.raw?.[4];
+  const dryUp = r.raw?.[5];
+  const adr = r.raw?.[6];
+  const liq = r.raw?.[7];
   const ah = r.raw?.[8];
   // Per-factor cell coloring — same verdict → class mapping Short Term uses
   // (vCls in shortRowHtml), reusing the same st-* class names.
@@ -3132,6 +3166,9 @@ function qsRowHtml(r, idx){
     const v = r.verdicts?.[k];
     return v === 'good' ? 'st-good' : v === 'ok' ? 'st-ok' : v === 'weak' ? 'st-weak' : v === 'bad' ? 'st-bad' : 'st-na';
   };
+  // Per-cell reasoning tooltip — "Factor name: computed reason", same
+  // convention as Short Term's tipFor/tipForChip.
+  const tipFor = k => escHtml(qsTipForChip(k, r.reasons?.[k]));
   const blockedBadge = r.blocked
     ? `<span class="qs-blocked-badge" data-tip="${escHtml(r.blockedReason||'')}">Blocked</span>`
     : (r.earnings?.daysUntil != null ? `<span style="color:var(--ink-faint);font-size:10px">${r.earnings.daysUntil}d</span>` : '—');
@@ -3139,13 +3176,17 @@ function qsRowHtml(r, idx){
     <td class="idx">${idx}.</td>
     <td><b>${escHtml(r.sym)}</b></td>
     <td class="num">${r.price!=null?'$'+r.price.toFixed(2):'—'}</td>
-    <td class="num qs-score-${scoreCls}">${escHtml(r.score||'—')}</td>
-    <td class="num ${vCls(0)}">${typeof rsiVal==='number'?rsiVal.toFixed(1):'—'}</td>
-    <td class="num ${vCls(1)}">${bb?.pctB!=null?bb.pctB.toFixed(2):'—'}</td>
-    <td class="num ${vCls(6)}">${typeof adr==='number'?adr.toFixed(1)+'%':'—'}</td>
-    <td class="num ${vCls(4)}">${rs?.delta!=null?(rs.delta>=0?'+':'')+(rs.delta*100).toFixed(1)+'pp':'—'}</td>
-    <td class="num ${vCls(8)}">${ah?.chg!=null?(ah.chg>=0?'+':'')+(ah.chg*100).toFixed(1)+'%':'—'}</td>
-    <td>${blockedBadge}</td>
+    <td class="num" style="cursor:pointer" data-tip="${escHtml('Composite score: '+(r.score||'—')+'. Each of the 9 factors scores 0-3 points (bad/weak/ok/good) for a max of 27. 18+/27 is a strong setup, 11-17 is mixed, under 11 is weak.')}"><span class="score ${scoreCls}">${escHtml(r.score||'—')}</span></td>
+    <td class="num ${vCls(0)}" data-tip="${tipFor(0)}">${typeof rsiVal==='number'?rsiVal.toFixed(1):'—'}</td>
+    <td class="num ${vCls(1)}" data-tip="${tipFor(1)}">${bb?.pctB!=null?bb.pctB.toFixed(2):'—'}</td>
+    <td class="num ${vCls(2)}" data-tip="${tipFor(2)}">${typeof volClimax==='number'?volClimax.toFixed(2)+'x':'—'}</td>
+    <td class="num ${vCls(3)}" data-tip="${tipFor(3)}">${typeof reversal==='number'?(reversal*100).toFixed(0)+'%':'—'}</td>
+    <td class="num ${vCls(4)}" data-tip="${tipFor(4)}">${rs?.delta!=null?(rs.delta>=0?'+':'')+(rs.delta*100).toFixed(1)+'pp':'—'}</td>
+    <td class="num ${vCls(5)}" data-tip="${tipFor(5)}">${typeof dryUp==='number'?(dryUp*100).toFixed(0)+'%':'—'}</td>
+    <td class="num ${vCls(6)}" data-tip="${tipFor(6)}">${typeof adr==='number'?adr.toFixed(1)+'%':'—'}</td>
+    <td class="num ${vCls(7)}" data-tip="${tipFor(7)}">${fmtQsDollars(liq)}</td>
+    <td class="num ${vCls(8)}" data-tip="${tipFor(8)}">${ah?.chg!=null?(ah.chg>=0?'+':'')+(ah.chg*100).toFixed(1)+'%':'—'}</td>
+    <td data-tip="${escHtml(r.blocked ? r.blockedReason||'' : (r.earnings?.daysUntil!=null ? `Earnings in ${r.earnings.daysUntil}d (${r.earnings.date}) — outside the 5-day blackout window` : 'No earnings calendar data'))}">${blockedBadge}</td>
   </tr>`;
 }
 
@@ -3169,7 +3210,7 @@ function renderQuickSwing(){
   }
 
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="10"><div class="qs-empty">No Quick Swing data yet — click Rescan to score your watchlist.</div></td></tr>`;
+    body.innerHTML = `<tr><td colspan="14"><div class="qs-empty">No Quick Swing data yet — click Rescan to score your watchlist.</div></td></tr>`;
     return;
   }
 
