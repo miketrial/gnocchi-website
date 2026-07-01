@@ -888,7 +888,6 @@
         <button class="btn" id="forceRescan" title="Force a full rescan of every row — bypasses the 'fresh rows' shortcut and re-pulls FMP for everything. Same as Shift+click on Rescan.">Force Rescan</button>
         <button class="btn" id="restoreOrder" title="Restore your saved drag-drop order and clear column sort" style="display:none">↺ Order</button>
         <button class="btn" id="pipelineBtn" onclick="document.getElementById('pipelineModal').style.display='flex'">Scoring Pipeline</button>
-        <button class="btn" id="twToggle">Training Wheels</button>
       </div>
       <div class="rescan-timer" id="rescanTimer"></div>
       <div class="rescan-timer" id="usageChip" title="Today's AI research calls vs daily cap"></div>
@@ -1094,6 +1093,10 @@
       </table>
       <button class="btn addrow" id="addNetRow">+ Add holding</button>
     </div>
+  </div>
+
+  <div style="text-align:center;padding:18px 0 4px">
+    <a href="#" onclick="setView('tw');return false;" style="font-size:10.5px;font-weight:600;color:var(--ink-faint);text-decoration:none;border-bottom:1px dashed currentColor">🎓 Training Wheels — walkthrough of every data point</a>
   </div>
 </div>
 
@@ -2240,9 +2243,7 @@ function setView(v){
   document.getElementById('wlLeft').style.display=(isWL||isShort)?'flex':'none';
   // Hide Basics-only buttons on Short Term view
   const pipeBtn=document.getElementById('pipelineBtn');
-  const twBtn=document.getElementById('twToggle');
   if(pipeBtn) pipeBtn.style.display=isShort?'none':'';
-  if(twBtn)   twBtn.style.display  =isShort?'none':'';
   // Force Rescan only meaningful on Basic — Short Term's Rescan already
   // always force-fetches fresh FMP (see rescanShort).
   const fr=document.getElementById('forceRescan');
@@ -2252,7 +2253,6 @@ function setView(v){
     navTog.style.display=isShort?'none':'';
     navTog.textContent=v==='net'?'Watchlist':'Net';
   }
-  if(twBtn) twBtn.textContent=v==='tw'?'↩ Watchlist':'Training Wheels';
   // Reflect current view in the segmented pill (Basic | Short Term)
   document.querySelectorAll('#viewSwitch button').forEach(b=>{
     const target=b.dataset.v;
@@ -2265,7 +2265,6 @@ function setView(v){
   window.scrollTo(0,0);
 }
 document.getElementById('navToggle').onclick=()=>setView(currentView==='net'?'watchlist':'net');
-document.getElementById('twToggle').onclick=()=>setView(currentView==='tw'?'watchlist':'tw');
 document.querySelectorAll('#viewSwitch button').forEach(b=>{
   b.addEventListener('click',()=>{
     const v=b.dataset.v;
