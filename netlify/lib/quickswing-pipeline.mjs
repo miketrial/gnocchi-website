@@ -34,6 +34,7 @@
      1. netlify/lib/quickswing-pipeline.mjs        (this file)
      2. netlify/functions/quickswing-rescan-background.mjs
      3. netlify/functions/quickswing-watchlist.mjs
+     3b. netlify/functions/quickswing-delete.mjs
      4. netlify.toml — remove the block between the
         "===== QUICK SWING FEATURE =====" / "===== END QUICK SWING FEATURE ====="
         comment markers

@@ -2,7 +2,7 @@
    1-2 day mean-reversion view. Self-contained and independently removable —
    see the removal checklist in netlify/lib/quickswing-pipeline.mjs. */
 import { scoreTickerQuickSwing, getMarketRegime } from "../lib/quickswing-pipeline.mjs";
-import { listWatchlist, putQuickswingRow, putJob, acquireRescanLock, releaseRescanLock } from "../lib/store.mjs";
+import { listQuickswingRows, putQuickswingRow, putJob, acquireRescanLock, releaseRescanLock } from "../lib/store.mjs";
 
 export default async (req) => {
   const { jobId, force, tickers: onlyTickers, clientTickers } = await req.json().catch(() => ({}));
@@ -29,9 +29,12 @@ export default async (req) => {
 };
 
 async function runQuickSwingScan({ jobId, force, onlyTickers, clientTickers }) {
-  // Reuses the SAME underlying watchlist symbol set as Basic/Short Term —
-  // Quick Swing is a different lens on the same tickers, not a separate list.
-  const existing = await listWatchlist();
+  // Quick Swing tracks its OWN ticker list, independent of Basic/Short Term's
+  // shared watchlist — a good 2-12wk trend hold and a good 1-2 day mean-
+  // reversion candidate are often different companies entirely. "Existing"
+  // here means "already tracked by Quick Swing" (has a qs-rows entry), not
+  // "on the Basic watchlist."
+  const existing = await listQuickswingRows();
   const storedSyms = new Set(existing.map(r => r.sym));
   const extraSyms = (clientTickers || []).filter(s => !storedSyms.has(s));
   const allSyms = [...existing.map(r => r.sym), ...extraSyms];

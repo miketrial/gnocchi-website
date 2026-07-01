@@ -1202,14 +1202,16 @@
 <!-- ===== QUICK SWING FEATURE =====
      1-2 day mean-reversion view — a different trade philosophy from Short
      Term (that one is trend-following, this one bets on a snap-back).
-     Reuses the same underlying watchlist symbols, scored differently.
+     Tracks its own independent ticker list, separate from Basic/Short
+     Term's shared watchlist — a good multi-week hold and a good 1-2 day
+     mean-reversion candidate are often different companies entirely.
      Removable as a block — see the checklist in
      netlify/lib/quickswing-pipeline.mjs. -->
 <div id="qsView" class="hidden">
   <div id="qsRegimeBanner"></div>
   <div class="wp-head">
     <span class="wp-title" style="border-bottom:1px dashed currentColor">Quick Swing</span>
-    <span class="wp-sub">1-2 day mean-reversion setups · click a column header to sort</span>
+    <span class="wp-sub">1-2 day mean-reversion setups · its own independent list, separate from Basic/Short Term · click a column header to sort · right-click a row for Rescan / Delete</span>
   </div>
   <div class="card">
     <table>
@@ -2327,6 +2329,9 @@ function setView(v){
   const qsEl=document.getElementById('qsView');
   if(qsEl) qsEl.classList.toggle('hidden',v!=='qs');
   const isQs=v==='qs';
+  // Quick Swing has its own independent ticker list — make the shared search
+  // box's placeholder reflect which list Enter will add to.
+  addInput.placeholder = isQs ? 'Add to Quick Swing…' : 'Add to watchlist…';
   // ===== END QUICK SWING FEATURE =====
   const isWL=v==='watchlist'||v==='net';
   const isShort=v==='short';
@@ -2692,6 +2697,18 @@ addInput.addEventListener('keydown',async e=>{
   // response (success or failure) can pop the dropdown back open after
   // the input's already been cleared and the ticker submitted.
   acReq++; clearTimeout(acTimer); acHide();
+
+  // ===== QUICK SWING FEATURE =====
+  // Quick Swing tracks its own independent ticker list — a good 2-12wk
+  // trend hold and a good 1-2 day mean-reversion candidate are often
+  // completely different companies. Adding here never touches Basic/Short
+  // Term's shared watchlist, and adding there never touches this list.
+  if(currentView==='qs'){
+    scoreQuickSwingForTicker(sym);
+    return;
+  }
+  // ===== END QUICK SWING FEATURE =====
+
   // placeholder row while the scoring pipeline runs.
   // justAdded keeps the row pinned to the bottom of the default-sorted screener
   // so the user can see it scoring without scrolling. Cleared on the next
@@ -2708,7 +2725,6 @@ addInput.addEventListener('keydown',async e=>{
     pollJob(jobId);
     // Also fire a Short Term scan for this ticker so it appears in both views
     scoreShortForTicker(sym);
-    scoreQuickSwingForTicker(sym); // ===== QUICK SWING FEATURE =====
   }
 });
 
@@ -2749,18 +2765,20 @@ async function scoreShortForTicker(sym){
 }
 
 // ===== QUICK SWING FEATURE =====
-// Single-ticker Quick Swing scoring — called when a new ticker is added so it
-// shows up populated in the Quick Swing view too, not just Basic/Short Term.
-// Mirrors scoreShortForTicker; single-ticker calls bypass the shared rescan
-// lock server-side, so this runs even if a full rescan is in progress.
+// Single-ticker Quick Swing scoring — adds a ticker to Quick Swing's own
+// independent list (see the addInput keydown handler above). Mirrors
+// scoreShortForTicker's polling shape; single-ticker calls bypass the shared
+// rescan lock server-side, so this runs even if a full rescan is in progress.
 async function scoreQuickSwingForTicker(sym){
   const up = sym.toUpperCase();
   const jobId = 'jadd-qs-' + Date.now();
+  rescanBtn.disabled = true; rescanBtn.innerHTML = '<span class="spin">⟳</span> Scoring…';
   await api.send('/api/quickswing/rescan','POST',{jobId, force:true, tickers:[up], clientTickers:[up]}).catch(()=>{});
   let pollCount = 0;
   const t = setInterval(async () => {
     if (++pollCount > 200) {
       clearInterval(t);
+      rescanBtn.disabled = false; rescanBtn.innerHTML = 'Rescan';
       showToast(`${up} Quick Swing scoring timed out — try Rescan on the Quick Swing tab.`);
       return;
     }
@@ -2772,7 +2790,12 @@ async function scoreQuickSwingForTicker(sym){
       });
       if (currentView === 'qs') renderQuickSwing();
     }
-    if (j.status === 'done' || j.status === 'error') clearInterval(t);
+    if (j.status === 'done' || j.status === 'error') {
+      clearInterval(t);
+      rescanBtn.disabled = false; rescanBtn.innerHTML = 'Rescan';
+      if (j.status === 'error') showToast(j.error || `${up} Quick Swing scoring failed.`);
+      else { flash(up); showToast(`${up} added to Quick Swing.`); }
+    }
   }, 3000);
 }
 // ===== END QUICK SWING FEATURE =====
@@ -2848,12 +2871,22 @@ const ctx=document.getElementById('ctx'); let ctxSym=null; let ctxFromView='watc
 function openCtxMenu(e, fromView){
   const tr=e.target.closest('tr'); if(!tr||tr.classList.contains('pin-divider')) return;
   e.preventDefault(); ctxSym=tr.dataset.sym; ctxFromView=fromView;
-  document.getElementById('ctxPin').textContent=pinnedSyms.has(ctxSym)?'Unpin':'Pin to top';
+  // ===== QUICK SWING FEATURE =====
+  // Quick Swing has its own independent list — pinning is a Basic/Short
+  // Term concept (shared pinnedSyms set), doesn't apply here.
+  const ctxPinEl=document.getElementById('ctxPin');
+  ctxPinEl.style.display = fromView==='qs' ? 'none' : '';
+  if (fromView!=='qs') ctxPinEl.textContent=pinnedSyms.has(ctxSym)?'Unpin':'Pin to top';
+  // ===== END QUICK SWING FEATURE =====
   ctx.style.display='block'; ctx.style.left=e.clientX+'px'; ctx.style.top=e.clientY+'px';
 }
 document.getElementById('wlBody').addEventListener('contextmenu',e=>openCtxMenu(e,'watchlist'));
 const stBody=document.getElementById('stBody');
 if(stBody) stBody.addEventListener('contextmenu',e=>openCtxMenu(e,'short'));
+// ===== QUICK SWING FEATURE =====
+const qsBodyEl=document.getElementById('qsBody');
+if(qsBodyEl) qsBodyEl.addEventListener('contextmenu',e=>openCtxMenu(e,'qs'));
+// ===== END QUICK SWING FEATURE =====
 
 // Click any chip or data cell in Short Term → factor history popover
 if(stBody) stBody.addEventListener('click', e => {
@@ -2888,6 +2921,11 @@ if(stBody) stBody.addEventListener('click', e => {
 });
 document.getElementById('ctxRescan').onclick=async()=>{
   const sym=ctxSym; ctx.style.display='none';
+  // ===== QUICK SWING FEATURE =====
+  // Quick Swing per-row rescan — scoreQuickSwingForTicker already does
+  // exactly this (single-ticker force rescan against its own list).
+  if(ctxFromView==='qs'){ scoreQuickSwingForTicker(sym); return; }
+  // ===== END QUICK SWING FEATURE =====
   // Short Term per-row rescan — single FMP fan-out, bypasses the per-ticker cache
   if(ctxFromView==='short'){
     const wl=watchlist.find(r=>r.sym===sym); if(wl) wl.shortScoring=true;
@@ -2970,6 +3008,17 @@ document.getElementById('ctxPin').onclick=()=>{
 };
 document.getElementById('ctxDel').onclick=async()=>{
   const sym=ctxSym;
+  // ===== QUICK SWING FEATURE =====
+  // Deletes from Quick Swing's own independent list only — never touches
+  // Basic/Short Term's shared watchlist.
+  if(ctxFromView==='qs'){
+    delete qsRowsBySym[sym];
+    ctx.style.display='none';
+    renderQuickSwing();
+    if(API_LIVE) await api.send('/api/quickswing/watchlist/'+encodeURIComponent(sym),'DELETE').catch(()=>{});
+    return;
+  }
+  // ===== END QUICK SWING FEATURE =====
   watchlist=watchlist.filter(r=>r.sym!==sym);
   delete shortRowsBySym[sym];
   // Also clear flag + demoted state so the chip doesn't linger in the
@@ -3074,8 +3123,9 @@ async function ensureShortDataLoaded(){
 }
 
 /* ===== QUICK SWING FEATURE =====
-   1-2 day mean-reversion view. Reuses the same underlying watchlist symbols
-   as Basic/Short Term (scored differently, not a separate ticker list).
+   1-2 day mean-reversion view. Tracks its own independent ticker list —
+   NOT Basic/Short Term's shared watchlist (see the addInput keydown
+   handler and rescanQuickSwing for where the two lists diverge).
    Removable as a block — see the checklist in
    netlify/lib/quickswing-pipeline.mjs. */
 let qsRowsBySym = Object.create(null);
@@ -3246,9 +3296,10 @@ async function rescanQuickSwing(e){
   }
   try {
     const jobId = crypto.randomUUID();
+    // Quick Swing's own tracked tickers — NOT Basic/Short Term's watchlist.
     await api.send('/api/quickswing/rescan', 'POST', {
       jobId, force,
-      clientTickers: watchlist.map(r => r.sym),
+      clientTickers: Object.keys(qsRowsBySym),
     }).catch(() => {});
     let pollCount = 0;
     const t = setInterval(async () => {
