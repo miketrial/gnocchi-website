@@ -2673,6 +2673,10 @@ addInput.addEventListener('keydown',async e=>{
   const sym=addInput.value.trim().toUpperCase();
   if(!sym) return;
   addInput.value='';
+  // Cancel any in-flight/pending autocomplete search — otherwise a late
+  // response (success or failure) can pop the dropdown back open after
+  // the input's already been cleared and the ticker submitted.
+  acReq++; clearTimeout(acTimer); acHide();
   // placeholder row while the scoring pipeline runs.
   // justAdded keeps the row pinned to the bottom of the default-sorted screener
   // so the user can see it scoring without scrolling. Cleared on the next
@@ -2689,6 +2693,7 @@ addInput.addEventListener('keydown',async e=>{
     pollJob(jobId);
     // Also fire a Short Term scan for this ticker so it appears in both views
     scoreShortForTicker(sym);
+    scoreQuickSwingForTicker(sym); // ===== QUICK SWING FEATURE =====
   }
 });
 
@@ -2727,6 +2732,35 @@ async function scoreShortForTicker(sym){
     }
   }, 3000);
 }
+
+// ===== QUICK SWING FEATURE =====
+// Single-ticker Quick Swing scoring — called when a new ticker is added so it
+// shows up populated in the Quick Swing view too, not just Basic/Short Term.
+// Mirrors scoreShortForTicker; single-ticker calls bypass the shared rescan
+// lock server-side, so this runs even if a full rescan is in progress.
+async function scoreQuickSwingForTicker(sym){
+  const up = sym.toUpperCase();
+  const jobId = 'jadd-qs-' + Date.now();
+  await api.send('/api/quickswing/rescan','POST',{jobId, force:true, tickers:[up], clientTickers:[up]}).catch(()=>{});
+  let pollCount = 0;
+  const t = setInterval(async () => {
+    if (++pollCount > 200) {
+      clearInterval(t);
+      showToast(`${up} Quick Swing scoring timed out — try Rescan on the Quick Swing tab.`);
+      return;
+    }
+    const j = await api.get('/api/jobs/'+jobId).catch(()=>null);
+    if (!j) return;
+    if (j.rows && j.rows.length) {
+      j.rows.forEach(row => {
+        if (row && row.sym && !row.error) qsRowsBySym[row.sym.toUpperCase()] = row;
+      });
+      if (currentView === 'qs') renderQuickSwing();
+    }
+    if (j.status === 'done' || j.status === 'error') clearInterval(t);
+  }, 3000);
+}
+// ===== END QUICK SWING FEATURE =====
 
 /* ---------------- rescan ----------------
    Normal click = smart rescan (skips rows scored in the last 2 days, to save cost).
