@@ -3276,32 +3276,47 @@ function tradeCard(sym, opts){
   const days = ts ? Math.floor((Date.now() - ts) / 86400000) : 0;
   const greens = (tvp.T?1:0)+(tvp.V?1:0)+(tvp.P?1:0);
   const score = r.score ? parseInt(r.score) || 0 : 0;
-  // Ladder math: stack values, normalize within ladder height.
-  // Dedupe by near-equal price (within 0.1%) — if Target == 52w high, fold
-  // labels into one stacked row instead of overlapping.
-  const rawVals = [
+  // "Now" is drawn as a 15-day price path ending in a dot, not a flat
+  // reference line — lets you see the run-up/pullback that produced today's
+  // price relative to the other levels, instead of just a static snapshot.
+  // Falls back to a flat line + dot (old behavior) if history isn't
+  // populated yet (rows scored before priceHist15 existed).
+  const hist15 = Array.isArray(r.priceHist15) && r.priceHist15.length >= 2 ? r.priceHist15 : null;
+  // Reference lines: horizontal, span the full chart width.
+  const rawRefs = [
     { y: high52 || target,  label: '52w high', color:'#94a3b8', dash:false, k:'hi'  },
     { y: target,            label: 'Target',   color:'#10b981', dash:true,  k:'tg'  },
-    { y: price,             label: 'Now',      color:'#3b82f6', dash:false, k:'now' },
     { y: sma50,             label: '50DMA',    color:'#f59e0b', dash:false, k:'50'  },
     { y: stop,              label: 'Stop',     color:'#ef4444', dash:true,  k:'st'  },
     { y: sma200,            label: '200DMA',   color:'#94a3b8', dash:false, k:'200' },
   ].filter(v => v.y && isFinite(v.y));
-  // Merge entries whose price is within 0.2% (Target ≈ 52w high case)
-  const vals = [];
-  rawVals.forEach(v => {
-    const dup = vals.find(u => Math.abs(u.y - v.y) / Math.max(u.y, v.y) < 0.002);
-    if (dup) {
-      dup.label += ' · ' + v.label;
-      // Promote "Now" or any dashed line color if merging upgrades visibility.
-      if (v.k === 'now') { dup.color = v.color; dup.k = 'now'; }
-    } else vals.push({ ...v });
+  // Merge ref lines within 0.2% of each other (e.g. Target ≈ 52w high)
+  const refs = [];
+  rawRefs.forEach(v => {
+    const dup = refs.find(u => Math.abs(u.y - v.y) / Math.max(u.y, v.y) < 0.002);
+    if (dup) dup.label += ' · ' + v.label;
+    else refs.push({ ...v });
   });
-  const min = Math.min(...vals.map(v=>v.y));
-  const max = Math.max(...vals.map(v=>v.y));
+  // "Now" label always present — either the path's last close or the flat
+  // fallback price — included in the same collision-avoidance pass as refs.
+  const nowVal = hist15 ? hist15[hist15.length - 1].close : price;
+  const nowEntry = { y: nowVal, label: hist15 ? '52w high · Now' : 'Now', color:'#3b82f6', dash:false, k:'now', isPath: !!hist15 };
+  // Only fold "52w high · Now" merge text if they're actually close; otherwise
+  // keep "Now" on its own so the path label doesn't inherit an unrelated tag.
+  const nearHigh52 = refs.find(u => Math.abs(u.y - nowVal) / Math.max(u.y, nowVal) < 0.002 && u.k === 'hi');
+  nowEntry.label = nearHigh52 ? `${nearHigh52.label} · Now` : 'Now';
+  if (nearHigh52) refs.splice(refs.indexOf(nearHigh52), 1);
+  const vals = [...refs, nowEntry];
+  // Y-domain includes every reference level AND the full price path (if
+  // present) so the line never clips outside the chart.
+  const domainYs = vals.map(v=>v.y).concat(hist15 ? hist15.map(d=>d.close) : []);
+  const min = Math.min(...domainYs);
+  const max = Math.max(...domainYs);
   const span = max - min || 1;
   const H = 130, W = 240, padT = 8, padB = 8, padL = 4, padR = 86;
+  const chartW = W - padR - padL;
   const yFor = v => padT + (1 - (v - min) / span) * (H - padT - padB);
+  const xFor = i => padL + (i / (hist15.length - 1)) * chartW;
   // Anti-collision pass on text y-positions: sort by line y, then walk and
   // push labels down so each one has at least minGap vertical room.
   const minGap = 16;
@@ -3313,16 +3328,33 @@ function tradeCard(sym, opts){
   // Shade the ideal entry band (50DMA to 5% above) — draw before lines.
   const zoneTop = sma50 * 1.05, zoneBot = sma50;
   const zy1 = yFor(zoneTop), zy2 = yFor(zoneBot);
-  const zone = `<rect x="${padL}" y="${Math.min(zy1,zy2)}" width="${W - padR - padL}" height="${Math.abs(zy2-zy1)}" fill="#10b981" opacity="0.08"/>`;
+  const zone = `<rect x="${padL}" y="${Math.min(zy1,zy2)}" width="${chartW}" height="${Math.abs(zy2-zy1)}" fill="#10b981" opacity="0.08"/>`;
+  // 15-day price path (blue) — drawn under the reference lines so dashed
+  // resistance/support levels stay visually on top.
+  const path = hist15
+    ? (() => {
+        const pts = hist15.map((d,i) => `${xFor(i)},${yFor(d.close)}`).join(' ');
+        const lastX = xFor(hist15.length - 1), lastY = yFor(nowVal);
+        return `<polyline points="${pts}" fill="none" stroke="#3b82f6" stroke-width="1.8"/>` +
+               `<circle cx="${lastX}" cy="${lastY}" r="3.5" fill="#3b82f6"/>`;
+      })()
+    : `<line x1="${padL}" y1="${yFor(nowVal)}" x2="${W - padR}" y2="${yFor(nowVal)}" stroke="#3b82f6" stroke-width="2"/>` +
+      `<circle cx="${W - padR + 4}" cy="${yFor(nowVal)}" r="3.5" fill="#3b82f6"/>`;
   const lines = sorted.map(v => {
+    if (v.k === 'now') {
+      // Label only — the path/flat-line + dot were already drawn above.
+      const leader = Math.abs(v.yLine - v.yText) > 2
+        ? `<line x1="${W - padR}" y1="${v.yLine}" x2="${W - padR + 8}" y2="${v.yText - 3}" stroke="${v.color}" stroke-width="0.6" opacity="0.5"/>`
+        : '';
+      return `${leader}<text x="${W - padR + 10}" y="${v.yText - 1}" font-size="8.5" fill="${v.color}" font-weight="700">${v.label}</text>` +
+             `<text x="${W - padR + 10}" y="${v.yText + 8}" font-size="7.5" fill="#9ca3af">$${v.y.toFixed(v.y>100?0:2)}</text>`;
+    }
     const dash = v.dash ? 'stroke-dasharray="3 3"' : '';
-    const dot = v.k === 'now' ? `<circle cx="${W - padR + 4}" cy="${v.yLine}" r="3.5" fill="#3b82f6"/>` : '';
-    // Leader line connects line-y to label-y when they were pushed apart
     const leader = Math.abs(v.yLine - v.yText) > 2
       ? `<line x1="${W - padR}" y1="${v.yLine}" x2="${W - padR + 8}" y2="${v.yText - 3}" stroke="${v.color}" stroke-width="0.6" opacity="0.5"/>`
       : '';
-    return `<line x1="${padL}" y1="${v.yLine}" x2="${W - padR}" y2="${v.yLine}" stroke="${v.color}" stroke-width="${v.k==='now'?2:1.2}" ${dash}/>${dot}${leader}` +
-           `<text x="${W - padR + 10}" y="${v.yText - 1}" font-size="8.5" fill="${v.color}" font-weight="${v.k==='now'?700:500}">${v.label}</text>` +
+    return `<line x1="${padL}" y1="${v.yLine}" x2="${W - padR}" y2="${v.yLine}" stroke="${v.color}" stroke-width="1.2" ${dash}/>${leader}` +
+           `<text x="${W - padR + 10}" y="${v.yText - 1}" font-size="8.5" fill="${v.color}" font-weight="500">${v.label}</text>` +
            `<text x="${W - padR + 10}" y="${v.yText + 8}" font-size="7.5" fill="#9ca3af">$${v.y.toFixed(v.y>100?0:2)}</text>`;
   }).join('');
   const rrColor = rr >= 2 ? '#10b981' : rr >= 1.5 ? '#f59e0b' : '#ef4444';
@@ -3331,61 +3363,30 @@ function tradeCard(sym, opts){
   const daysBadge = days >= 3 ? `<span class="wp-chip-days" data-tip="In Ready ${days}d — consider entering or clearing">${days}d</span>` : '';
   const outerOpen  = opts.compact ? '<div class="wp-trade-card wp-trade-card-compact">' : `<div class="wp-trade-card" data-sym="${sym}" data-tip="Click for ${sym} history">`;
   const closeBtn   = opts.compact ? '' : `<span class="wp-x" data-sym="${sym}" data-kind="ready" data-tip="Clear watchlist flag">×</span>`;
-  const sparkline15 = renderPriceSparkline15(r.priceHist15, W);
+  const dateAxis = hist15
+    ? `<div style="display:flex;justify-content:space-between;font-size:7px;color:#9ca3af;margin:1px 0 6px;padding:0 ${padR}px 0 ${padL}px">` +
+      `<span>${fmtAxisDate(hist15[0].date)}</span><span>${fmtAxisDate(hist15[hist15.length-1].date)}</span></div>`
+    : `<div style="font-size:7.5px;color:#9ca3af;margin:1px 0 6px">15d price path unavailable — rescan to populate</div>`;
   return `${outerOpen}
     <div class="wp-tc-head">
       <span class="wp-tc-sym">${sym}</span>
       <span class="wp-tc-sub">${score}/30 · ${greens}/3 ${sigPills} ${daysBadge}</span>
       ${closeBtn}
     </div>
-    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;margin:4px 0 6px">
-      ${zone}${lines}
+    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;margin:4px 0 0">
+      ${zone}${path}${lines}
     </svg>
+    ${dateAxis}
     <div class="wp-tc-rr">
       <div><span class="wp-tc-lbl">R/R</span><span class="wp-tc-val" style="color:${rrColor}">${rr.toFixed(1)}:1</span><span class="wp-tc-tag" style="color:${rrColor}">${rrLabel}</span></div>
       <div><span class="wp-tc-lbl">Stop</span><span class="wp-tc-val" style="color:#ef4444">−${downside.toFixed(1)}%</span></div>
       <div><span class="wp-tc-lbl">Target</span><span class="wp-tc-val" style="color:#10b981">+${upside.toFixed(1)}%</span></div>
     </div>
-    ${sparkline15}
   </div>`;
 }
-// 15-trading-day price sparkline for the trade card — gives quick "where did
-// this come from" context beyond the static ladder levels. Sourced from
-// r.priceHist15 (populated by the pipeline off data it already fetches for
-// scoring, so no extra API call). Returns '' gracefully for rows scored
-// before this field existed — those just show the ladder until rescanned.
-function renderPriceSparkline15(hist15, W){
-  if (!Array.isArray(hist15) || hist15.length < 2) {
-    return `<div style="font-size:7.5px;color:#9ca3af;padding-top:4px;border-top:1px dashed #e5e7eb;margin-top:2px">15d chart unavailable — rescan to populate</div>`;
-  }
-  const closes = hist15.map(d => d.close);
-  const first = closes[0], last = closes[closes.length - 1];
-  const chg = (last - first) / first * 100;
-  const color = chg >= 0 ? '#10b981' : '#ef4444';
-  const min = Math.min(...closes), max = Math.max(...closes);
-  const span = (max - min) || 1;
-  const H = 40, padT = 4, padB = 4, padL = 2, padR = 2;
-  const n = closes.length;
-  const xFor = i => padL + (i / (n - 1)) * (W - padL - padR);
-  const yFor = v => padT + (1 - (v - min) / span) * (H - padT - padB);
-  const pts = closes.map((c, i) => `${xFor(i)},${yFor(c)}`).join(' ');
-  const areaPts = `${xFor(0)},${H} ${pts} ${xFor(n-1)},${H}`;
-  const dateFmt = d => { const dt = new Date(d + 'T00:00:00'); return dt.toLocaleDateString(undefined,{month:'short',day:'numeric'}); };
-  return `<div style="padding-top:5px;margin-top:3px;border-top:1px dashed #e5e7eb">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
-      <span style="font-size:7.5px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;font-weight:600">15-day price</span>
-      <span style="font-size:9.5px;font-weight:700;color:${color}">${chg>=0?'+':''}${chg.toFixed(1)}%</span>
-    </div>
-    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block">
-      <polygon points="${areaPts}" fill="${color}" opacity="0.08"/>
-      <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.4"/>
-      <circle cx="${xFor(n-1)}" cy="${yFor(last)}" r="2" fill="${color}"/>
-    </svg>
-    <div style="display:flex;justify-content:space-between;font-size:7px;color:#9ca3af;margin-top:1px">
-      <span>${dateFmt(hist15[0].date)}</span>
-      <span>${dateFmt(hist15[hist15.length-1].date)}</span>
-    </div>
-  </div>`;
+function fmtAxisDate(d){
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString(undefined,{month:'short',day:'numeric'});
 }
 function renderWatchPanel(){
   const el = document.getElementById('watchPanel');
