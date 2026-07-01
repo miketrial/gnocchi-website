@@ -513,6 +513,13 @@
   /* Days-in-Ready badge (stale Ready entries that haven't been acted on) */
   .wp-chip-days{ font-size:9.5px;font-weight:600;padding:1px 5px;border-radius:6px;
     background:rgba(245,158,11,.18);color:#92400e;margin-left:2px;letter-spacing:.02em }
+  /* Earnings-proximity badge on trade cards — gap risk if earnings lands
+     mid-trade, before the stop/target has a chance to play out normally. */
+  .wp-tc-earn{ font-size:9.5px;font-weight:600;padding:1px 5px;border-radius:6px;margin-left:2px;letter-spacing:.02em }
+  .wp-tc-earn.soon{ background:rgba(239,68,68,.18);color:#991b1b }
+  .wp-tc-earn.near{ background:rgba(245,158,11,.18);color:#92400e }
+  .wp-trade-card-compact .wp-tc-earn.soon{ background:rgba(239,68,68,.25);color:#fca5a5 }
+  .wp-trade-card-compact .wp-tc-earn.near{ background:rgba(245,158,11,.25);color:#fcd34d }
   /* Trade card (Premium-tier Ready visualization) */
   .wp-trade-card{
     display:flex;flex-direction:column;
@@ -3430,6 +3437,18 @@ function tradeCard(sym, opts){
   const rrLabel = rr >= 2 ? 'good' : rr >= 1.5 ? 'ok' : 'weak';
   const sigPills = sigDots(sym);
   const daysBadge = days >= 3 ? `<span class="wp-chip-days" data-tip="In Ready ${days}d — consider entering or clearing">${days}d</span>` : '';
+  // Earnings-proximity flag: a stock can gap through the stop or target
+  // overnight on an earnings print, so surface how close the next report is.
+  // Sourced from the Catalyst check's raw value (raw[8] = {date, daysUntil})
+  // — already fetched during scoring, no extra FMP call needed.
+  const earn = r?.raw?.[8];
+  const earnBadge = (earn && Number.isFinite(earn.daysUntil) && earn.daysUntil >= 0)
+    ? (earn.daysUntil <= 14
+        ? `<span class="wp-tc-earn soon" data-tip="Earnings ${fmtAxisDate(earn.date)} — could gap through stop/target before this trade plays out">⚠ Earnings ${earn.daysUntil}d</span>`
+        : earn.daysUntil <= 45
+          ? `<span class="wp-tc-earn near" data-tip="Earnings ${fmtAxisDate(earn.date)} — falls inside a typical swing window">Earnings ${earn.daysUntil}d</span>`
+          : '')
+    : '';
   const outerOpen  = opts.compact ? '<div class="wp-trade-card wp-trade-card-compact">' : `<div class="wp-trade-card" data-sym="${sym}" data-tip="Click for ${sym} history">`;
   const closeBtn   = opts.compact ? '' : `<span class="wp-x" data-sym="${sym}" data-kind="ready" data-tip="Clear watchlist flag">×</span>`;
   const dateAxis = hist15
@@ -3447,7 +3466,7 @@ function tradeCard(sym, opts){
   return `${outerOpen}
     <div class="wp-tc-head">
       <span class="wp-tc-sym">${sym}</span>
-      <span class="wp-tc-sub">${score}/30 · ${greens}/3 ${sigPills} ${daysBadge}</span>
+      <span class="wp-tc-sub">${score}/30 · ${greens}/3 ${sigPills} ${daysBadge}${earnBadge}</span>
       ${closeBtn}
     </div>
     <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;margin:4px 0 0">
