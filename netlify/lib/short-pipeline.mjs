@@ -207,6 +207,29 @@ function scored(points, summary, value) {
   return { points, verdict, summary, value };
 }
 
+const round2 = x => (x == null ? null : Number(x.toFixed(2))); // trim blob bytes + float noise
+
+// True Range for one bar: needs today's high/low and yesterday's close.
+// Wilder's definition — the largest of the three gaps a stop could get run
+// through overnight (today's range, or a gap up/down from yesterday's close).
+function trueRange(hi, lo, prevClose) {
+  if (hi == null || lo == null || prevClose == null) return null;
+  return Math.max(hi - lo, Math.abs(hi - prevClose), Math.abs(lo - prevClose));
+}
+// Average True Range over `n` periods starting at index `from` in a
+// newest-first array (index 0 = most recent bar). Each element needs
+// {high, low} and either {close} or {price}. Needs n+1 bars (the (n+1)th
+// bar only supplies its close, as "yesterday" for the nth bar's TR).
+function atrFrom(arr, from, n) {
+  let s = 0, c = 0;
+  for (let k = from; k < from + n && k + 1 < arr.length; k++) {
+    const d = arr[k], p = arr[k + 1];
+    const tr = trueRange(d?.high, d?.low, p?.close ?? p?.price);
+    if (tr != null) { s += tr; c++; }
+  }
+  return c ? s / c : null;
+}
+
 // One price-history point is valid only if it has a well-formed ISO date
 // (YYYY-MM-DD, real calendar date) and a finite, strictly-positive close.
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -238,11 +261,12 @@ function buildPriceHist(hist) {
     if (!validPricePoint(date, close)) continue;
     if (seen.has(date)) continue;         // FMP occasionally double-lists a session
     seen.add(date);
-    desc.push({ date, close });
+    // high/low fall back to close for older cached blobs or feeds without
+    // OHLC — degrades ATR to a same-day-only range rather than breaking.
+    desc.push({ date, close, high: d?.high ?? close, low: d?.low ?? close });
   }
   desc.sort((a, b) => b.date.localeCompare(a.date)); // newest first
   const closes = desc.map(d => d.close);
-  const round2 = x => (x == null ? null : Number(x.toFixed(2))); // trim blob bytes + float noise
   // Trailing average / max of `n` closes starting at index `from` (inclusive),
   // most-recent-first — so `from=i` looks back from day i. Returns null if no
   // data (never happens once we're inside the array), partial near the tail.
@@ -265,6 +289,7 @@ function buildPriceHist(hist) {
       sma50:  round2(avgFrom(i, 50)),
       sma200: round2(avgFrom(i, 200)),
       high52: round2(maxFrom(i, 252)),
+      atr14:  round2(atrFrom(desc, i, 14)),
     });
   }
   return out.reverse();                   // newest 15, oldest→newest
@@ -280,6 +305,10 @@ function checkTrend(hist) {
   const sma50 = sma(50);
   const sma200 = sma(200);
   const pctAbove50 = (price - sma50) / sma50;
+  // ATR14 for the trade-card stop distance — computed here (not just in
+  // buildPriceHist) so it's available even if the caller never asks for the
+  // rolling price-history curve.
+  const atr14 = round2(atrFrom(hist, 0, 14));
   let points, label;
   if (price > sma50 && sma50 > sma200 && pctAbove50 >= 0.08) {
     points = 3; label = `strong uptrend — ${(pctAbove50*100).toFixed(1)}% above 50DMA`;
@@ -290,7 +319,7 @@ function checkTrend(hist) {
   } else {
     points = 0; label = "below 50DMA — downtrend";
   }
-  return scored(points, `$${price.toFixed(2)} vs 50DMA $${sma50.toFixed(2)} / 200DMA $${sma200.toFixed(2)} — ${label}`, { price, sma50, sma200 });
+  return scored(points, `$${price.toFixed(2)} vs 50DMA $${sma50.toFixed(2)} / 200DMA $${sma200.toFixed(2)} — ${label}`, { price, sma50, sma200, atr14 });
 }
 
 // 2. 3M Momentum: graduated by return magnitude
@@ -601,7 +630,7 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   // Cache check
   if (!skipCache) {
     const cached = await getShortFmpCache(sym);
-    if (cached && cached._v === 13) {
+    if (cached && cached._v === 14) {
       return cached.row;
     }
   } else {
@@ -612,7 +641,11 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   // Wrapped in a closure so the 3-step integrity check can retry it once.
   const runFmp = async () => {
     const d = {};
-    d.hist          = await safe("historical-price-eod/light", sym, "&limit=320"); await delay(200);
+    // "full" (not "light") so each bar carries high/low — needed for a real
+    // ATR-based stop distance. Same single call/cost as before; every
+    // downstream reader already falls back `d.price ?? d.close`, so this
+    // swap is a drop-in (light returns `price`, full returns `close`).
+    d.hist          = await safe("historical-price-eod/full", sym, "&limit=320"); await delay(200);
     d.quote         = await safe("quote", sym);                                     await delay(200);
     d.keyMetrics    = await safe("key-metrics", sym, "&period=annual&limit=2");     await delay(200);
     d.estimates     = await safe("analyst-estimates", sym, "&period=annual&limit=3"); await delay(200);
@@ -728,6 +761,6 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     scored_at: new Date().toISOString(),
   };
 
-  await putShortFmpCache(sym, { _v: 13, row }).catch(() => {});
+  await putShortFmpCache(sym, { _v: 14, row }).catch(() => {});
   return row;
 }
