@@ -3424,7 +3424,7 @@ function tradeCard(sym, opts){
       ? `<line x1="${W - padR}" y1="${e.y}" x2="${W - padR + 8}" y2="${e.yText - 3}" stroke="${e.color}" stroke-width="0.6" opacity="0.5"/>`
       : '';
     return `${leader}<text x="${W - padR + 10}" y="${e.yText - 1}" font-size="10" fill="${e.color}" font-weight="${e.weight}">${e.label}</text>` +
-           `<text x="${W - padR + 10}" y="${e.yText + 10}" font-size="9" fill="#9ca3af">$${e.val.toFixed(e.val>100?0:2)}</text>`;
+           `<text x="${W - padR + 10}" y="${e.yText + 10}" font-size="9" fill="${e.color}" font-weight="400">$${e.val.toFixed(e.val>100?0:2)}</text>`;
   }).join('');
   const rrColor = rr >= 2 ? '#10b981' : rr >= 1.5 ? '#f59e0b' : '#ef4444';
   const rrLabel = rr >= 2 ? 'good' : rr >= 1.5 ? 'ok' : 'weak';
