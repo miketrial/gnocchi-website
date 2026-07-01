@@ -538,7 +538,7 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   // Cache check
   if (!skipCache) {
     const cached = await getShortFmpCache(sym);
-    if (cached && cached._v === 9) {
+    if (cached && cached._v === 10) {
       return cached.row;
     }
   } else {
@@ -632,6 +632,15 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   const score = checks.reduce((s, c) => s + (c.points ?? 0), 0);
   const total = 30;
 
+  // Last 15 trading days of close price, oldest→newest, for the trade-card
+  // sparkline. hist is already fetched for scoring (260d, most-recent-first)
+  // so this is free — no extra FMP call.
+  const priceHist15 = (hist || [])
+    .slice(0, 15)
+    .map(d => ({ date: d.date, close: d.price ?? d.close }))
+    .filter(d => d.date && d.close != null)
+    .reverse();
+
   const row = {
     sym,
     name,
@@ -643,10 +652,11 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     reasons: checks.map(c => c.summary),
     raw: checks.map(c => c.value),
     verdicts: checks.map(c => c.verdict), // "good"|"ok"|"weak"|"bad"|"na" for chip colors
+    priceHist15,
     warnings,
     scored_at: new Date().toISOString(),
   };
 
-  await putShortFmpCache(sym, { _v: 9, row }).catch(() => {});
+  await putShortFmpCache(sym, { _v: 10, row }).catch(() => {});
   return row;
 }

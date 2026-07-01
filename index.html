@@ -3331,6 +3331,7 @@ function tradeCard(sym, opts){
   const daysBadge = days >= 3 ? `<span class="wp-chip-days" data-tip="In Ready ${days}d — consider entering or clearing">${days}d</span>` : '';
   const outerOpen  = opts.compact ? '<div class="wp-trade-card wp-trade-card-compact">' : `<div class="wp-trade-card" data-sym="${sym}" data-tip="Click for ${sym} history">`;
   const closeBtn   = opts.compact ? '' : `<span class="wp-x" data-sym="${sym}" data-kind="ready" data-tip="Clear watchlist flag">×</span>`;
+  const sparkline15 = renderPriceSparkline15(r.priceHist15, W);
   return `${outerOpen}
     <div class="wp-tc-head">
       <span class="wp-tc-sym">${sym}</span>
@@ -3344,6 +3345,45 @@ function tradeCard(sym, opts){
       <div><span class="wp-tc-lbl">R/R</span><span class="wp-tc-val" style="color:${rrColor}">${rr.toFixed(1)}:1</span><span class="wp-tc-tag" style="color:${rrColor}">${rrLabel}</span></div>
       <div><span class="wp-tc-lbl">Stop</span><span class="wp-tc-val" style="color:#ef4444">−${downside.toFixed(1)}%</span></div>
       <div><span class="wp-tc-lbl">Target</span><span class="wp-tc-val" style="color:#10b981">+${upside.toFixed(1)}%</span></div>
+    </div>
+    ${sparkline15}
+  </div>`;
+}
+// 15-trading-day price sparkline for the trade card — gives quick "where did
+// this come from" context beyond the static ladder levels. Sourced from
+// r.priceHist15 (populated by the pipeline off data it already fetches for
+// scoring, so no extra API call). Returns '' gracefully for rows scored
+// before this field existed — those just show the ladder until rescanned.
+function renderPriceSparkline15(hist15, W){
+  if (!Array.isArray(hist15) || hist15.length < 2) {
+    return `<div style="font-size:7.5px;color:#9ca3af;padding-top:4px;border-top:1px dashed #e5e7eb;margin-top:2px">15d chart unavailable — rescan to populate</div>`;
+  }
+  const closes = hist15.map(d => d.close);
+  const first = closes[0], last = closes[closes.length - 1];
+  const chg = (last - first) / first * 100;
+  const color = chg >= 0 ? '#10b981' : '#ef4444';
+  const min = Math.min(...closes), max = Math.max(...closes);
+  const span = (max - min) || 1;
+  const H = 40, padT = 4, padB = 4, padL = 2, padR = 2;
+  const n = closes.length;
+  const xFor = i => padL + (i / (n - 1)) * (W - padL - padR);
+  const yFor = v => padT + (1 - (v - min) / span) * (H - padT - padB);
+  const pts = closes.map((c, i) => `${xFor(i)},${yFor(c)}`).join(' ');
+  const areaPts = `${xFor(0)},${H} ${pts} ${xFor(n-1)},${H}`;
+  const dateFmt = d => { const dt = new Date(d + 'T00:00:00'); return dt.toLocaleDateString(undefined,{month:'short',day:'numeric'}); };
+  return `<div style="padding-top:5px;margin-top:3px;border-top:1px dashed #e5e7eb">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
+      <span style="font-size:7.5px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;font-weight:600">15-day price</span>
+      <span style="font-size:9.5px;font-weight:700;color:${color}">${chg>=0?'+':''}${chg.toFixed(1)}%</span>
+    </div>
+    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block">
+      <polygon points="${areaPts}" fill="${color}" opacity="0.08"/>
+      <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.4"/>
+      <circle cx="${xFor(n-1)}" cy="${yFor(last)}" r="2" fill="${color}"/>
+    </svg>
+    <div style="display:flex;justify-content:space-between;font-size:7px;color:#9ca3af;margin-top:1px">
+      <span>${dateFmt(hist15[0].date)}</span>
+      <span>${dateFmt(hist15[hist15.length-1].date)}</span>
     </div>
   </div>`;
 }
