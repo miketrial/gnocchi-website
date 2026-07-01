@@ -217,13 +217,19 @@ function validPricePoint(date, close) {
   return Number.isFinite(close) && close > 0;
 }
 
-// Build the rolling, validated 15-day series (oldest→newest) from FMP's hist
-// feed. Every point is checked; dupes are collapsed; the newest 15 valid
+// How many trailing trading days the chart plots. 50 gives ~2.5 months of
+// context. The hist fetch (limit=320) carries enough history that even the
+// oldest of these 50 points has a full 252-session window behind it for an
+// accurate rolling 52-week high.
+const PRICE_HIST_DAYS = 50;
+
+// Build the rolling, validated N-day series (oldest→newest) from FMP's hist
+// feed. Every point is checked; dupes are collapsed; the newest N valid
 // sessions win. Each point also carries the trailing 50DMA, 200DMA, and 52w
 // high computed AS OF THAT DAY — so the chart can draw them as moving curves
 // (they change daily), not flat lines. See the call site for why this makes
 // the window self-rolling.
-function buildPriceHist15(hist) {
+function buildPriceHist(hist) {
   const seen = new Set();
   const desc = [];                        // newest-first, validated, deduped
   for (const d of hist || []) {
@@ -236,6 +242,7 @@ function buildPriceHist15(hist) {
   }
   desc.sort((a, b) => b.date.localeCompare(a.date)); // newest first
   const closes = desc.map(d => d.close);
+  const round2 = x => (x == null ? null : Number(x.toFixed(2))); // trim blob bytes + float noise
   // Trailing average / max of `n` closes starting at index `from` (inclusive),
   // most-recent-first — so `from=i` looks back from day i. Returns null if no
   // data (never happens once we're inside the array), partial near the tail.
@@ -249,15 +256,15 @@ function buildPriceHist15(hist) {
     for (let k = from; k < from + n && k < closes.length; k++) { if (closes[k] > m) m = closes[k]; c++; }
     return c ? m : null;
   };
-  const count = Math.min(15, desc.length);
+  const count = Math.min(PRICE_HIST_DAYS, desc.length);
   const out = [];
   for (let i = 0; i < count; i++) {
     out.push({
       date:   desc[i].date,
       close:  desc[i].close,
-      sma50:  avgFrom(i, 50),
-      sma200: avgFrom(i, 200),
-      high52: maxFrom(i, 252),
+      sma50:  round2(avgFrom(i, 50)),
+      sma200: round2(avgFrom(i, 200)),
+      high52: round2(maxFrom(i, 252)),
     });
   }
   return out.reverse();                   // newest 15, oldest→newest
@@ -594,7 +601,7 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   // Cache check
   if (!skipCache) {
     const cached = await getShortFmpCache(sym);
-    if (cached && cached._v === 12) {
+    if (cached && cached._v === 13) {
       return cached.row;
     }
   } else {
@@ -605,7 +612,7 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   // Wrapped in a closure so the 3-step integrity check can retry it once.
   const runFmp = async () => {
     const d = {};
-    d.hist          = await safe("historical-price-eod/light", sym, "&limit=260"); await delay(200);
+    d.hist          = await safe("historical-price-eod/light", sym, "&limit=320"); await delay(200);
     d.quote         = await safe("quote", sym);                                     await delay(200);
     d.keyMetrics    = await safe("key-metrics", sym, "&period=annual&limit=2");     await delay(200);
     d.estimates     = await safe("analyst-estimates", sym, "&period=annual&limit=3"); await delay(200);
@@ -688,22 +695,22 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   const score = checks.reduce((s, c) => s + (c.points ?? 0), 0);
   const total = 30;
 
-  // Last 15 trading days of close price, oldest→newest, for the trade-card
-  // price path. hist is already fetched for scoring (260d, most-recent-first)
-  // so this is free — no extra FMP call.
+  // Last PRICE_HIST_DAYS (50) trading days, oldest→newest, for the trade-card
+  // price path + moving-average curves. hist is already fetched for scoring
+  // (320d, most-recent-first) so this is free — no extra FMP call.
   //
   // Built to be self-correcting and rolling:
   //   1. Validate EVERY point — a valid ISO date and a finite, positive
   //      close. Garbage rows (nulls, zeros, NaN, malformed dates) are
   //      dropped rather than poisoning the chart's min/max scaling.
   //   2. Dedupe by date (FMP occasionally double-lists a session).
-  //   3. Sort by date DESC and take the 15 most-recent valid days. Because
-  //      this runs on every rescan against a freshly fetched 260-day window,
+  //   3. Sort by date DESC and take the N most-recent valid days. Because
+  //      this runs on every rescan against a freshly fetched 320-day window,
   //      the set rolls forward automatically: a new session enters at the
-  //      front and the 16th-oldest drops off. The 50/200DMA, price target,
-  //      and stop below are recomputed from the same fresh feed, so they
-  //      roll in lockstep.
-  const priceHist15 = buildPriceHist15(hist);
+  //      front and the oldest drops off. The 50/200DMA, price target, and
+  //      stop are recomputed from the same fresh feed, so they roll in
+  //      lockstep.
+  const priceHist = buildPriceHist(hist);
 
   const row = {
     sym,
@@ -716,11 +723,11 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     reasons: checks.map(c => c.summary),
     raw: checks.map(c => c.value),
     verdicts: checks.map(c => c.verdict), // "good"|"ok"|"weak"|"bad"|"na" for chip colors
-    priceHist15,
+    priceHist,
     warnings,
     scored_at: new Date().toISOString(),
   };
 
-  await putShortFmpCache(sym, { _v: 12, row }).catch(() => {});
+  await putShortFmpCache(sym, { _v: 13, row }).catch(() => {});
   return row;
 }

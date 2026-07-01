@@ -3253,12 +3253,13 @@ function sigDots(sym){
 // opts.compact: renders without the wrapping card chrome (border/padding/
 // click-tip) — used when embedding inside the ticker history popover, which
 // already has its own chrome and click handling.
-// Client-side guard for the 15-day price series. Mirrors the pipeline's
-// validation so a bad point that slipped through the blob (or an older cached
-// row with a looser shape) can't poison the chart. Returns a clean
-// oldest→newest array of {date, close}, or null if fewer than 2 valid points
-// survive (caller falls back to the flat "Now" line).
-function sanitizePriceHist15(raw){
+// Client-side guard for the price series (up to 50 sessions). Mirrors the
+// pipeline's validation so a bad point that slipped through the blob (or an
+// older cached row with a looser shape) can't poison the chart. Returns a
+// clean oldest→newest array of {date, close, sma50, sma200, high52}, or null
+// if fewer than 2 valid points survive (caller falls back to the flat line).
+const PRICE_HIST_MAX = 50;
+function sanitizePriceHist(raw){
   if (!Array.isArray(raw)) return null;
   const ISO = /^\d{4}-\d{2}-\d{2}$/;
   const num = v => { const n = (typeof v === 'number') ? v : Number(v); return Number.isFinite(n) ? n : null; };
@@ -3284,7 +3285,7 @@ function sanitizePriceHist15(raw){
     });
   }
   clean.sort((a, b) => a.date.localeCompare(b.date)); // oldest → newest
-  const rolled = clean.slice(-15);                     // keep newest 15
+  const rolled = clean.slice(-PRICE_HIST_MAX);         // keep newest N
   return rolled.length >= 2 ? rolled : null;
 }
 function tradeCard(sym, opts){
@@ -3314,14 +3315,16 @@ function tradeCard(sym, opts){
   // reference line — lets you see the run-up/pullback that produced today's
   // price relative to the other levels, instead of just a static snapshot.
   // Falls back to a flat line + dot (old behavior) if history isn't
-  // populated yet (rows scored before priceHist15 existed).
+  // populated yet (rows scored before priceHist existed).
   //
   // Defensive re-validation: the pipeline already validates each point, but
   // the data round-trips through the shared blob and older cached rows may
   // carry looser shapes, so re-check every point here before plotting.
   // Drop anything without a real ISO date or a finite positive close, dedupe
   // by date, and re-sort oldest→newest so the path can never render garbage.
-  const hist15 = sanitizePriceHist15(r.priceHist15);
+  // Reads the new `priceHist` field, falling back to the legacy `priceHist15`
+  // so a row cached just before this change still renders until its rescan.
+  const hist15 = sanitizePriceHist(r.priceHist || r.priceHist15);
   const n = hist15 ? hist15.length : 0;
   // Rich per-day series present? (pipeline v12 attaches sma50/sma200/high52 to
   // every point). When present each level is drawn as a MOVING CURVE — the
@@ -3424,7 +3427,7 @@ function tradeCard(sym, opts){
   const dateAxis = hist15
     ? `<div style="display:flex;justify-content:space-between;font-size:7px;color:#9ca3af;margin:1px 0 6px;padding:0 ${padR}px 0 ${padL}px">` +
       `<span>${fmtAxisDate(hist15[0].date)}</span><span>${fmtAxisDate(hist15[hist15.length-1].date)}</span></div>`
-    : `<div style="font-size:7.5px;color:#9ca3af;margin:1px 0 6px">15d price path unavailable — rescan to populate</div>`;
+    : `<div style="font-size:7.5px;color:#9ca3af;margin:1px 0 6px">price path unavailable — rescan to populate</div>`;
   return `${outerOpen}
     <div class="wp-tc-head">
       <span class="wp-tc-sym">${sym}</span>
