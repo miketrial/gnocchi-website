@@ -3261,9 +3261,9 @@ function sigDots(sym){
 }
 // Trade card for Premium-tier Ready tickers: a vertical price ladder that
 // shows price relative to 50DMA / 200DMA / 52w-high, with a suggested stop
-// (3% below 50DMA) and a target (the lesser of 52w-high or +8%). The R/R
-// ratio is the headline number — if it's < 1.5, the trade is mathematically
-// weak even if the TVP setup is clean.
+// (1.5x the stock's own 14-day ATR below price) and a target (the lesser of
+// 52w-high or +8%). The R/R ratio is the headline number — if it's < 1.5,
+// the trade is mathematically weak even if the TVP setup is clean.
 //
 // opts.compact: renders without the wrapping card chrome (border/padding/
 // click-tip) — used when embedding inside the ticker history popover, which
@@ -3291,12 +3291,13 @@ function sanitizePriceHist(raw){
     // Per-day moving-average / rolling-high fields (added pipeline v12).
     // Kept as numbers when valid+positive, else null → those curves fall
     // back to the current flat level for this row.
-    const sma50  = num(d.sma50),  sma200 = num(d.sma200), high52 = num(d.high52);
+    const sma50  = num(d.sma50),  sma200 = num(d.sma200), high52 = num(d.high52), atr14 = num(d.atr14);
     clean.push({
       date, close,
       sma50:  (sma50  != null && sma50  > 0) ? sma50  : null,
       sma200: (sma200 != null && sma200 > 0) ? sma200 : null,
       high52: (high52 != null && high52 > 0) ? high52 : null,
+      atr14:  (atr14  != null && atr14  > 0) ? atr14  : null,
     });
   }
   clean.sort((a, b) => a.date.localeCompare(b.date)); // oldest → newest
@@ -3311,12 +3312,15 @@ function tradeCard(sym, opts){
   const sma50  = r?.raw?.[0]?.sma50;
   const sma200 = r?.raw?.[0]?.sma200;
   const high52 = r?.raw?.[2]?.high;
+  const atr14  = r?.raw?.[0]?.atr14;
   if (!price || !sma50 || !sma200 || !tvp) return null;
-  // Stop just below 50DMA (chartist convention) — 3% under so noise wicks
-  // don't trip it. Target: bounded by 52w-high resistance OR +8% from
-  // current, whichever is closer. If price is already at the high, fall
-  // back to +8%.
-  const stop = sma50 * 0.97;
+  // Stop distance scales with the stock's own volatility (1.5x its 14-day
+  // ATR) instead of a flat percentage — a sleepy utility and a high-beta
+  // chip name get different stop distances instead of the same 3%. Falls
+  // back to the old "3% under 50DMA" rule for rows scored before ATR14
+  // existed (pre-rescan cached rows).
+  const hasAtr = Number.isFinite(atr14) && atr14 > 0;
+  const stop = hasAtr ? price - 1.5 * atr14 : sma50 * 0.97;
   const tgtCap = high52 && high52 > price ? high52 : price * 1.08;
   const target = Math.min(tgtCap, price * 1.08);
   const upside = (target - price) / price * 100;
@@ -3348,6 +3352,7 @@ function tradeCard(sym, opts){
   // its current value.
   const richSMA  = !!hist15 && hist15.every(d => Number.isFinite(d.sma50) && Number.isFinite(d.sma200));
   const richHigh = !!hist15 && hist15.every(d => Number.isFinite(d.high52));
+  const richAtr  = !!hist15 && hist15.every(d => Number.isFinite(d.atr14));
   // Per-day value arrays (oldest→newest) for each level, or null → flat.
   const tgtOf = d => { const cap = (d.high52 && d.high52 > d.close) ? d.high52 : d.close * 1.08; return Math.min(cap, d.close * 1.08); };
   const seriesVals = {
@@ -3355,7 +3360,8 @@ function tradeCard(sym, opts){
     sma50:  richSMA ? hist15.map(d => d.sma50)        : null,
     sma200: richSMA ? hist15.map(d => d.sma200)       : null,
     high52: richHigh? hist15.map(d => d.high52)       : null,
-    stop:   richSMA ? hist15.map(d => d.sma50 * 0.97) : null,
+    stop:   richAtr ? hist15.map(d => d.close - 1.5 * d.atr14)
+          : richSMA ? hist15.map(d => d.sma50 * 0.97) : null,
     target: richHigh? hist15.map(tgtOf)               : null,
   };
   const nowVal = hist15 ? hist15[hist15.length - 1].close : price;
@@ -3461,7 +3467,7 @@ function tradeCard(sym, opts){
     `<span style="color:#94a3b8"><i style="background:#94a3b8"></i>200DMA</span>` +
     `<span style="color:#7dd3fc"><i style="background:#7dd3fc"></i>52w high</span>` +
     `<span style="color:#10b981"><i class="dash"></i>Target (+8% cap)</span>` +
-    `<span style="color:#ef4444"><i class="dash"></i>Stop (−3% of 50DMA)</span>` +
+    `<span style="color:#ef4444"><i class="dash"></i>Stop (1.5× 14d ATR)</span>` +
     `</div>`;
   return `${outerOpen}
     <div class="wp-tc-head">
