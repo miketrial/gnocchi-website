@@ -207,6 +207,69 @@ function scored(points, summary, value) {
   return { points, verdict, summary, value };
 }
 
+// One price-history point is valid only if it has a well-formed ISO date
+// (YYYY-MM-DD, real calendar date) and a finite, strictly-positive close.
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+function validPricePoint(date, close) {
+  if (typeof date !== "string" || !ISO_DATE_RE.test(date)) return false;
+  const t = new Date(date + "T00:00:00Z").getTime();
+  if (Number.isNaN(t)) return false;
+  return Number.isFinite(close) && close > 0;
+}
+
+// How many trailing trading days the chart plots. 50 gives ~2.5 months of
+// context. The hist fetch (limit=320) carries enough history that even the
+// oldest of these 50 points has a full 252-session window behind it for an
+// accurate rolling 52-week high.
+const PRICE_HIST_DAYS = 50;
+
+// Build the rolling, validated N-day series (oldest→newest) from FMP's hist
+// feed. Every point is checked; dupes are collapsed; the newest N valid
+// sessions win. Each point also carries the trailing 50DMA, 200DMA, and 52w
+// high computed AS OF THAT DAY — so the chart can draw them as moving curves
+// (they change daily), not flat lines. See the call site for why this makes
+// the window self-rolling.
+function buildPriceHist(hist) {
+  const seen = new Set();
+  const desc = [];                        // newest-first, validated, deduped
+  for (const d of hist || []) {
+    const date = d?.date;
+    const close = d?.price ?? d?.close;
+    if (!validPricePoint(date, close)) continue;
+    if (seen.has(date)) continue;         // FMP occasionally double-lists a session
+    seen.add(date);
+    desc.push({ date, close });
+  }
+  desc.sort((a, b) => b.date.localeCompare(a.date)); // newest first
+  const closes = desc.map(d => d.close);
+  const round2 = x => (x == null ? null : Number(x.toFixed(2))); // trim blob bytes + float noise
+  // Trailing average / max of `n` closes starting at index `from` (inclusive),
+  // most-recent-first — so `from=i` looks back from day i. Returns null if no
+  // data (never happens once we're inside the array), partial near the tail.
+  const avgFrom = (from, n) => {
+    let s = 0, c = 0;
+    for (let k = from; k < from + n && k < closes.length; k++) { s += closes[k]; c++; }
+    return c ? s / c : null;
+  };
+  const maxFrom = (from, n) => {
+    let m = -Infinity, c = 0;
+    for (let k = from; k < from + n && k < closes.length; k++) { if (closes[k] > m) m = closes[k]; c++; }
+    return c ? m : null;
+  };
+  const count = Math.min(PRICE_HIST_DAYS, desc.length);
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    out.push({
+      date:   desc[i].date,
+      close:  desc[i].close,
+      sma50:  round2(avgFrom(i, 50)),
+      sma200: round2(avgFrom(i, 200)),
+      high52: round2(maxFrom(i, 252)),
+    });
+  }
+  return out.reverse();                   // newest 15, oldest→newest
+}
+
 // 1. Trend: how cleanly price is above its moving averages
 function checkTrend(hist) {
   if (!hist || hist.length < 200) return na("Need 200 days of price history");
@@ -538,7 +601,7 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   // Cache check
   if (!skipCache) {
     const cached = await getShortFmpCache(sym);
-    if (cached && cached._v === 9) {
+    if (cached && cached._v === 13) {
       return cached.row;
     }
   } else {
@@ -549,7 +612,7 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   // Wrapped in a closure so the 3-step integrity check can retry it once.
   const runFmp = async () => {
     const d = {};
-    d.hist          = await safe("historical-price-eod/light", sym, "&limit=260"); await delay(200);
+    d.hist          = await safe("historical-price-eod/light", sym, "&limit=320"); await delay(200);
     d.quote         = await safe("quote", sym);                                     await delay(200);
     d.keyMetrics    = await safe("key-metrics", sym, "&period=annual&limit=2");     await delay(200);
     d.estimates     = await safe("analyst-estimates", sym, "&period=annual&limit=3"); await delay(200);
@@ -632,6 +695,23 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   const score = checks.reduce((s, c) => s + (c.points ?? 0), 0);
   const total = 30;
 
+  // Last PRICE_HIST_DAYS (50) trading days, oldest→newest, for the trade-card
+  // price path + moving-average curves. hist is already fetched for scoring
+  // (320d, most-recent-first) so this is free — no extra FMP call.
+  //
+  // Built to be self-correcting and rolling:
+  //   1. Validate EVERY point — a valid ISO date and a finite, positive
+  //      close. Garbage rows (nulls, zeros, NaN, malformed dates) are
+  //      dropped rather than poisoning the chart's min/max scaling.
+  //   2. Dedupe by date (FMP occasionally double-lists a session).
+  //   3. Sort by date DESC and take the N most-recent valid days. Because
+  //      this runs on every rescan against a freshly fetched 320-day window,
+  //      the set rolls forward automatically: a new session enters at the
+  //      front and the oldest drops off. The 50/200DMA, price target, and
+  //      stop are recomputed from the same fresh feed, so they roll in
+  //      lockstep.
+  const priceHist = buildPriceHist(hist);
+
   const row = {
     sym,
     name,
@@ -643,10 +723,11 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     reasons: checks.map(c => c.summary),
     raw: checks.map(c => c.value),
     verdicts: checks.map(c => c.verdict), // "good"|"ok"|"weak"|"bad"|"na" for chip colors
+    priceHist,
     warnings,
     scored_at: new Date().toISOString(),
   };
 
-  await putShortFmpCache(sym, { _v: 9, row }).catch(() => {});
+  await putShortFmpCache(sym, { _v: 13, row }).catch(() => {});
   return row;
 }

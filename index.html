@@ -513,6 +513,42 @@
   /* Days-in-Ready badge (stale Ready entries that haven't been acted on) */
   .wp-chip-days{ font-size:9.5px;font-weight:600;padding:1px 5px;border-radius:6px;
     background:rgba(245,158,11,.18);color:#92400e;margin-left:2px;letter-spacing:.02em }
+  /* Trade card (Premium-tier Ready visualization) */
+  .wp-trade-card{
+    display:flex;flex-direction:column;
+    background:#fff;border:1px solid #a7f3d0;border-radius:7px;
+    padding:7px 9px 8px;width:300px;max-width:300px;
+    cursor:pointer;transition:border-color .12s ease;font-size:9.5px;
+    box-shadow:0 1px 2px rgba(0,0,0,.04);
+  }
+  .wp-trade-card:hover{ border-color:#10b981 }
+  .wp-tc-head{ display:flex;align-items:center;gap:6px;font-weight:700 }
+  .wp-tc-sym{ font-size:11px;color:var(--ink);letter-spacing:.2px }
+  .wp-tc-sub{ font-size:8.5px;color:var(--ink-soft);font-weight:500;
+    display:inline-flex;align-items:center;gap:4px;flex:1 }
+  .wp-tc-head .wp-x{ margin-left:auto;color:#9ca3af;font-size:11px;cursor:pointer;
+    line-height:1;padding:0 2px }
+  .wp-tc-head .wp-x:hover{ color:#ef4444 }
+  .wp-tc-rr{ display:flex;justify-content:space-between;gap:6px;
+    padding-top:5px;border-top:1px dashed #e5e7eb }
+  .wp-tc-rr > div{ display:flex;flex-direction:column;align-items:flex-start;
+    flex:1;min-width:0 }
+  .wp-tc-lbl{ font-size:7.5px;color:#9ca3af;text-transform:uppercase;
+    letter-spacing:.5px;font-weight:600 }
+  .wp-tc-val{ font-size:11px;font-weight:700;line-height:1.2 }
+  .wp-tc-tag{ font-size:7.5px;font-weight:600;text-transform:uppercase;
+    letter-spacing:.4px;margin-top:1px }
+  /* Compact variant: embedded in the dark ticker-history popover, side by
+     side with the T/V/P timeline. No card chrome/click affordance — the
+     popover already owns clicking and close. */
+  .wp-trade-card-compact{
+    background:transparent;border:none;box-shadow:none;cursor:default;
+    padding:0;width:220px;max-width:220px;flex-shrink:0;
+  }
+  .wp-trade-card-compact .wp-tc-sym{ color:#e8eaf0 }
+  .wp-trade-card-compact .wp-tc-sub{ color:#8a95a8 }
+  .wp-trade-card-compact .wp-tc-rr{ border-top-color:rgba(255,255,255,.12) }
+  .wp-trade-card-compact .wp-tc-lbl{ color:#6b7280 }
   /* Ready sub-tier divider headings (Premium / Standard) */
   .wp-tier-head{ width:100%;display:flex;align-items:center;gap:6px;
     font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
@@ -852,7 +888,6 @@
         <button class="btn" id="forceRescan" title="Force a full rescan of every row — bypasses the 'fresh rows' shortcut and re-pulls FMP for everything. Same as Shift+click on Rescan.">Force Rescan</button>
         <button class="btn" id="restoreOrder" title="Restore your saved drag-drop order and clear column sort" style="display:none">↺ Order</button>
         <button class="btn" id="pipelineBtn" onclick="document.getElementById('pipelineModal').style.display='flex'">Scoring Pipeline</button>
-        <button class="btn" id="twToggle">Training Wheels</button>
       </div>
       <div class="rescan-timer" id="rescanTimer"></div>
       <div class="rescan-timer" id="usageChip" title="Today's AI research calls vs daily cap"></div>
@@ -1059,6 +1094,10 @@
       <button class="btn addrow" id="addNetRow">+ Add holding</button>
     </div>
   </div>
+
+  <div style="text-align:center;padding:18px 0 4px">
+    <a href="#" onclick="setView('tw');return false;" style="font-size:10.5px;font-weight:600;color:var(--ink-faint);text-decoration:none;border-bottom:1px dashed currentColor">🎓 Training Wheels — walkthrough of every data point</a>
+  </div>
 </div>
 
 <!-- ===== SHORT TERM VIEW (FMP-only, swing trading 1wk-3mo) ===== -->
@@ -1108,6 +1147,10 @@
     <span><b style="background:var(--pur-bg);color:var(--pur-fg)">●</b><span style="color:var(--pur-fg);font-weight:600">Purple</span> · data not available from FMP for this ticker</span>
     <div class="ttl" style="margin-top:10px">Tip</div>
     <span style="color:var(--ink-soft)">Hover any chip to read what it measures, why it matters, the pass rule, and your computed value.</span>
+  </div>
+
+  <div style="text-align:center;padding:18px 0 4px">
+    <a href="/cheatsheet.html" target="_blank" rel="noopener" style="font-size:10.5px;font-weight:600;color:var(--ink-faint);text-decoration:none;border-bottom:1px dashed currentColor">📄 Beginner's Swing Trading Cheatsheet</a>
   </div>
 
 </div>
@@ -1264,7 +1307,7 @@
   <div id="backtestBody"></div>
 </div>
 
-<div id="tickerHist" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.5;padding:12px 14px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:340px;max-width:400px;pointer-events:auto;white-space:normal;border:0.5px solid rgba(255,255,255,.08)">
+<div id="tickerHist" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.5;padding:12px 14px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:340px;max-width:600px;pointer-events:auto;white-space:normal;border:0.5px solid rgba(255,255,255,.08)">
   <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
     <span id="tickerHistTitle" style="font-size:11px;font-weight:700;color:#e8eaf0;letter-spacing:.2px"></span>
     <span id="tickerHistClose" style="cursor:pointer;color:#8a95a8;font-size:13px;line-height:1;padding:0 2px">✕</span>
@@ -1273,8 +1316,17 @@
     <span id="tickerHistStats"></span>
     <span id="tickerHistJump" style="cursor:pointer;color:#a7f3d0;text-transform:uppercase;letter-spacing:.4px;font-weight:600">Jump to row →</span>
   </div>
-  <div id="tickerHistChart" style="margin-bottom:10px"></div>
-  <div id="tickerHistRows" style="max-height:200px;overflow-y:auto;scrollbar-width:thin"></div>
+  <!-- Side-by-side body: trade card (price ladder + R/R) on the left when
+       the ticker is Ready with enough data to build one, T/V/P timeline +
+       event log on the right. Trade card container is empty/hidden for
+       tickers that aren't Ready or lack raw price/SMA data. -->
+  <div style="display:flex;gap:14px;align-items:flex-start">
+    <div id="tickerHistCard"></div>
+    <div style="flex:1;min-width:0">
+      <div id="tickerHistChart" style="margin-bottom:10px"></div>
+      <div id="tickerHistRows" style="max-height:200px;overflow-y:auto;scrollbar-width:thin"></div>
+    </div>
+  </div>
 </div>
 
 <!-- context menu -->
@@ -2191,9 +2243,7 @@ function setView(v){
   document.getElementById('wlLeft').style.display=(isWL||isShort)?'flex':'none';
   // Hide Basics-only buttons on Short Term view
   const pipeBtn=document.getElementById('pipelineBtn');
-  const twBtn=document.getElementById('twToggle');
   if(pipeBtn) pipeBtn.style.display=isShort?'none':'';
-  if(twBtn)   twBtn.style.display  =isShort?'none':'';
   // Force Rescan only meaningful on Basic — Short Term's Rescan already
   // always force-fetches fresh FMP (see rescanShort).
   const fr=document.getElementById('forceRescan');
@@ -2203,7 +2253,6 @@ function setView(v){
     navTog.style.display=isShort?'none':'';
     navTog.textContent=v==='net'?'Watchlist':'Net';
   }
-  if(twBtn) twBtn.textContent=v==='tw'?'↩ Watchlist':'Training Wheels';
   // Reflect current view in the segmented pill (Basic | Short Term)
   document.querySelectorAll('#viewSwitch button').forEach(b=>{
     const target=b.dataset.v;
@@ -2216,7 +2265,6 @@ function setView(v){
   window.scrollTo(0,0);
 }
 document.getElementById('navToggle').onclick=()=>setView(currentView==='net'?'watchlist':'net');
-document.getElementById('twToggle').onclick=()=>setView(currentView==='tw'?'watchlist':'tw');
 document.querySelectorAll('#viewSwitch button').forEach(b=>{
   b.addEventListener('click',()=>{
     const v=b.dataset.v;
@@ -3100,6 +3148,12 @@ document.addEventListener('click', e => {
   const chip = e.target.closest('.wp-chip');
   if (chip && chip.dataset.sym) {
     showTickerHistory(chip.dataset.sym, chip);
+    return;
+  }
+  // Trade cards (Premium Ready tier) open the same combined popover.
+  const card = e.target.closest('.wp-trade-card:not(.wp-trade-card-compact)');
+  if (card && card.dataset.sym) {
+    showTickerHistory(card.dataset.sym, card);
   }
 });
 
@@ -3112,6 +3166,288 @@ function pruneDemoted(){
     if (!at || at < cutoff) { delete demotedRecent[sym]; dirty = true; }
   }
   if (dirty) saveDemoted();
+}
+// Hoisted out of renderWatchPanel so showTickerHistory (the combined
+// ladder + timeline popover) can reuse the exact same card-building logic
+// without duplicating it. These only touch global state (shortRowsBySym,
+// watchFlags, demotedRecent, activityLog, sigHistory), so they're safe as
+// top-level functions.
+function lastEventTs(sym, types){
+  const e = activityLog.find(ev => ev.sym === sym && types.includes(ev.type));
+  return e ? e.ts : null;
+}
+function chipDate(sym, kind){
+  let ts = null;
+  if (kind === 'demoted')      ts = demotedRecent[sym]?.at ?? null;
+  else if (kind === 'ready')   ts = lastEventTs(sym, ['promote']);
+  else if (kind === 'watching')ts = lastEventTs(sym, ['add','demote']);
+  return ts;
+}
+function fmtChipDate(ts){
+  if (!ts) return '';
+  const ageH = (Date.now() - ts) / 3600000;
+  if (ageH < 24) return relTime(ts);
+  const d = new Date(ts);
+  return d.toLocaleDateString(undefined, { month:'short', day:'numeric' });
+}
+// Entry signal dots for Ready chips: Trend (idx 0), Vol Surge (idx 9)
+// Near-50DMA: parse raw[0] which is the vs50 percent string from reasons
+function entrySigs(sym){
+  const r = shortRowsBySym[sym];
+  if (!r) return null;
+  const tvp = tvpFor(r);
+  if (!tvp) return null;
+  // Yellow = the signal was green within the last 24h but isn't now. We
+  // read that from sigHistory rather than the row itself so the colour
+  // persists across renders even after the signal flips off.
+  const now = Date.now();
+  const recentLossT = !tvp.T && (lastGreenAt(sym, 'T') ?? 0) > now - SIG_STALE_MS;
+  const recentLossV = !tvp.V && (lastGreenAt(sym, 'V') ?? 0) > now - SIG_STALE_MS;
+  const recentLossP = !tvp.P && (lastGreenAt(sym, 'P') ?? 0) > now - SIG_STALE_MS;
+  return { ...tvp, recentLossT, recentLossV, recentLossP };
+}
+function sigDots(sym){
+  const s = entrySigs(sym);
+  if (!s) return '';
+  // Each signal: green if currently met; yellow if it was green within
+  // the last 24h but isn't now; red if active distribution warning (V
+  // only); grey otherwise.
+  const trendCls = s.T ? 'sig-on' : (s.recentLossT ? 'sig-stale' : 'sig-off');
+  // V intensity: <1.5x = mild, 1.5-2.5x = normal, >2.5x = strong (glow)
+  const volIntensity = s.V && s.volMult != null
+    ? (s.volMult > 2.5 ? ' sig-on-strong' : s.volMult < 1.5 ? ' sig-on-mild' : '')
+    : '';
+  const volCls   = s.volWarn ? 'sig-warn'
+                : s.V        ? ('sig-on' + volIntensity)
+                : s.recentLossV ? 'sig-stale'
+                                : 'sig-off';
+  const nearCls  = s.P ? 'sig-on' : (s.recentLossP ? 'sig-stale' : 'sig-off');
+  const trendTip = s.T ? 'Trend: price above 50DMA ✓'
+                 : s.recentLossT ? 'Trend: was above 50DMA recently — rescan to confirm'
+                                 : 'Trend: below 50DMA — avoid entry';
+  const volMultStr = s.volMult != null ? ` (${s.volMult.toFixed(2)}x avg vol)` : '';
+  const intensityStr = s.V && s.volMult != null
+    ? (s.volMult > 2.5 ? ' — strong conviction'
+      : s.volMult < 1.5 ? ' — mild'
+      : '')
+    : '';
+  const volTip   = s.volWarn ? `Vol Surge: down-day distribution ✗${volMultStr}`
+                 : s.V       ? `Vol Surge: up-day accumulation ✓${volMultStr}${intensityStr}`
+                 : s.recentLossV ? 'Vol Surge: accumulation lost — rescan to confirm'
+                                 : 'Vol Surge: no strong signal yet';
+  const nearTip  = s.P ? 'Near 50DMA: pullback zone — good entry risk/reward ✓'
+                 : s.recentLossP ? 'Near 50DMA: pullback zone lost — rescan to confirm'
+                                 : 'Not near 50DMA — may be extended';
+  return `<span class="wp-sig">` +
+    `<span class="wp-sig-dot ${trendCls}" data-tip="${escHtml(trendTip)}">T</span>` +
+    `<span class="wp-sig-dot ${volCls}"   data-tip="${escHtml(volTip)}">V</span>` +
+    `<span class="wp-sig-dot ${nearCls}"  data-tip="${escHtml(nearTip)}">P</span>` +
+    `</span>`;
+}
+// Trade card for Premium-tier Ready tickers: a vertical price ladder that
+// shows price relative to 50DMA / 200DMA / 52w-high, with a suggested stop
+// (3% below 50DMA) and a target (the lesser of 52w-high or +8%). The R/R
+// ratio is the headline number — if it's < 1.5, the trade is mathematically
+// weak even if the TVP setup is clean.
+//
+// opts.compact: renders without the wrapping card chrome (border/padding/
+// click-tip) — used when embedding inside the ticker history popover, which
+// already has its own chrome and click handling.
+// Client-side guard for the price series (up to 50 sessions). Mirrors the
+// pipeline's validation so a bad point that slipped through the blob (or an
+// older cached row with a looser shape) can't poison the chart. Returns a
+// clean oldest→newest array of {date, close, sma50, sma200, high52}, or null
+// if fewer than 2 valid points survive (caller falls back to the flat line).
+const PRICE_HIST_MAX = 50;
+function sanitizePriceHist(raw){
+  if (!Array.isArray(raw)) return null;
+  const ISO = /^\d{4}-\d{2}-\d{2}$/;
+  const num = v => { const n = (typeof v === 'number') ? v : Number(v); return Number.isFinite(n) ? n : null; };
+  const seen = new Set();
+  const clean = [];
+  for (const d of raw) {
+    const date = d && d.date;
+    const close = d && num(d.close);
+    if (typeof date !== 'string' || !ISO.test(date)) continue;
+    if (Number.isNaN(new Date(date + 'T00:00:00Z').getTime())) continue;
+    if (!Number.isFinite(close) || close <= 0) continue;
+    if (seen.has(date)) continue;
+    seen.add(date);
+    // Per-day moving-average / rolling-high fields (added pipeline v12).
+    // Kept as numbers when valid+positive, else null → those curves fall
+    // back to the current flat level for this row.
+    const sma50  = num(d.sma50),  sma200 = num(d.sma200), high52 = num(d.high52);
+    clean.push({
+      date, close,
+      sma50:  (sma50  != null && sma50  > 0) ? sma50  : null,
+      sma200: (sma200 != null && sma200 > 0) ? sma200 : null,
+      high52: (high52 != null && high52 > 0) ? high52 : null,
+    });
+  }
+  clean.sort((a, b) => a.date.localeCompare(b.date)); // oldest → newest
+  const rolled = clean.slice(-PRICE_HIST_MAX);         // keep newest N
+  return rolled.length >= 2 ? rolled : null;
+}
+function tradeCard(sym, opts){
+  opts = opts || {};
+  const r = shortRowsBySym[sym];
+  const tvp = r ? tvpFor(r) : null;
+  const price  = r?.raw?.[0]?.price;
+  const sma50  = r?.raw?.[0]?.sma50;
+  const sma200 = r?.raw?.[0]?.sma200;
+  const high52 = r?.raw?.[2]?.high;
+  if (!price || !sma50 || !sma200 || !tvp) return null;
+  // Stop just below 50DMA (chartist convention) — 3% under so noise wicks
+  // don't trip it. Target: bounded by 52w-high resistance OR +8% from
+  // current, whichever is closer. If price is already at the high, fall
+  // back to +8%.
+  const stop = sma50 * 0.97;
+  const tgtCap = high52 && high52 > price ? high52 : price * 1.08;
+  const target = Math.min(tgtCap, price * 1.08);
+  const upside = (target - price) / price * 100;
+  const downside = (price - stop) / price * 100;
+  const rr = downside > 0 ? upside / downside : 0;
+  const ts = chipDate(sym, 'ready');
+  const days = ts ? Math.floor((Date.now() - ts) / 86400000) : 0;
+  const greens = (tvp.T?1:0)+(tvp.V?1:0)+(tvp.P?1:0);
+  const score = r.score ? parseInt(r.score) || 0 : 0;
+  // "Now" is drawn as a 15-day price path ending in a dot, not a flat
+  // reference line — lets you see the run-up/pullback that produced today's
+  // price relative to the other levels, instead of just a static snapshot.
+  // Falls back to a flat line + dot (old behavior) if history isn't
+  // populated yet (rows scored before priceHist existed).
+  //
+  // Defensive re-validation: the pipeline already validates each point, but
+  // the data round-trips through the shared blob and older cached rows may
+  // carry looser shapes, so re-check every point here before plotting.
+  // Drop anything without a real ISO date or a finite positive close, dedupe
+  // by date, and re-sort oldest→newest so the path can never render garbage.
+  // Reads the new `priceHist` field, falling back to the legacy `priceHist15`
+  // so a row cached just before this change still renders until its rescan.
+  const hist15 = sanitizePriceHist(r.priceHist || r.priceHist15);
+  const n = hist15 ? hist15.length : 0;
+  // Rich per-day series present? (pipeline v12 attaches sma50/sma200/high52 to
+  // every point). When present each level is drawn as a MOVING CURVE — the
+  // 50/200DMA genuinely change every day, so a flat line misrepresents them.
+  // When absent (older cached rows), each level falls back to a flat line at
+  // its current value.
+  const richSMA  = !!hist15 && hist15.every(d => Number.isFinite(d.sma50) && Number.isFinite(d.sma200));
+  const richHigh = !!hist15 && hist15.every(d => Number.isFinite(d.high52));
+  // Per-day value arrays (oldest→newest) for each level, or null → flat.
+  const tgtOf = d => { const cap = (d.high52 && d.high52 > d.close) ? d.high52 : d.close * 1.08; return Math.min(cap, d.close * 1.08); };
+  const seriesVals = {
+    price:  hist15  ? hist15.map(d => d.close)        : null,
+    sma50:  richSMA ? hist15.map(d => d.sma50)        : null,
+    sma200: richSMA ? hist15.map(d => d.sma200)       : null,
+    high52: richHigh? hist15.map(d => d.high52)       : null,
+    stop:   richSMA ? hist15.map(d => d.sma50 * 0.97) : null,
+    target: richHigh? hist15.map(tgtOf)               : null,
+  };
+  const nowVal = hist15 ? hist15[hist15.length - 1].close : price;
+  // Draw order: context levels first, price last (on top). `current` is the
+  // flat fallback value + the value shown in the right-edge label.
+  const seriesDefs = [
+    { key:'high52', label:'52w high', color:'#94a3b8', dash:false, width:1.2, current: high52 },
+    { key:'sma200', label:'200DMA',   color:'#94a3b8', dash:false, width:1.2, current: sma200 },
+    { key:'target', label:'Target',   color:'#10b981', dash:true,  width:1.2, current: target },
+    { key:'stop',   label:'Stop',     color:'#ef4444', dash:true,  width:1.2, current: stop },
+    { key:'sma50',  label:'50DMA',    color:'#f59e0b', dash:false, width:1.2, current: sma50 },
+    { key:'price',  label:'Now',      color:'#3b82f6', dash:false, width:1.8, current: nowVal, isPrice:true },
+  ].filter(def => seriesVals[def.key] || Number.isFinite(def.current));
+  // Y-domain spans every point of every drawn series so nothing clips.
+  const domainYs = [];
+  seriesDefs.forEach(def => {
+    const arr = seriesVals[def.key];
+    if (arr) domainYs.push(...arr.filter(Number.isFinite));
+    else if (Number.isFinite(def.current)) domainYs.push(def.current);
+  });
+  if (!domainYs.length) domainYs.push(nowVal);
+  const min = Math.min(...domainYs);
+  const max = Math.max(...domainYs);
+  const span = max - min || 1;
+  const H = 130, W = 240, padT = 8, padB = 8, padL = 4, padR = 86;
+  const chartW = W - padR - padL;
+  const yFor = v => padT + (1 - (v - min) / span) * (H - padT - padB);
+  const xFor = i => padL + (i / Math.max(1, n - 1)) * chartW;
+  // Shade the ideal entry band (50DMA to 5% above) — draw before lines.
+  const zoneTop = sma50 * 1.05, zoneBot = sma50;
+  const zy1 = yFor(zoneTop), zy2 = yFor(zoneBot);
+  const zone = `<rect x="${padL}" y="${Math.min(zy1,zy2)}" width="${chartW}" height="${Math.abs(zy2-zy1)}" fill="#10b981" opacity="0.08"/>`;
+  // Draw each series as a curve (per-day array) or a flat line (fallback).
+  const curves = seriesDefs.map(def => {
+    const arr = seriesVals[def.key];
+    const dash = def.dash ? 'stroke-dasharray="3 3"' : '';
+    let markup = '';
+    let newestY;
+    if (arr) {
+      const pts = arr.map((v, i) => `${xFor(i)},${yFor(v)}`).join(' ');
+      markup = `<polyline points="${pts}" fill="none" stroke="${def.color}" stroke-width="${def.width}" ${dash}/>`;
+      newestY = yFor(arr[arr.length - 1]);
+      if (def.isPrice) markup += `<circle cx="${xFor(n - 1)}" cy="${newestY}" r="3.5" fill="${def.color}"/>`;
+    } else {
+      const y = yFor(def.current);
+      markup = `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="${def.color}" stroke-width="${def.width}" ${dash}/>`;
+      newestY = y;
+      if (def.isPrice) markup += `<circle cx="${W - padR + 4}" cy="${y}" r="3.5" fill="${def.color}"/>`;
+    }
+    def._labelY = newestY;
+    def._labelVal = arr ? arr[arr.length - 1] : def.current;
+    return markup;
+  }).join('');
+  // Right-edge labels: merge levels whose newest value coincides (e.g. Now ≈
+  // 52w high at the highs), then collision-avoid vertically.
+  let labelEntries = seriesDefs.map(def => ({
+    label: def.label, color: def.color, weight: def.isPrice ? 700 : 500,
+    y: def._labelY, val: def._labelVal,
+  })).sort((a, b) => a.y - b.y);
+  const merged = [];
+  labelEntries.forEach(e => {
+    const dup = merged.find(u => Math.abs(u.val - e.val) / Math.max(u.val, e.val) < 0.004);
+    if (dup) { dup.label += ' · ' + e.label; if (e.weight > dup.weight) { dup.weight = e.weight; dup.color = e.color; } }
+    else merged.push({ ...e });
+  });
+  const minGap = 15;
+  merged.forEach((e, i) => {
+    const prev = merged[i-1];
+    e.yText = prev ? Math.max(e.y, prev.yText + minGap) : Math.max(padT + 8, e.y);
+  });
+  const lines = merged.map(e => {
+    const leader = Math.abs(e.y - e.yText) > 2
+      ? `<line x1="${W - padR}" y1="${e.y}" x2="${W - padR + 8}" y2="${e.yText - 3}" stroke="${e.color}" stroke-width="0.6" opacity="0.5"/>`
+      : '';
+    return `${leader}<text x="${W - padR + 10}" y="${e.yText - 1}" font-size="8.5" fill="${e.color}" font-weight="${e.weight}">${e.label}</text>` +
+           `<text x="${W - padR + 10}" y="${e.yText + 8}" font-size="7.5" fill="#9ca3af">$${e.val.toFixed(e.val>100?0:2)}</text>`;
+  }).join('');
+  const rrColor = rr >= 2 ? '#10b981' : rr >= 1.5 ? '#f59e0b' : '#ef4444';
+  const rrLabel = rr >= 2 ? 'good' : rr >= 1.5 ? 'ok' : 'weak';
+  const sigPills = sigDots(sym);
+  const daysBadge = days >= 3 ? `<span class="wp-chip-days" data-tip="In Ready ${days}d — consider entering or clearing">${days}d</span>` : '';
+  const outerOpen  = opts.compact ? '<div class="wp-trade-card wp-trade-card-compact">' : `<div class="wp-trade-card" data-sym="${sym}" data-tip="Click for ${sym} history">`;
+  const closeBtn   = opts.compact ? '' : `<span class="wp-x" data-sym="${sym}" data-kind="ready" data-tip="Clear watchlist flag">×</span>`;
+  const dateAxis = hist15
+    ? `<div style="display:flex;justify-content:space-between;font-size:7px;color:#9ca3af;margin:1px 0 6px;padding:0 ${padR}px 0 ${padL}px">` +
+      `<span>${fmtAxisDate(hist15[0].date)}</span><span>${fmtAxisDate(hist15[hist15.length-1].date)}</span></div>`
+    : `<div style="font-size:7.5px;color:#9ca3af;margin:1px 0 6px">price path unavailable — rescan to populate</div>`;
+  return `${outerOpen}
+    <div class="wp-tc-head">
+      <span class="wp-tc-sym">${sym}</span>
+      <span class="wp-tc-sub">${score}/30 · ${greens}/3 ${sigPills} ${daysBadge}</span>
+      ${closeBtn}
+    </div>
+    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;margin:4px 0 0">
+      ${zone}${curves}${lines}
+    </svg>
+    ${dateAxis}
+    <div class="wp-tc-rr">
+      <div><span class="wp-tc-lbl">R/R</span><span class="wp-tc-val" style="color:${rrColor}">${rr.toFixed(1)}:1</span><span class="wp-tc-tag" style="color:${rrColor}">${rrLabel}</span></div>
+      <div><span class="wp-tc-lbl">Stop</span><span class="wp-tc-val" style="color:#ef4444">−${downside.toFixed(1)}%</span></div>
+      <div><span class="wp-tc-lbl">Target</span><span class="wp-tc-val" style="color:#10b981">+${upside.toFixed(1)}%</span></div>
+    </div>
+  </div>`;
+}
+function fmtAxisDate(d){
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString(undefined,{month:'short',day:'numeric'});
 }
 function renderWatchPanel(){
   const el = document.getElementById('watchPanel');
@@ -3151,80 +3487,6 @@ function renderWatchPanel(){
     el.innerHTML = '';
     return;
   }
-  // Find the most recent timestamp for a sym's current state from the
-  // activity log (or demotedRecent for demoted). null = no record.
-  const lastEventTs = (sym, types) => {
-    const e = activityLog.find(ev => ev.sym === sym && types.includes(ev.type));
-    return e ? e.ts : null;
-  };
-  const chipDate = (sym, kind) => {
-    let ts = null;
-    if (kind === 'demoted')      ts = demotedRecent[sym]?.at ?? null;
-    else if (kind === 'ready')   ts = lastEventTs(sym, ['promote']);
-    else if (kind === 'watching')ts = lastEventTs(sym, ['add','demote']);
-    return ts;
-  };
-  const fmtChipDate = ts => {
-    if (!ts) return '';
-    const ageH = (Date.now() - ts) / 3600000;
-    if (ageH < 24) return relTime(ts);
-    const d = new Date(ts);
-    return d.toLocaleDateString(undefined, { month:'short', day:'numeric' });
-  };
-  // Entry signal dots for Ready chips: Trend (idx 0), Vol Surge (idx 9)
-  // Near-50DMA: parse raw[0] which is the vs50 percent string from reasons
-  const entrySigs = sym => {
-    const r = shortRowsBySym[sym];
-    if (!r) return null;
-    const tvp = tvpFor(r);
-    if (!tvp) return null;
-    // Yellow = the signal was green within the last 24h but isn't now. We
-    // read that from sigHistory rather than the row itself so the colour
-    // persists across renders even after the signal flips off.
-    const now = Date.now();
-    const recentLossT = !tvp.T && (lastGreenAt(sym, 'T') ?? 0) > now - SIG_STALE_MS;
-    const recentLossV = !tvp.V && (lastGreenAt(sym, 'V') ?? 0) > now - SIG_STALE_MS;
-    const recentLossP = !tvp.P && (lastGreenAt(sym, 'P') ?? 0) > now - SIG_STALE_MS;
-    return { ...tvp, recentLossT, recentLossV, recentLossP };
-  };
-  const sigDots = sym => {
-    const s = entrySigs(sym);
-    if (!s) return '';
-    // Each signal: green if currently met; yellow if it was green within
-    // the last 24h but isn't now; red if active distribution warning (V
-    // only); grey otherwise.
-    const trendCls = s.T ? 'sig-on' : (s.recentLossT ? 'sig-stale' : 'sig-off');
-    // V intensity: <1.5x = mild, 1.5-2.5x = normal, >2.5x = strong (glow)
-    const volIntensity = s.V && s.volMult != null
-      ? (s.volMult > 2.5 ? ' sig-on-strong' : s.volMult < 1.5 ? ' sig-on-mild' : '')
-      : '';
-    const volCls   = s.volWarn ? 'sig-warn'
-                  : s.V        ? ('sig-on' + volIntensity)
-                  : s.recentLossV ? 'sig-stale'
-                                  : 'sig-off';
-    const nearCls  = s.P ? 'sig-on' : (s.recentLossP ? 'sig-stale' : 'sig-off');
-    const trendTip = s.T ? 'Trend: price above 50DMA ✓'
-                   : s.recentLossT ? 'Trend: was above 50DMA recently — rescan to confirm'
-                                   : 'Trend: below 50DMA — avoid entry';
-    const volMultStr = s.volMult != null ? ` (${s.volMult.toFixed(2)}x avg vol)` : '';
-    const intensityStr = s.V && s.volMult != null
-      ? (s.volMult > 2.5 ? ' — strong conviction'
-        : s.volMult < 1.5 ? ' — mild'
-        : '')
-      : '';
-    const volTip   = s.volWarn ? `Vol Surge: down-day distribution ✗${volMultStr}`
-                   : s.V       ? `Vol Surge: up-day accumulation ✓${volMultStr}${intensityStr}`
-                   : s.recentLossV ? 'Vol Surge: accumulation lost — rescan to confirm'
-                                   : 'Vol Surge: no strong signal yet';
-    const nearTip  = s.P ? 'Near 50DMA: pullback zone — good entry risk/reward ✓'
-                   : s.recentLossP ? 'Near 50DMA: pullback zone lost — rescan to confirm'
-                                   : 'Not near 50DMA — may be extended';
-    return `<span class="wp-sig">` +
-      `<span class="wp-sig-dot ${trendCls}" data-tip="${escHtml(trendTip)}">T</span>` +
-      `<span class="wp-sig-dot ${volCls}"   data-tip="${escHtml(volTip)}">V</span>` +
-      `<span class="wp-sig-dot ${nearCls}"  data-tip="${escHtml(nearTip)}">P</span>` +
-      `</span>`;
-  };
   const chip = (sym, kind, reason) => {
     const reasonHtml = reason ? `<span class="wp-chip-reason">${escHtml(reason)}</span>` : '';
     const ts = chipDate(sym, kind);
@@ -3250,6 +3512,9 @@ function renderWatchPanel(){
     let body;
     if (kind === 'ready' && items.length) {
       // Split Ready into Premium (3/3 + score≥26) and Standard sub-groups.
+      // Both render as compact TVP chips — the full price-ladder trade card
+      // is too tall to show inline for every Premium ticker at once, so it's
+      // reserved for the click-through popover (showTickerHistory).
       const prem = renderItems(readyPremium);
       const std  = renderItems(readyStandard);
       const premHead = readyPremium.length
@@ -3534,7 +3799,8 @@ document.addEventListener('mouseout', e => {
 const tickerHist = document.getElementById('tickerHist');
 document.getElementById('tickerHistClose').addEventListener('click', () => tickerHist.style.display='none');
 document.addEventListener('click', e => {
-  if (tickerHist.style.display === 'block' && !tickerHist.contains(e.target) && !e.target.closest('.wp-chip')) {
+  if (tickerHist.style.display === 'block' && !tickerHist.contains(e.target)
+      && !e.target.closest('.wp-chip') && !e.target.closest('.wp-trade-card:not(.wp-trade-card-compact)')) {
     tickerHist.style.display = 'none';
   }
 });
@@ -3724,6 +3990,14 @@ function showTickerHistory(sym, anchorEl){
   if (!sym) return;
   tickerHist.dataset.sym = sym;
   renderSigHistoryChart(sym);
+  // Trade card (price ladder + R/R) alongside the timeline — only for
+  // tickers currently flagged Ready with enough raw price/SMA data to build
+  // the ladder. Anything else (Watching, Demoted, or missing data) just
+  // shows the timeline with no left column.
+  const cardEl = document.getElementById('tickerHistCard');
+  const cardHtml = watchFlags[sym] === 'ready' ? tradeCard(sym, { compact: true }) : null;
+  cardEl.innerHTML = cardHtml || '';
+  cardEl.style.display = cardHtml ? '' : 'none';
   const events = activityLog.filter(e => e.sym === sym);
 
   // Stats summary

@@ -1,14 +1,9 @@
 [build]
   publish = "."
   functions = "netlify/functions"
-  edge_functions = "netlify/edge-functions"
 
 [functions]
   node_bundler = "esbuild"
-
-[[edge_functions]]
-  function = "basic-auth"
-  path = "/*"
 
 # friendly /api/* → functions mapping
 [[redirects]]
