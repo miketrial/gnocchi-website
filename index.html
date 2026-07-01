@@ -3407,11 +3407,10 @@ function renderWatchPanel(){
     let body;
     if (kind === 'ready' && items.length) {
       // Split Ready into Premium (3/3 + score≥26) and Standard sub-groups.
-      // Premium renders as trade cards (price ladder + R/R) — they're the
-      // actionable ones, so we surface the decision-relevant chart up top.
-      // Standard stays as compact chips. Falls back to chip if a card can't
-      // be built (missing raw price/SMA data on a freshly added ticker).
-      const prem = readyPremium.map(s => tradeCard(s) || chip(s, 'ready', '')).join('');
+      // Both render as compact TVP chips — the full price-ladder trade card
+      // is too tall to show inline for every Premium ticker at once, so it's
+      // reserved for the click-through popover (showTickerHistory).
+      const prem = renderItems(readyPremium);
       const std  = renderItems(readyStandard);
       const premHead = readyPremium.length
         ? `<div class="wp-tier-head wp-tier-prem">★ Premium <span class="wp-tier-sub">3/3 · or 2/3 with score ≥ 26</span><span class="wp-tier-count">${readyPremium.length}</span></div>${prem}`
