@@ -3253,6 +3253,30 @@ function sigDots(sym){
 // opts.compact: renders without the wrapping card chrome (border/padding/
 // click-tip) — used when embedding inside the ticker history popover, which
 // already has its own chrome and click handling.
+// Client-side guard for the 15-day price series. Mirrors the pipeline's
+// validation so a bad point that slipped through the blob (or an older cached
+// row with a looser shape) can't poison the chart. Returns a clean
+// oldest→newest array of {date, close}, or null if fewer than 2 valid points
+// survive (caller falls back to the flat "Now" line).
+function sanitizePriceHist15(raw){
+  if (!Array.isArray(raw)) return null;
+  const ISO = /^\d{4}-\d{2}-\d{2}$/;
+  const seen = new Set();
+  const clean = [];
+  for (const d of raw) {
+    const date = d && d.date;
+    const close = d && (typeof d.close === 'number' ? d.close : Number(d.close));
+    if (typeof date !== 'string' || !ISO.test(date)) continue;
+    if (Number.isNaN(new Date(date + 'T00:00:00Z').getTime())) continue;
+    if (!Number.isFinite(close) || close <= 0) continue;
+    if (seen.has(date)) continue;
+    seen.add(date);
+    clean.push({ date, close });
+  }
+  clean.sort((a, b) => a.date.localeCompare(b.date)); // oldest → newest
+  const rolled = clean.slice(-15);                     // keep newest 15
+  return rolled.length >= 2 ? rolled : null;
+}
 function tradeCard(sym, opts){
   opts = opts || {};
   const r = shortRowsBySym[sym];
@@ -3281,7 +3305,13 @@ function tradeCard(sym, opts){
   // price relative to the other levels, instead of just a static snapshot.
   // Falls back to a flat line + dot (old behavior) if history isn't
   // populated yet (rows scored before priceHist15 existed).
-  const hist15 = Array.isArray(r.priceHist15) && r.priceHist15.length >= 2 ? r.priceHist15 : null;
+  //
+  // Defensive re-validation: the pipeline already validates each point, but
+  // the data round-trips through the shared blob and older cached rows may
+  // carry looser shapes, so re-check every point here before plotting.
+  // Drop anything without a real ISO date or a finite positive close, dedupe
+  // by date, and re-sort oldest→newest so the path can never render garbage.
+  const hist15 = sanitizePriceHist15(r.priceHist15);
   // Reference lines: horizontal, span the full chart width.
   const rawRefs = [
     { y: high52 || target,  label: '52w high', color:'#94a3b8', dash:false, k:'hi'  },
