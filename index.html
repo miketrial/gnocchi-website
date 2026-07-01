@@ -579,6 +579,19 @@
   .qs-score-r{ color:var(--bad-fg);font-weight:700 }
   .qs-empty{ padding:24px;text-align:center;color:var(--ink-faint);font-size:11px }
   .qs-row-blocked{ opacity:.55 }
+  /* Per-factor cell coloring — same verdict palette/treatment as Short Term's
+     #shortView td.st-* cells, scoped here instead of shared, so this stays
+     independently removable. */
+  #qsView tbody td.st-good{ background:rgba(213,245,227,.45); color:var(--good-fg); font-weight:600 }
+  #qsView tbody td.st-ok  { background:rgba(200,238,216,.35); color:var(--good-fg); font-weight:500 }
+  #qsView tbody td.st-weak{ background:rgba(253,232,184,.45); color:#9a6f00;        font-weight:500 }
+  #qsView tbody td.st-bad { background:rgba(250,219,216,.45); color:var(--bad-fg);  font-weight:600 }
+  #qsView tbody td.st-na  { background:rgba(237,231,246,.45); color:var(--pur-fg);  font-weight:500 }
+  #qsView tbody tr:hover td.st-good{ background:rgba(213,245,227,.7) }
+  #qsView tbody tr:hover td.st-ok  { background:rgba(200,238,216,.6) }
+  #qsView tbody tr:hover td.st-weak{ background:rgba(253,232,184,.7) }
+  #qsView tbody tr:hover td.st-bad { background:rgba(250,219,216,.7) }
+  #qsView tbody tr:hover td.st-na  { background:rgba(237,231,246,.7) }
   /* ===== END QUICK SWING FEATURE ===== */
   /* Ready sub-tier divider headings (Premium / Standard) */
   .wp-tier-head{ width:100%;display:flex;align-items:center;gap:6px;
@@ -1208,11 +1221,12 @@
           <th></th>
           <th class="sortable" data-qssort="sym">Ticker</th>
           <th class="num sortable" data-qssort="price">Price</th>
-          <th class="num sortable" data-qssort="score" data-tip="Sum of 8 factors (RSI(2), Bollinger %B, volume climax, reversal candle, relative strength vs SPY, volume dry-up, ADR%, liquidity), each 0-3 points, out of 24.">Score<span class="sub">of 24</span></th>
+          <th class="num sortable" data-qssort="score" data-tip="Sum of 9 factors (RSI(2), Bollinger %B, volume climax, reversal candle, relative strength vs SPY, volume dry-up, ADR%, liquidity, after-hours move), each 0-3 points, out of 27.">Score<span class="sub">of 27</span></th>
           <th class="num sortable" data-qssort="rsi" data-tip="2-day RSI — a much more reactive oversold/overbought read than the standard 14-day RSI. Below 10 = oversold.">RSI(2)</th>
           <th class="num sortable" data-qssort="pctB" data-tip="Bollinger %B(20,2σ) — where price sits inside its own 20-day volatility band. Below 0 = outside the lower band.">%B</th>
           <th class="num sortable" data-qssort="adr" data-tip="Average Daily Range % — how much this stock typically moves per day. Too low = won't move enough in 1-2 days; too high = whipsaw risk.">ADR%</th>
           <th class="num sortable" data-qssort="rs" data-tip="Simplified relative strength vs SPY — weighted 3/6/9/12-month return, ticker minus SPY. Positive = beating the market.">RS vs SPY</th>
+          <th class="num sortable" data-qssort="ah" data-tip="Post-close move vs today's regular-session close, from FMP's live after-hours quote. A sharp drop adds to the 'stretched' read; a sharp pop gets partial credit (the bounce may already be starting). No premarket leg — FMP's stable API doesn't offer one.">AH Move</th>
           <th data-tip="Hard gate, not a graduated score — a 1-2 day hold can't absorb an earnings-day gap. Blocked inside 5 days of the next print.">Earnings</th>
         </tr>
       </thead>
@@ -1220,7 +1234,7 @@
     </table>
   </div>
   <div class="legend">
-    <div class="ttl">Quick Swing scoring &nbsp;·&nbsp; 8 factors tuned for a 1-2 day mean-reversion hold</div>
+    <div class="ttl">Quick Swing scoring &nbsp;·&nbsp; 9 factors tuned for a 1-2 day mean-reversion hold</div>
     <span style="color:var(--ink-soft)">This is a genuinely different trade philosophy from Short Term — that view is trend-following (buy strength, ride weeks); this one bets on a snap-back after price gets stretched. Lower hit-rate by design, so earnings and thin liquidity are hard gates, not just docked points.</span>
   </div>
 </div>
@@ -3082,8 +3096,8 @@ async function ensureQsDataLoaded(){
 function qsScoreClass(score){
   const n = parseInt((score||'').toString());
   if (isNaN(n)) return 'na';
-  if (n >= 16) return 'g';   // ≥16/24 (67%)
-  if (n >= 10) return 'y';   // ≥10/24 (42%)
+  if (n >= 18) return 'g';   // ≥18/27 (67%)
+  if (n >= 11) return 'y';   // ≥11/27 (41%)
   return 'r';
 }
 
@@ -3097,19 +3111,27 @@ function qsSortVal(r, col){
     case 'pctB':  return r.raw?.[1]?.pctB ?? null;
     case 'adr':   return typeof r.raw?.[6] === 'number' ? r.raw[6] : null;
     case 'rs':    return r.raw?.[4]?.delta ?? null;
+    case 'ah':    return r.raw?.[8]?.chg ?? null;
     default:      return null;
   }
 }
 
 function qsRowHtml(r, idx){
   if (r.error) {
-    return `<tr><td class="idx">${idx}.</td><td>${escHtml(r.sym)}</td><td colspan="7" style="color:var(--bad-fg)">Error: ${escHtml(r.error)}</td></tr>`;
+    return `<tr><td class="idx">${idx}.</td><td>${escHtml(r.sym)}</td><td colspan="8" style="color:var(--bad-fg)">Error: ${escHtml(r.error)}</td></tr>`;
   }
   const scoreCls = qsScoreClass(r.score);
   const rsiVal = r.raw?.[0];
   const bb = r.raw?.[1];
   const adr = r.raw?.[6];
   const rs = r.raw?.[4];
+  const ah = r.raw?.[8];
+  // Per-factor cell coloring — same verdict → class mapping Short Term uses
+  // (vCls in shortRowHtml), reusing the same st-* class names.
+  const vCls = k => {
+    const v = r.verdicts?.[k];
+    return v === 'good' ? 'st-good' : v === 'ok' ? 'st-ok' : v === 'weak' ? 'st-weak' : v === 'bad' ? 'st-bad' : 'st-na';
+  };
   const blockedBadge = r.blocked
     ? `<span class="qs-blocked-badge" data-tip="${escHtml(r.blockedReason||'')}">Blocked</span>`
     : (r.earnings?.daysUntil != null ? `<span style="color:var(--ink-faint);font-size:10px">${r.earnings.daysUntil}d</span>` : '—');
@@ -3118,10 +3140,11 @@ function qsRowHtml(r, idx){
     <td><b>${escHtml(r.sym)}</b></td>
     <td class="num">${r.price!=null?'$'+r.price.toFixed(2):'—'}</td>
     <td class="num qs-score-${scoreCls}">${escHtml(r.score||'—')}</td>
-    <td class="num">${typeof rsiVal==='number'?rsiVal.toFixed(1):'—'}</td>
-    <td class="num">${bb?.pctB!=null?bb.pctB.toFixed(2):'—'}</td>
-    <td class="num">${typeof adr==='number'?adr.toFixed(1)+'%':'—'}</td>
-    <td class="num" style="color:${(rs?.delta??0)>=0?'var(--good-fg)':'var(--bad-fg)'}">${rs?.delta!=null?(rs.delta>=0?'+':'')+(rs.delta*100).toFixed(1)+'pp':'—'}</td>
+    <td class="num ${vCls(0)}">${typeof rsiVal==='number'?rsiVal.toFixed(1):'—'}</td>
+    <td class="num ${vCls(1)}">${bb?.pctB!=null?bb.pctB.toFixed(2):'—'}</td>
+    <td class="num ${vCls(6)}">${typeof adr==='number'?adr.toFixed(1)+'%':'—'}</td>
+    <td class="num ${vCls(4)}">${rs?.delta!=null?(rs.delta>=0?'+':'')+(rs.delta*100).toFixed(1)+'pp':'—'}</td>
+    <td class="num ${vCls(8)}">${ah?.chg!=null?(ah.chg>=0?'+':'')+(ah.chg*100).toFixed(1)+'%':'—'}</td>
     <td>${blockedBadge}</td>
   </tr>`;
 }
@@ -3146,7 +3169,7 @@ function renderQuickSwing(){
   }
 
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="9"><div class="qs-empty">No Quick Swing data yet — click Rescan to score your watchlist.</div></td></tr>`;
+    body.innerHTML = `<tr><td colspan="10"><div class="qs-empty">No Quick Swing data yet — click Rescan to score your watchlist.</div></td></tr>`;
     return;
   }
 

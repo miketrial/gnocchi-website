@@ -7,11 +7,18 @@
    graduated scoring for the riskiest conditions (earnings, illiquidity).
 
    Each check returns { points: 0-3 | null, verdict, summary, value }, same
-   shape as short-pipeline.mjs. Score = sum of points across 8 checks, out
-   of 24. Two additional checks are pass/fail GATES (earnings blackout,
+   shape as short-pipeline.mjs. Score = sum of points across 9 checks, out
+   of 27. Two additional checks are pass/fail GATES (earnings blackout,
    liquidity floor) — a gate failure excludes the ticker from this view
    entirely rather than just docking points, because a 1-2 day hold can't
    absorb an earnings gap or a wide bid/ask the way a multi-week hold can.
+
+   Factor 9 (after-hours move) is post-close only — confirmed via FMP that
+   aftermarket-quote is a real, live endpoint, but there is no separate
+   premarket endpoint on this plan (premarket-quote/premarket-trade both
+   404, same signature as a deliberately bogus endpoint name; corroborated
+   by a web search turning up no documented premarket route). Revisit if
+   FMP ever adds one.
 
    Every factor is computed from data already fetched elsewhere in the app
    (historical-price-eod/full + earnings) — confirmed against FMP's live API
@@ -261,6 +268,35 @@ function checkLiquidity(hist) {
   return scored(points, `20-day avg $-volume ${fmt(avgDollarVol)} (${label})`, avgDollarVol);
 }
 
+/* ---------- 9. After-hours move — did something change the story after the close? ----------
+   A large post-close move (news, guidance, M&A rumor) re-prices the setup
+   before tomorrow's open — a 1-2 day hold can't just ignore that the way a
+   multi-week hold might. A sharp drop adds to the "stretched" read, same
+   spirit as RSI(2)/Bollinger; a sharp pop still gets a little credit,
+   mirroring checkVolumeClimax's asymmetric down > up treatment (the bounce
+   this system is looking for may already be starting). Post-close only —
+   see the file header for why there's no premarket leg. */
+function checkAfterHoursMove(hist, ahQuote) {
+  const regularClose = hist?.[0]?.close;
+  if (!regularClose) return na("Need today's regular-session close");
+  if (!ahQuote) return na("No after-hours quote available");
+  const AH_STALE_MS = 18 * 60 * 60 * 1000; // stale = leftover from a prior session, not tonight's
+  if (!ahQuote.timestamp || Date.now() - ahQuote.timestamp > AH_STALE_MS) {
+    return na("After-hours quote is stale — outside today's post-close session");
+  }
+  const bid = ahQuote.bidPrice, ask = ahQuote.askPrice;
+  const ahPrice = (bid != null && ask != null) ? (bid + ask) / 2 : (ask ?? bid);
+  if (!(ahPrice > 0)) return na("No usable after-hours price");
+  const chg = (ahPrice - regularClose) / regularClose;
+  let points, label;
+  if (chg <= -0.05)        { points = 3; label = "sharp after-hours drop — more stretched into tomorrow"; }
+  else if (chg <= -0.03)   { points = 2; label = "notable after-hours weakness"; }
+  else if (chg <= -0.015)  { points = 1; label = "mild after-hours weakness"; }
+  else if (chg >= 0.03)    { points = 1; label = "after-hours pop — bounce may already be starting"; }
+  else                     { points = 0; label = "after-hours flat"; }
+  return scored(points, `${chg >= 0 ? "+" : ""}${(chg * 100).toFixed(1)}% after-hours — ${label}`, { ahPrice, regularClose, chg });
+}
+
 /* ---------- GATE: Earnings blackout ----------
    A hard block, not a graduated score. A 1-2 day hold can't absorb an
    earnings gap the way a multi-week hold can — this excludes the ticker
@@ -339,18 +375,20 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
 
   if (!skipCache) {
     const cached = await getQuickswingFmpCache(sym);
-    if (cached && cached._v === 1) return cached.row;
+    if (cached && cached._v === 2) return cached.row;
   } else {
     await deleteQuickswingFmpCache(sym).catch(() => {});
   }
 
-  let rawHist = [], earningsHist = [];
+  let rawHist = [], earningsHist = [], ahQuoteRaw = [];
   try {
     rawHist = await safe("historical-price-eod/full", sym, "&limit=320"); await delay(200);
-    earningsHist = await safe("earnings", sym, "&limit=6");
+    earningsHist = await safe("earnings", sym, "&limit=6"); await delay(200);
+    ahQuoteRaw = await safe("aftermarket-quote", sym);
   } catch (e) {
     console.error(`[quickswing] ${sym} fetch error:`, e?.message || e);
   }
+  const ahQuote = ahQuoteRaw?.[0] || null;
 
   const hist = cleanHist(rawHist);
   const regime = marketRegime || await getMarketRegime();
@@ -366,9 +404,10 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
     checkVolumeDryUp(hist),                // 6
     checkAdr(hist),                        // 7
     checkLiquidity(hist),                  // 8
+    checkAfterHoursMove(hist, ahQuote),    // 9
   ];
   const score = checks.reduce((s, c) => s + (c.points ?? 0), 0);
-  const total = 24;
+  const total = 27;
 
   const price = hist[0]?.close ?? null;
   const atr5 = round2(atrFrom(hist, 0, 5));
@@ -388,6 +427,6 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
     scored_at: new Date().toISOString(),
   };
 
-  await putQuickswingFmpCache(sym, { _v: 1, row }).catch(() => {});
+  await putQuickswingFmpCache(sym, { _v: 2, row }).catch(() => {});
   return row;
 }
