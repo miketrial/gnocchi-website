@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Swing Trading Cheatsheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1e1510; --ink-soft:#4a3c2c; --ink-faint:#78685a;
+    --page:#faf6ef; --card:#ffffff; --line:#e8dfd0;
+    --good:#1e6038; --good-bg:#c8ead4;
+    --bad:#9e2e22;  --bad-bg:#f8d8d2;
+    --warn:#92400e; --warn-bg:#fde9c8;
+    --blue:#1e4e8c; --blue-bg:#d8e6f8;
+    --accent:#b8860b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--page); color:var(--ink);
+    font:13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'JetBrains Mono',monospace}
+  #wrap{max-width:820px;margin:0 auto;padding:36px 24px 80px}
+  h1{
+    font-size:26px;font-weight:800;letter-spacing:-.3px;margin:0 0 4px;
+  }
+  .subtitle{color:var(--ink-faint);font-size:13.5px;margin:0 0 28px}
+  h2{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;
+    color:var(--accent);margin:36px 0 12px;padding-bottom:6px;
+    border-bottom:2px solid var(--line);
+  }
+  h2:first-of-type{margin-top:0}
+  h3{font-size:15px;font-weight:700;margin:20px 0 6px}
+  p{margin:6px 0}
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:10px;
+    padding:16px 18px;margin:12px 0;
+  }
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:12.5px}
+  th{
+    text-align:left;font-family:'JetBrains Mono',monospace;font-size:10px;
+    text-transform:uppercase;letter-spacing:.5px;color:var(--ink-faint);
+    padding:6px 10px;border-bottom:2px solid var(--line);
+  }
+  td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .pill{
+    display:inline-flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-weight:800;font-size:11px;
+    width:20px;height:20px;border-radius:5px;color:#fff;flex-shrink:0;
+  }
+  .pill.g{background:#10b981}
+  .pill.y{background:#f59e0b}
+  .pill.r{background:#ef4444}
+  .pill.gray{background:#9ca3af}
+  .row{display:flex;align-items:flex-start;gap:10px;margin:8px 0}
+  .row .txt{flex:1;padding-top:1px}
+  .row .txt b{display:block;font-size:13px;margin-bottom:1px}
+  .row .txt span{color:var(--ink-soft);font-size:12px}
+  .glossary dt{
+    font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12.5px;
+    color:var(--ink);margin-top:12px;
+  }
+  .glossary dd{margin:2px 0 0;color:var(--ink-soft);font-size:12.5px}
+  .callout{
+    border-left:3px solid var(--accent);background:#fbf2df;
+    padding:10px 14px;border-radius:0 8px 8px 0;font-size:12.5px;margin:14px 0;
+  }
+  .callout b{color:var(--accent)}
+  .good-txt{color:var(--good);font-weight:700}
+  .bad-txt{color:var(--bad);font-weight:700}
+  .warn-txt{color:var(--warn);font-weight:700}
+  .steps{counter-reset:step;list-style:none;padding:0;margin:14px 0}
+  .steps li{
+    counter-increment:step;position:relative;padding:4px 0 4px 34px;margin-bottom:6px;
+  }
+  .steps li::before{
+    content:counter(step);position:absolute;left:0;top:2px;
+    width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--page);
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .ladder{
+    display:flex;flex-direction:column;gap:0;border:1px solid var(--line);
+    border-radius:8px;overflow:hidden;margin:10px 0;
+  }
+  .ladder .lrow{display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:11.5px;padding:7px 12px;border-bottom:1px solid var(--line)}
+  .ladder .lrow:last-child{border-bottom:none}
+  .ladder .lrow .lbl{font-weight:700;width:80px;flex-shrink:0}
+  .ladder .lrow .desc{color:var(--ink-soft)}
+  .ladder .lrow.high{background:#f4f1ea}
+  .ladder .lrow.target{background:var(--good-bg);color:var(--good)}
+  .ladder .lrow.now{background:var(--blue-bg);color:var(--blue);font-weight:700}
+  .ladder .lrow.dma{background:var(--warn-bg);color:var(--warn)}
+  .ladder .lrow.stop{background:var(--bad-bg);color:var(--bad)}
+  .ladder .lrow.floor{background:#f4f1ea}
+  .footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--line);color:var(--ink-faint);font-size:11.5px}
+  @media print{
+    body{background:#fff}
+    .card{break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+
+  <h1>Swing Trading Cheatsheet</h1>
+  <p class="subtitle">For 1-week to 3-month holds · built alongside the gnocchi.website screener</p>
+
+  <h2>1 · The basics — words you'll see everywhere</h2>
+  <dl class="glossary">
+    <dt>50DMA / 200DMA (Moving Averages)</dt>
+    <dd>The average closing price over the last 50 (or 200) trading days. They smooth out daily noise so you can see the underlying trend. Price crossing above/below these lines is one of the oldest trend signals in trading.</dd>
+
+    <dt>Uptrend</dt>
+    <dd>Price is generally rising over time. The strongest confirmation: price > 50DMA > 200DMA, all three stacked in that order (sometimes called a "golden cross" setup).</dd>
+
+    <dt>Support</dt>
+    <dd>A price level that buyers tend to defend — the stock has bounced off it before. In an uptrend, the 50DMA often acts as dynamic support.</dd>
+
+    <dt>Resistance</dt>
+    <dd>A price level that sellers tend to defend — the stock has struggled to break above it before. The 52-week high is a classic resistance level.</dd>
+
+    <dt>Pullback</dt>
+    <dd>A short-term dip within a longer uptrend. Buying a pullback (rather than a fresh breakout) usually means a tighter stop and better risk/reward.</dd>
+
+    <dt>Volume Surge</dt>
+    <dd>A day where trading volume is well above its recent average. Combined with an up day, it suggests institutions ("smart money") are buying — called <b>accumulation</b>. Combined with a down day, it suggests they're selling — called <b>distribution</b>.</dd>
+
+    <dt>Stop-loss ("stop")</dt>
+    <dd>The price at which you sell to cut your losses if the trade goes wrong. Decide this <i>before</i> you enter — never after.</dd>
+
+    <dt>Target</dt>
+    <dd>The price at which you plan to take profit. Usually set at the next resistance level, or a fixed percentage gain.</dd>
+
+    <dt>Risk/Reward (R/R)</dt>
+    <dd>Your potential upside divided by your potential downside. A 2:1 R/R means you stand to make twice what you'd lose if the stop gets hit. Professional traders generally want at least 1.5–2:1 before taking a trade — even a mediocre win rate can be profitable at a good R/R.</dd>
+
+    <dt>Position sizing</dt>
+    <dd>How many shares to buy so that if your stop gets hit, you only lose a small, predictable slice of your account (commonly 1–2% per trade) — not how many shares you can technically afford.</dd>
+  </dl>
+
+  <div class="callout"><b>Rule of thumb:</b> decide your stop and target <i>before</i> you buy, not after. If you can't state both in one sentence, you're not ready to enter.</div>
+
+  <h2>2 · The T / V / P system (this screener's language)</h2>
+  <p>Every ticker gets scored on three entry signals. Green = met, grey = not met, yellow = was met recently but changed, red = active warning (V only).</p>
+
+  <div class="card">
+    <div class="row"><span class="pill g">T</span><div class="txt"><b>Trend</b><span>Price is above the 50DMA, <i>and</i> the 50DMA is above the 200DMA. Confirms an established uptrend — not just a bounce inside a longer downtrend.</span></div></div>
+    <div class="row"><span class="pill g">V</span><div class="txt"><b>Vol Surge</b><span>Today's volume is above its 20-day average <i>and</i> price closed up — institutions are stepping in to buy. A number like "2.35x" shows how many times the average volume today's volume was; the badge glows brighter the higher that number gets.</span></div></div>
+    <div class="row"><span class="pill g">P</span><div class="txt"><b>Pullback</b><span>Price is sitting 0–5% above the 50DMA — the ideal buy zone. Close enough to the 50DMA for a tight stop, but confirmed still in an uptrend.</span></div></div>
+  </div>
+
+  <table>
+    <thead><tr><th>Badge</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill g">✓</span></td><td>Signal is currently met.</td></tr>
+      <tr><td><span class="pill y">!</span></td><td>Was green within the last 24h, but changed on the most recent scan — rescan to confirm before acting.</td></tr>
+      <tr><td><span class="pill r">✗</span></td><td><b>V only</b>: active distribution warning — heavy volume on a down day. Institutions may be selling.</td></tr>
+      <tr><td><span class="pill gray">·</span></td><td>Signal not met.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Why 3/3 isn't automatically a "buy"</h3>
+  <p>All three green tells you the <i>setup</i> is technically sound. It doesn't tell you if the <i>price</i> is still a good one to pay. A stock that's already run up near its 52-week high can have perfect T/V/P and still be a poor trade — there's nowhere left to go and a wide stop below. That's what the trade-card ladder (section 4) is for.</p>
+
+  <h2>3 · Where a ticker lives — Ready / Watching / Demoted</h2>
+  <ol class="steps">
+    <li><b>Watching</b> — you've flagged a ticker (click its flag icon in the Screener table) but it hasn't yet met the bar to trade.</li>
+    <li><b>Ready</b> — score ≥ 22/30 <i>and</i> at least one of T/V/P is green (or was green within the last 24h). Splits into two tiers:
+      <ul>
+        <li><b>★ Premium</b> — 3/3 green, or 2/3 with a strong score (≥26). The highest-conviction setups.</li>
+        <li><b>Standard</b> — 1–2 green with score 22–25. Still tradeable, but less confirmed.</li>
+      </ul>
+    </li>
+    <li><b>Demoted</b> — all three signals have been off for a full 24 hours. Auto-clears after 24h if nothing changes; comes back to Watching if it requalifies.</li>
+  </ol>
+  <div class="callout">A stock only <b>auto-promotes</b> once it's flagged — the screener never adds tickers to your watchlist on its own, even if they score well. You have to click the flag first.</div>
+
+  <h2>4 · Reading the trade card (click any Ready ticker)</h2>
+  <p>Clicking a ticker opens a price ladder next to its scan history. Top to bottom, it's a map of where the price sits relative to key levels:</p>
+
+  <div class="ladder">
+    <div class="lrow high"><span class="lbl">52w High</span><span class="desc">Overhead resistance — price often struggles here on the first try.</span></div>
+    <div class="lrow target"><span class="lbl">Target</span><span class="desc">Where you'd take profit — the lesser of the 52w high or +8% from today's price.</span></div>
+    <div class="lrow now"><span class="lbl">Now</span><span class="desc">Today's price (the blue dot). Where this sits relative to the shaded zone tells you if you're getting a good entry or chasing.</span></div>
+    <div class="lrow dma"><span class="lbl">50DMA</span><span class="desc">Dynamic support. The shaded band (0–5% above) is the ideal buy zone.</span></div>
+    <div class="lrow stop"><span class="lbl">Stop</span><span class="desc">Suggested sell-to-cut-losses price — 3% below the 50DMA.</span></div>
+    <div class="lrow floor"><span class="lbl">200DMA</span><span class="desc">The long-term trend floor.</span></div>
+  </div>
+
+  <p>The bottom row does the R/R math for you and color-codes the verdict:</p>
+  <table>
+    <thead><tr><th>R/R</th><th>Verdict</th><th>What it means</th></tr></thead>
+    <tbody>
+      <tr><td class="mono good-txt">≥ 2.0 : 1</td><td class="good-txt">GOOD</td><td>Upside is at least double the downside. Worth considering.</td></tr>
+      <tr><td class="mono warn-txt">1.5 – 2.0 : 1</td><td class="warn-txt">OK</td><td>Acceptable, but not a slam dunk — check the chart for extra confirmation.</td></tr>
+      <tr><td class="mono bad-txt">&lt; 1.5 : 1</td><td class="bad-txt">WEAK</td><td>Even a decent setup isn't worth the risk here — usually means price has run too far already.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5 · Putting it together — a simple workflow</h2>
+  <ol class="steps">
+    <li>Rescan the Screener table (or let it run automatically) to refresh scores.</li>
+    <li>Sort by score / TVP count and scan for strong setups — score 22+ with 2 or more factors green is a good starting filter.</li>
+    <li>Flag anything interesting — it lands in Watching.</li>
+    <li>Check back after future rescans; qualifying tickers auto-promote to Ready (Premium if 3/3 or strong 2/3).</li>
+    <li>Click a Ready ticker to open its trade card. Check the <b>R/R verdict</b> before anything else — WEAK means skip it even if the badges look perfect.</li>
+    <li>If R/R is GOOD or OK, note the stop and target from the ladder <i>before</i> placing the trade.</li>
+    <li>Use <b>Backtest</b> (top of the watchlist panel) periodically to see how past 3/3 signals actually performed — hit rate and average return, based on real recorded scans.</li>
+  </ol>
+
+  <div class="callout"><b>Remember:</b> the screener finds setups and does the math. It doesn't know your account size, your other positions, or your risk tolerance — position sizing and the final buy/sell decision are always yours.</div>
+
+  <div class="footer">Keep this open in a tab while you trade — everything here maps directly to what you'll see in the app.</div>
+
+</div>
+</body>
+</html>
