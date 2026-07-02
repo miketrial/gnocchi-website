@@ -2672,7 +2672,7 @@ function acShow(results,q){
   acIdx=-1;
   if(!results.length){ acMessage('No matching US-listed tickers'); return; }
   acDrop.innerHTML=results.map((r,i)=>{
-    const have=watchlist.some(w=>w.sym&&w.sym.toUpperCase()===r.symbol);
+    const have=currentView==='qs' ? !!qsRowsBySym[r.symbol] : watchlist.some(w=>w.sym&&w.sym.toUpperCase()===r.symbol);
     return `<div class="ac-item${have?' added':''}" data-i="${i}">
        <span class="ac-sym">${acMark(r.symbol,q)}</span>
        <span class="ac-name">${acMark(r.name,q)}</span>
@@ -2692,8 +2692,9 @@ function acHighlight(i){
 }
 function pickAc(i){
   const r=acItems[i]; if(!r) return;
-  if(watchlist.some(w=>w.sym&&w.sym.toUpperCase()===r.symbol)){
-    acHide(); addInput.value=''; showToast(`${r.symbol} is already in your watchlist.`); return;
+  const have=currentView==='qs' ? !!qsRowsBySym[r.symbol] : watchlist.some(w=>w.sym&&w.sym.toUpperCase()===r.symbol);
+  if(have){
+    acHide(); addInput.value=''; showToast(`${r.symbol} is already in your ${currentView==='qs'?'Quick Swing list':'watchlist'}.`); return;
   }
   addInput.value=r.symbol;
   acHide();
