@@ -13,43 +13,8 @@
    Thresholds: 20+ strong, 12-19 mixed, <12 weak.
 */
 import { getShortFmpCache, putShortFmpCache, deleteShortFmpCache } from "./store.mjs";
-
-const FMP = "https://financialmodelingprep.com/stable";
-
-/* ---------- FMP fetch helper ---------- */
-async function fmp(endpoint, ticker, extra = "") {
-  const key = process.env.FMP_API_KEY;
-  const url = `${FMP}/${endpoint}?symbol=${ticker}&apikey=${key}${extra}`;
-  const r = await fetch(url);
-  if (!r.ok) {
-    const err = new Error(`FMP ${endpoint} ${ticker} → ${r.status}`);
-    err.status = r.status;
-    throw err;
-  }
-  return r.json();
-}
-
-// Retry on 429 rate-limit (up to 2 retries, 3s/6s backoff).
-// With 39+ tickers × 11 FMP calls each, late tickers in a full rescan
-// can hit FMP's per-minute limit — without retry they silently get empty
-// data and score all-purple.
-async function safe(endpoint, ticker, extra = "") {
-  for (let attempt = 0; attempt <= 2; attempt++) {
-    try {
-      const d = await fmp(endpoint, ticker, extra);
-      return Array.isArray(d) ? d : (d && !d["Error Message"] ? [d] : []);
-    } catch (e) {
-      if (e.status === 429 && attempt < 2) {
-        await delay(3000 * (attempt + 1)); // 3s then 6s
-        continue;
-      }
-      return [];
-    }
-  }
-  return [];
-}
-
-const delay = ms => new Promise(r => setTimeout(r, ms));
+import { round2, na, scored, trueRange, atrFrom } from "./ta-helpers.mjs";
+import { fmp, safe, delay } from "./fmp-client.mjs";
 
 /* ---------- Sanity range gates — reject implausible FMP values before they
    reach a chip. A swing trader acts on these numbers fast, so a garbage
@@ -199,36 +164,8 @@ function sectorPe75th(industry) {
    points null = "na" (data unavailable); 0 = bad, 1 = weak, 2 = ok, 3 = good.
    Score = sum of points across all 10 checks, out of 30. */
 
-function na(summary) {
-  return { points: null, verdict: "na", summary, value: null };
-}
-function scored(points, summary, value) {
-  const verdict = points >= 3 ? "good" : points >= 2 ? "ok" : points >= 1 ? "weak" : "bad";
-  return { points, verdict, summary, value };
-}
-
-const round2 = x => (x == null ? null : Number(x.toFixed(2))); // trim blob bytes + float noise
-
-// True Range for one bar: needs today's high/low and yesterday's close.
-// Wilder's definition — the largest of the three gaps a stop could get run
-// through overnight (today's range, or a gap up/down from yesterday's close).
-function trueRange(hi, lo, prevClose) {
-  if (hi == null || lo == null || prevClose == null) return null;
-  return Math.max(hi - lo, Math.abs(hi - prevClose), Math.abs(lo - prevClose));
-}
-// Average True Range over `n` periods starting at index `from` in a
-// newest-first array (index 0 = most recent bar). Each element needs
-// {high, low} and either {close} or {price}. Needs n+1 bars (the (n+1)th
-// bar only supplies its close, as "yesterday" for the nth bar's TR).
-function atrFrom(arr, from, n) {
-  let s = 0, c = 0;
-  for (let k = from; k < from + n && k + 1 < arr.length; k++) {
-    const d = arr[k], p = arr[k + 1];
-    const tr = trueRange(d?.high, d?.low, p?.close ?? p?.price);
-    if (tr != null) { s += tr; c++; }
-  }
-  return c ? s / c : null;
-}
+// na/scored/round2/trueRange/atrFrom live in ta-helpers.mjs — shared with
+// quickswing-pipeline.mjs so the ATR math can't drift between the two.
 
 // One price-history point is valid only if it has a well-formed ISO date
 // (YYYY-MM-DD, real calendar date) and a finite, strictly-positive close.

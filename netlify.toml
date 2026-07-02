@@ -51,6 +51,24 @@
   to = "/.netlify/functions/short-watchlist"
   status = 200
 
+# ===== QUICK SWING FEATURE (removable as a block — see checklist in
+# netlify/lib/quickswing-pipeline.mjs) =====
+[[redirects]]
+  from = "/api/quickswing/rescan"
+  to = "/.netlify/functions/quickswing-rescan-background"
+  status = 200
+
+[[redirects]]
+  from = "/api/quickswing/watchlist"
+  to = "/.netlify/functions/quickswing-watchlist"
+  status = 200
+
+[[redirects]]
+  from = "/api/quickswing/watchlist/*"
+  to = "/.netlify/functions/quickswing-delete/:splat"
+  status = 200
+# ===== END QUICK SWING FEATURE =====
+
 [[redirects]]
   from = "/api/watchlist"
   to = "/.netlify/functions/watchlist"
