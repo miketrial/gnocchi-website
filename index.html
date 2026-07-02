@@ -901,6 +901,12 @@
    The inactive button raises z-index on hover so the cursor can always reach it. */
 #viewSwitch button:not(.active):hover{ z-index:3 }
 #viewSwitch button:hover{ opacity:1 }
+/* ===== QUICK SWING FEATURE ===== */
+/* Flagged red for now — signals this tab isn't at "trust the score" yet
+   while the scoring model is still being reworked. Remove once settled. */
+#viewSwitch button[data-v="qs"]{ border-color:var(--bad-fg); color:var(--bad-fg) }
+#viewSwitch button[data-v="qs"].active{ border-color:var(--bad-fg); box-shadow:2px 2px 0 0 var(--bad-fg) }
+/* ===== END QUICK SWING FEATURE ===== */
 [data-theme="white"] #viewSwitch button{ border-radius:0; border:1px solid #000; background:#fff; color:#000 }
 [data-theme="white"] #viewSwitch button.active{
   background:#fff; color:#000;
