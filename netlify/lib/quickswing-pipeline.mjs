@@ -20,14 +20,22 @@
    by a web search turning up no documented premarket route). Revisit if
    FMP ever adds one.
 
+   Factors 1, 2, and 5 (RSI(2), %B, RS vs SPY) are live during market hours —
+   see injectLiveBar. The rest stay end-of-day-only on purpose: Volume Climax
+   and Volume Dry-Up compare against a FULL day's average, so mid-session
+   volume-so-far reads as a false "dry-up" purely because the day isn't over;
+   Reversal Candle's whole signal is "where price ended up in the day's
+   range," unanswerable before the close. Liquidity and ADR% are slow-moving
+   structural stats where a live tick adds nothing.
+
    Every factor is computed from data already fetched elsewhere in the app
-   (historical-price-eod/full + earnings) — confirmed against FMP's live API
-   that there is no native Bollinger Bands, ATR, Relative-Strength-rank, or
-   distribution-day endpoint, so all of this is self-computed arithmetic, not
-   a new data source. The one new fetch is SPY's own price history, needed
-   for relative-strength-vs-market and the market-regime gate — fetched ONCE
-   per scan batch (see getMarketRegime) and shared across every ticker,
-   not re-fetched per ticker.
+   (historical-price-eod/full + earnings + a live /stable/quote) — confirmed
+   against FMP's live API that there is no native Bollinger Bands, ATR,
+   Relative-Strength-rank, or distribution-day endpoint, so all of this is
+   self-computed arithmetic, not a new data source. The one shared fetch is
+   SPY's own price history + live quote, needed for relative-strength-vs-
+   market and the market-regime gate — fetched ONCE per scan batch (see
+   getMarketRegime) and shared across every ticker, not re-fetched per ticker.
 
    ---------- REMOVAL CHECKLIST (if this feature doesn't earn its keep) ----------
    Delete, in order:
@@ -88,6 +96,32 @@ function cleanHist(hist) {
   }
   out.sort((a, b) => b.date.localeCompare(a.date)); // newest first
   return out;
+}
+
+/* Prepend today's in-progress session as a synthetic bar, built from a live
+   /stable/quote, so RSI(2)/%B/RS-vs-SPY can react intraday instead of only
+   once at close. Only three of the nine factors get this treatment — the
+   volume-based checks (Climax, Dry-Up) compare against a FULL day's average
+   and would read as a false "dry-up" all morning purely because the session
+   isn't over; Reversal Candle's whole logic is "where did price end up
+   relative to the day's range," which isn't answerable until the day ends.
+   If FMP's own daily bar for today already exists (quote's date <= hist[0]'s
+   date), skip — the real bar already covers it, don't double-count. */
+function injectLiveBar(hist, quote) {
+  if (!hist || !hist.length || !quote) return hist;
+  const price = quote.price;
+  if (!(price > 0) || !quote.timestamp) return hist;
+  const quoteDate = new Date(quote.timestamp * 1000).toISOString().slice(0, 10);
+  if (quoteDate <= hist[0].date) return hist;
+  const livePoint = {
+    date: quoteDate,
+    close: price,
+    high: quote.dayHigh ?? price,
+    low: quote.dayLow ?? price,
+    volume: quote.volume ?? null,
+    live: true,
+  };
+  return [livePoint, ...hist];
 }
 
 /* ---------- 1. RSI(2) — oversold/overbought extremity ----------
@@ -351,7 +385,7 @@ export async function getMarketRegime() {
     if (spyHist.length >= 200) await putSpyHistCache(spyHist).catch(() => {});
   }
   if (!spyHist || spyHist.length < 200) {
-    return { ok: false, reason: "Insufficient SPY history", hist: spyHist };
+    return { ok: false, reason: "Insufficient SPY history", hist: spyHist, liveHist: spyHist };
   }
   const closes = spyHist.map(d => d.close);
   const sma50 = closes.slice(0, 50).reduce((s, x) => s + x, 0) / 50;
@@ -364,9 +398,15 @@ export async function getMarketRegime() {
   else if (uptrend && distDays <= 5) label = "uptrend but distribution building — caution";
   else if (uptrend)                 label = "uptrend under pressure — 6+ distribution days";
   else                               label = "SPY below its own trend — swing longs disfavored";
+  // Fetched once per scan batch (not per ticker) so relative-strength's SPY
+  // leg is anchored to "right now," matching the live bar injected into each
+  // ticker's own hist — comparing a live ticker return to a stale SPY return
+  // would silently mis-measure the delta.
+  const spyLiveQuote = (await safe("quote", "SPY").catch(() => []))?.[0] || null;
+  const liveHist = injectLiveBar(spyHist, spyLiveQuote);
   return {
     ok: true, price, sma50, sma200, uptrend, distributionDays: distDays,
-    favorable: uptrend && distDays <= 5, label, hist: spyHist,
+    favorable: uptrend && distDays <= 5, label, hist: spyHist, liveHist,
   };
 }
 
@@ -376,46 +416,57 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
 
   if (!skipCache) {
     const cached = await getQuickswingFmpCache(sym);
-    if (cached && cached._v === 2) return cached.row;
+    if (cached && cached._v === 3) return cached.row;
   } else {
     await deleteQuickswingFmpCache(sym).catch(() => {});
   }
 
-  let rawHist = [], earningsHist = [], ahQuoteRaw = [];
+  let rawHist = [], earningsHist = [], ahQuoteRaw = [], liveQuoteRaw = [];
   try {
     rawHist = await safe("historical-price-eod/full", sym, "&limit=320"); await delay(200);
     earningsHist = await safe("earnings", sym, "&limit=6"); await delay(200);
-    ahQuoteRaw = await safe("aftermarket-quote", sym);
+    ahQuoteRaw = await safe("aftermarket-quote", sym); await delay(200);
+    liveQuoteRaw = await safe("quote", sym);
   } catch (e) {
     console.error(`[quickswing] ${sym} fetch error:`, e?.message || e);
   }
   const ahQuote = ahQuoteRaw?.[0] || null;
+  const liveQuote = liveQuoteRaw?.[0] || null;
 
   const hist = cleanHist(rawHist);
+  // liveHist swaps in today's in-progress session (from the live quote) as
+  // the newest bar — used only by the 3 factors where an incomplete day is
+  // still a meaningful read (see injectLiveBar). Falls back to hist itself
+  // outside market hours / on a fetch miss, since injectLiveBar is a no-op
+  // when the quote isn't newer than the latest completed daily bar.
+  const liveHist = injectLiveBar(hist, liveQuote);
   const regime = marketRegime || await getMarketRegime();
   const spyHist = regime?.hist || null;
+  const spyLiveHist = regime?.liveHist || spyHist;
 
   const eGate = earningsGate(earningsHist);
   const checks = [
-    checkRsi2(hist),                       // 1
-    checkBollinger(hist),                  // 2
-    checkVolumeClimax(hist),                // 3
-    checkReversalCandle(hist),             // 4
-    checkRelativeStrength(hist, spyHist),  // 5
-    checkVolumeDryUp(hist),                // 6
-    checkAdr(hist),                        // 7
-    checkLiquidity(hist),                  // 8
-    checkAfterHoursMove(hist, ahQuote),    // 9
+    checkRsi2(liveHist),                       // 1 — live
+    checkBollinger(liveHist),                  // 2 — live
+    checkVolumeClimax(hist),                   // 3 — EOD only (needs a full day's volume to compare against)
+    checkReversalCandle(hist),                 // 4 — EOD only (needs the completed day's range)
+    checkRelativeStrength(liveHist, spyLiveHist), // 5 — live
+    checkVolumeDryUp(hist),                    // 6 — EOD only
+    checkAdr(hist),                            // 7 — EOD only (structural, slow-moving)
+    checkLiquidity(hist),                      // 8 — EOD only (structural, slow-moving)
+    checkAfterHoursMove(hist, ahQuote),        // 9 — post-close only, unaffected
   ];
   const score = checks.reduce((s, c) => s + (c.points ?? 0), 0);
   const total = 27;
 
-  const price = hist[0]?.close ?? null;
+  const priceIsLive = liveHist[0]?.live === true;
+  const price = liveHist[0]?.close ?? hist[0]?.close ?? null;
   const atr5 = round2(atrFrom(hist, 0, 5));
 
   const row = {
     sym,
     price,
+    priceIsLive,
     dataAsOf: hist[0]?.date ?? null,
     score: `${score}/${total}`,
     reasons: checks.map(c => c.summary),
@@ -429,6 +480,6 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
     scored_at: new Date().toISOString(),
   };
 
-  await putQuickswingFmpCache(sym, { _v: 2, row }).catch(() => {});
+  await putQuickswingFmpCache(sym, { _v: 3, row }).catch(() => {});
   return row;
 }

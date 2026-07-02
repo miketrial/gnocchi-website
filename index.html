@@ -901,6 +901,12 @@
    The inactive button raises z-index on hover so the cursor can always reach it. */
 #viewSwitch button:not(.active):hover{ z-index:3 }
 #viewSwitch button:hover{ opacity:1 }
+/* ===== QUICK SWING FEATURE ===== */
+/* Flagged red for now — signals this tab isn't at "trust the score" yet
+   while the scoring model is still being reworked. Remove once settled. */
+#viewSwitch button[data-v="qs"]{ border-color:var(--bad-fg); color:var(--bad-fg) }
+#viewSwitch button[data-v="qs"].active{ border-color:var(--bad-fg); box-shadow:2px 2px 0 0 var(--bad-fg) }
+/* ===== END QUICK SWING FEATURE ===== */
 [data-theme="white"] #viewSwitch button{ border-radius:0; border:1px solid #000; background:#fff; color:#000 }
 [data-theme="white"] #viewSwitch button.active{
   background:#fff; color:#000;
@@ -1248,14 +1254,14 @@
           <th class="sortable" data-qssort="sym">Ticker</th>
           <th class="num sortable" data-qssort="price">Price</th>
           <th class="num sortable" data-qssort="score" data-tip="Sum of 9 factors (RSI(2), Bollinger %B, volume climax, reversal candle, relative strength vs SPY, volume dry-up, ADR%, liquidity, after-hours move), each 0-3 points, out of 27.">Score<span class="sub">of 27</span></th>
-          <th class="num sortable" data-qssort="rsi" data-tip="2-day RSI — a much more reactive oversold/overbought read than the standard 14-day RSI, tuned to catch 1-2 day extremes rather than multi-week trend. Lower = more oversold: ≤5 deeply oversold, ≤10 oversold, ≤20 stretched down.">RSI(2)</th>
-          <th class="num sortable" data-qssort="pctB" data-tip="Bollinger %B(20,2σ) — where price sits inside its own 20-day volatility band. The more negative, the further outside the lower band and the more stretched from its own normal range.">%B</th>
-          <th class="num sortable" data-qssort="volclimax" data-tip="Last session's volume vs its own 20-day average, read against direction. A huge spike on a down day often marks capitulation (the sellers who were going to sell, already have); a spike on an up day can mean the bounce is already underway.">Vol Climax</th>
-          <th class="num sortable" data-qssort="reversal" data-tip="Where the close sits within the day's own high-low range. Closing near the day's highs after a down day is a rough 'buyers stepped in' tell.">Reversal</th>
-          <th class="num sortable" data-qssort="rs" data-tip="Simplified relative strength vs SPY — weighted 3/6/9/12-month return, ticker minus SPY. Only fade dips in stocks beating the market — this keeps the system from buying dips in laggards.">RS vs SPY</th>
-          <th class="num sortable" data-qssort="dryup" data-tip="Last 5 days' average volume vs the 20 days before that. Counterintuitively bullish: low volume during a consolidation (nobody's selling) often precedes a move better than a volume spike does.">Vol Dry-Up</th>
-          <th class="num sortable" data-qssort="adr" data-tip="Average Daily Range % — how much this stock typically moves per day. Too low = won't move enough in 1-2 days; too high = whipsaw risk that runs through a tight stop.">ADR%</th>
-          <th class="num sortable" data-qssort="liq" data-tip="20-day average dollar volume. Thin stocks gap on small flows and can trap you on exit — a liquidity floor is the cheapest risk control, same reasoning as Short Term's.">Liquidity</th>
+          <th class="num sortable" data-qssort="rsi" data-tip="2-day RSI — a much more reactive oversold/overbought read than the standard 14-day RSI, tuned to catch 1-2 day extremes rather than multi-week trend. Lower = more oversold: ≤5 deeply oversold, ≤10 oversold, ≤20 stretched down. Live during market hours — uses the current quote as today's in-progress bar, not just yesterday's close.">RSI(2)</th>
+          <th class="num sortable" data-qssort="pctB" data-tip="Bollinger %B(20,2σ) — where price sits inside its own 20-day volatility band. The more negative, the further outside the lower band and the more stretched from its own normal range. Live during market hours.">%B</th>
+          <th class="num sortable" data-qssort="volclimax" data-tip="Last session's volume vs its own 20-day average, read against direction. A huge spike on a down day often marks capitulation (the sellers who were going to sell, already have); a spike on an up day can mean the bounce is already underway. Updates once daily after close — mid-session volume-so-far isn't comparable to a full day's average, so this can't be shown live without being misleading.">Vol Climax</th>
+          <th class="num sortable" data-qssort="reversal" data-tip="Where the close sits within the day's own high-low range. Closing near the day's highs after a down day is a rough 'buyers stepped in' tell. Updates once daily after close — the whole signal is where price ends up by the close, so it isn't answerable mid-session.">Reversal</th>
+          <th class="num sortable" data-qssort="rs" data-tip="Simplified relative strength vs SPY — weighted 3/6/9/12-month return, ticker minus SPY. Only fade dips in stocks beating the market — this keeps the system from buying dips in laggards. Live during market hours — both legs use current quotes.">RS vs SPY</th>
+          <th class="num sortable" data-qssort="dryup" data-tip="Last 5 days' average volume vs the 20 days before that. Counterintuitively bullish: low volume during a consolidation (nobody's selling) often precedes a move better than a volume spike does. Updates once daily after close, same reason as Vol Climax.">Vol Dry-Up</th>
+          <th class="num sortable" data-qssort="adr" data-tip="Average Daily Range % — how much this stock typically moves per day. Too low = won't move enough in 1-2 days; too high = whipsaw risk that runs through a tight stop. Updates once daily — a slow-moving structural stat, a live tick wouldn't change it meaningfully.">ADR%</th>
+          <th class="num sortable" data-qssort="liq" data-tip="20-day average dollar volume. Thin stocks gap on small flows and can trap you on exit — a liquidity floor is the cheapest risk control, same reasoning as Short Term's. Updates once daily — same reasoning as ADR%.">Liquidity</th>
           <th class="num sortable" data-qssort="ah" data-tip="Post-close move vs today's regular-session close, from FMP's live after-hours quote. A sharp drop adds to the 'stretched' read; a sharp pop gets partial credit (the bounce may already be starting). No premarket leg — FMP's stable API doesn't offer one.">AH Move</th>
           <th data-tip="Hard gate, not a graduated score — a 1-2 day hold can't absorb an earnings-day gap. Blocked inside 5 days of the next print.">Earnings</th>
         </tr>
@@ -2672,7 +2678,7 @@ function acShow(results,q){
   acIdx=-1;
   if(!results.length){ acMessage('No matching US-listed tickers'); return; }
   acDrop.innerHTML=results.map((r,i)=>{
-    const have=watchlist.some(w=>w.sym&&w.sym.toUpperCase()===r.symbol);
+    const have=currentView==='qs' ? !!qsRowsBySym[r.symbol] : watchlist.some(w=>w.sym&&w.sym.toUpperCase()===r.symbol);
     return `<div class="ac-item${have?' added':''}" data-i="${i}">
        <span class="ac-sym">${acMark(r.symbol,q)}</span>
        <span class="ac-name">${acMark(r.name,q)}</span>
@@ -2692,8 +2698,9 @@ function acHighlight(i){
 }
 function pickAc(i){
   const r=acItems[i]; if(!r) return;
-  if(watchlist.some(w=>w.sym&&w.sym.toUpperCase()===r.symbol)){
-    acHide(); addInput.value=''; showToast(`${r.symbol} is already in your watchlist.`); return;
+  const have=currentView==='qs' ? !!qsRowsBySym[r.symbol] : watchlist.some(w=>w.sym&&w.sym.toUpperCase()===r.symbol);
+  if(have){
+    acHide(); addInput.value=''; showToast(`${r.symbol} is already in your ${currentView==='qs'?'Quick Swing list':'watchlist'}.`); return;
   }
   addInput.value=r.symbol;
   acHide();
@@ -2811,6 +2818,9 @@ async function scoreShortForTicker(sym){
 // rescan lock server-side, so this runs even if a full rescan is in progress.
 async function scoreQuickSwingForTicker(sym){
   const up = sym.toUpperCase();
+  if (qsRowsBySym[up]) qsRowsBySym[up].scoring = true;
+  else qsRowsBySym[up] = { sym: up, scoring: true };
+  if (currentView === 'qs') { renderQuickSwing(); startCheckAnim(up); }
   const jobId = 'jadd-qs-' + Date.now();
   rescanBtn.disabled = true; rescanBtn.innerHTML = '<span class="spin">⟳</span> Scoring…';
   await api.send('/api/quickswing/rescan','POST',{jobId, force:true, tickers:[up], clientTickers:[up]}).catch(()=>{});
@@ -2818,6 +2828,7 @@ async function scoreQuickSwingForTicker(sym){
   const t = setInterval(async () => {
     if (++pollCount > 200) {
       clearInterval(t);
+      stopCheckAnim(up);
       rescanBtn.disabled = false; rescanBtn.innerHTML = 'Rescan';
       showToast(`${up} Quick Swing scoring timed out — try Rescan on the Quick Swing tab.`);
       return;
@@ -2826,14 +2837,15 @@ async function scoreQuickSwingForTicker(sym){
     if (!j) return;
     if (j.rows && j.rows.length) {
       j.rows.forEach(row => {
-        if (row && row.sym && !row.error) { qsRowsBySym[row.sym.toUpperCase()] = row; saveQsHistory(row.sym.toUpperCase(), row); }
+        if (row && row.sym && !row.error) { qsRowsBySym[row.sym.toUpperCase()] = row; saveQsHistory(row.sym.toUpperCase(), row); stopCheckAnim(row.sym.toUpperCase()); }
       });
       if (currentView === 'qs') renderQuickSwing();
     }
     if (j.status === 'done' || j.status === 'error') {
       clearInterval(t);
+      stopCheckAnim(up);
       rescanBtn.disabled = false; rescanBtn.innerHTML = 'Rescan';
-      if (j.status === 'error') showToast(j.error || `${up} Quick Swing scoring failed.`);
+      if (j.status === 'error') { if (qsRowsBySym[up]) qsRowsBySym[up].scoring = false; if (currentView === 'qs') renderQuickSwing(); showToast(j.error || `${up} Quick Swing scoring failed.`); }
       else { flash(up); showToast(`${up} added to Quick Swing.`); }
     }
   }, 3000);
@@ -3519,11 +3531,16 @@ function qsRowHtml(r, idx){
   const blockedBadge = r.blocked
     ? `<span class="qs-blocked-badge" data-tip="${escHtml(r.blockedReason||'')}">Blocked</span>`
     : (r.earnings?.daysUntil != null ? `<span style="color:var(--ink-faint);font-size:10px">${r.earnings.daysUntil}d</span>` : '—');
-  const asOf = r.dataAsOf ? `<br><span style="color:var(--ink-faint);font-size:9px;font-weight:400">as of ${fmtQsAsOf(r.dataAsOf)}</span>` : '';
-  return `<tr class="${r.blocked?'qs-row-blocked':''}" data-sym="${r.sym}">
+  const priceTag = r.priceIsLive
+    ? `<br><span data-tip="${escHtml('Live intraday price from FMP. RSI(2), %B, and RS vs SPY are computed using this live price too. Vol Climax, Reversal, Vol Dry-Up, ADR%, and Liquidity still use the completed session as of '+fmtQsAsOf(r.dataAsOf)+' — those need a finished day to mean anything.')}" style="color:var(--good-fg,#2f7d4f);font-size:9px;font-weight:600;cursor:default">● live</span>`
+    : (r.dataAsOf ? `<br><span style="color:var(--ink-faint);font-size:9px;font-weight:400">as of ${fmtQsAsOf(r.dataAsOf)}</span>` : '');
+  const symCell = r.scoring
+    ? `<td class="co-cell"><span class="sym" style="opacity:0.3">${escHtml(r.sym)}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
+    : `<td class="co-cell"><b>${escHtml(r.sym)}</b></td>`;
+  return `<tr class="${r.scoring?'scoring':(r.blocked?'qs-row-blocked':'')}" data-sym="${r.sym}">
     <td class="idx">${idx}.</td>
-    <td><b>${escHtml(r.sym)}</b></td>
-    <td class="num">${r.price!=null?'$'+r.price.toFixed(2):'—'}${asOf}</td>
+    ${symCell}
+    <td class="num">${r.price!=null?'$'+r.price.toFixed(2):'—'}${priceTag}</td>
     <td class="num" data-col="score" style="cursor:pointer" data-tip="${escHtml('Composite score: '+(r.score||'—')+'. Each of the 9 factors scores 0-3 points (bad/weak/ok/good) for a max of 27. 18+/27 is a strong setup, 11-17 is mixed, under 11 is weak. Click to see score history.')}"><span class="score ${scoreCls}">${escHtml(r.score||'—')}</span></td>
     <td class="num ${vCls(0)}" data-col="rsi" style="cursor:pointer" data-tip="${tipFor(0)}">${typeof rsiVal==='number'?rsiVal.toFixed(1):'—'}</td>
     <td class="num ${vCls(1)}" data-col="pctB" style="cursor:pointer" data-tip="${tipFor(1)}">${bb?.pctB!=null?bb.pctB.toFixed(2):'—'}</td>
@@ -3608,14 +3625,19 @@ async function rescanQuickSwing(e){
   try {
     const jobId = crypto.randomUUID();
     // Quick Swing's own tracked tickers — NOT Basic/Short Term's watchlist.
+    const targetSyms = Object.keys(qsRowsBySym);
+    targetSyms.forEach(sym => { qsRowsBySym[sym].scoring = true; });
+    renderQuickSwing();
+    targetSyms.forEach(sym => startCheckAnim(sym));
     await api.send('/api/quickswing/rescan', 'POST', {
       jobId, force,
-      clientTickers: Object.keys(qsRowsBySym),
+      clientTickers: targetSyms,
     }).catch(() => {});
     let pollCount = 0;
     const t = setInterval(async () => {
       if (++pollCount > 200) {
         clearInterval(t);
+        targetSyms.forEach(sym => stopCheckAnim(sym));
         btn.disabled = false; btn.innerHTML = 'Rescan';
         showToast('Quick Swing rescan timed out — some rows may be incomplete. Try again.');
         return;
@@ -3624,12 +3646,14 @@ async function rescanQuickSwing(e){
       if (!j) return;
       if (j.rows && j.rows.length) {
         j.rows.forEach(row => {
-          if (row && row.sym && !row.error) { qsRowsBySym[row.sym.toUpperCase()] = row; saveQsHistory(row.sym.toUpperCase(), row); }
+          if (row && row.sym && !row.error) { qsRowsBySym[row.sym.toUpperCase()] = row; saveQsHistory(row.sym.toUpperCase(), row); stopCheckAnim(row.sym.toUpperCase()); }
         });
         renderQuickSwing();
       }
       if (j.status === 'done' || j.status === 'error') {
         clearInterval(t);
+        targetSyms.forEach(sym => { stopCheckAnim(sym); if (qsRowsBySym[sym]) qsRowsBySym[sym].scoring = false; });
+        renderQuickSwing();
         btn.disabled = false;
         btn.innerHTML = 'Rescan';
         if (j.status === 'error') showToast(j.error || 'Quick Swing rescan failed.');
