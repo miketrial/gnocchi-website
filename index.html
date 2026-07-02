@@ -2812,6 +2812,9 @@ async function scoreShortForTicker(sym){
 // rescan lock server-side, so this runs even if a full rescan is in progress.
 async function scoreQuickSwingForTicker(sym){
   const up = sym.toUpperCase();
+  if (qsRowsBySym[up]) qsRowsBySym[up].scoring = true;
+  else qsRowsBySym[up] = { sym: up, scoring: true };
+  if (currentView === 'qs') { renderQuickSwing(); startCheckAnim(up); }
   const jobId = 'jadd-qs-' + Date.now();
   rescanBtn.disabled = true; rescanBtn.innerHTML = '<span class="spin">⟳</span> Scoring…';
   await api.send('/api/quickswing/rescan','POST',{jobId, force:true, tickers:[up], clientTickers:[up]}).catch(()=>{});
@@ -2819,6 +2822,7 @@ async function scoreQuickSwingForTicker(sym){
   const t = setInterval(async () => {
     if (++pollCount > 200) {
       clearInterval(t);
+      stopCheckAnim(up);
       rescanBtn.disabled = false; rescanBtn.innerHTML = 'Rescan';
       showToast(`${up} Quick Swing scoring timed out — try Rescan on the Quick Swing tab.`);
       return;
@@ -2827,14 +2831,15 @@ async function scoreQuickSwingForTicker(sym){
     if (!j) return;
     if (j.rows && j.rows.length) {
       j.rows.forEach(row => {
-        if (row && row.sym && !row.error) { qsRowsBySym[row.sym.toUpperCase()] = row; saveQsHistory(row.sym.toUpperCase(), row); }
+        if (row && row.sym && !row.error) { qsRowsBySym[row.sym.toUpperCase()] = row; saveQsHistory(row.sym.toUpperCase(), row); stopCheckAnim(row.sym.toUpperCase()); }
       });
       if (currentView === 'qs') renderQuickSwing();
     }
     if (j.status === 'done' || j.status === 'error') {
       clearInterval(t);
+      stopCheckAnim(up);
       rescanBtn.disabled = false; rescanBtn.innerHTML = 'Rescan';
-      if (j.status === 'error') showToast(j.error || `${up} Quick Swing scoring failed.`);
+      if (j.status === 'error') { if (qsRowsBySym[up]) qsRowsBySym[up].scoring = false; if (currentView === 'qs') renderQuickSwing(); showToast(j.error || `${up} Quick Swing scoring failed.`); }
       else { flash(up); showToast(`${up} added to Quick Swing.`); }
     }
   }, 3000);
@@ -3521,9 +3526,12 @@ function qsRowHtml(r, idx){
     ? `<span class="qs-blocked-badge" data-tip="${escHtml(r.blockedReason||'')}">Blocked</span>`
     : (r.earnings?.daysUntil != null ? `<span style="color:var(--ink-faint);font-size:10px">${r.earnings.daysUntil}d</span>` : '—');
   const asOf = r.dataAsOf ? `<br><span style="color:var(--ink-faint);font-size:9px;font-weight:400">as of ${fmtQsAsOf(r.dataAsOf)}</span>` : '';
-  return `<tr class="${r.blocked?'qs-row-blocked':''}" data-sym="${r.sym}">
+  const symCell = r.scoring
+    ? `<td class="co-cell"><span class="sym" style="opacity:0.3">${escHtml(r.sym)}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
+    : `<td class="co-cell"><b>${escHtml(r.sym)}</b></td>`;
+  return `<tr class="${r.scoring?'scoring':(r.blocked?'qs-row-blocked':'')}" data-sym="${r.sym}">
     <td class="idx">${idx}.</td>
-    <td><b>${escHtml(r.sym)}</b></td>
+    ${symCell}
     <td class="num">${r.price!=null?'$'+r.price.toFixed(2):'—'}${asOf}</td>
     <td class="num" data-col="score" style="cursor:pointer" data-tip="${escHtml('Composite score: '+(r.score||'—')+'. Each of the 9 factors scores 0-3 points (bad/weak/ok/good) for a max of 27. 18+/27 is a strong setup, 11-17 is mixed, under 11 is weak. Click to see score history.')}"><span class="score ${scoreCls}">${escHtml(r.score||'—')}</span></td>
     <td class="num ${vCls(0)}" data-col="rsi" style="cursor:pointer" data-tip="${tipFor(0)}">${typeof rsiVal==='number'?rsiVal.toFixed(1):'—'}</td>
@@ -3609,14 +3617,19 @@ async function rescanQuickSwing(e){
   try {
     const jobId = crypto.randomUUID();
     // Quick Swing's own tracked tickers — NOT Basic/Short Term's watchlist.
+    const targetSyms = Object.keys(qsRowsBySym);
+    targetSyms.forEach(sym => { qsRowsBySym[sym].scoring = true; });
+    renderQuickSwing();
+    targetSyms.forEach(sym => startCheckAnim(sym));
     await api.send('/api/quickswing/rescan', 'POST', {
       jobId, force,
-      clientTickers: Object.keys(qsRowsBySym),
+      clientTickers: targetSyms,
     }).catch(() => {});
     let pollCount = 0;
     const t = setInterval(async () => {
       if (++pollCount > 200) {
         clearInterval(t);
+        targetSyms.forEach(sym => stopCheckAnim(sym));
         btn.disabled = false; btn.innerHTML = 'Rescan';
         showToast('Quick Swing rescan timed out — some rows may be incomplete. Try again.');
         return;
@@ -3625,12 +3638,14 @@ async function rescanQuickSwing(e){
       if (!j) return;
       if (j.rows && j.rows.length) {
         j.rows.forEach(row => {
-          if (row && row.sym && !row.error) { qsRowsBySym[row.sym.toUpperCase()] = row; saveQsHistory(row.sym.toUpperCase(), row); }
+          if (row && row.sym && !row.error) { qsRowsBySym[row.sym.toUpperCase()] = row; saveQsHistory(row.sym.toUpperCase(), row); stopCheckAnim(row.sym.toUpperCase()); }
         });
         renderQuickSwing();
       }
       if (j.status === 'done' || j.status === 'error') {
         clearInterval(t);
+        targetSyms.forEach(sym => { stopCheckAnim(sym); if (qsRowsBySym[sym]) qsRowsBySym[sym].scoring = false; });
+        renderQuickSwing();
         btn.disabled = false;
         btn.innerHTML = 'Rescan';
         if (j.status === 'error') showToast(j.error || 'Quick Swing rescan failed.');
