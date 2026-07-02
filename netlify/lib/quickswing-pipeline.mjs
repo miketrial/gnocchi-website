@@ -416,6 +416,7 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
   const row = {
     sym,
     price,
+    dataAsOf: hist[0]?.date ?? null,
     score: `${score}/${total}`,
     reasons: checks.map(c => c.summary),
     raw: checks.map(c => c.value),

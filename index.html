@@ -1211,7 +1211,7 @@
   <div id="qsRegimeBanner"></div>
   <div class="wp-head">
     <span class="wp-title" style="border-bottom:1px dashed currentColor">Quick Swing</span>
-    <span class="wp-sub">1-2 day mean-reversion setups · its own independent list, separate from Basic/Short Term · click a column header to sort · right-click a row for Rescan / Delete</span>
+    <span class="wp-sub">1-2 day mean-reversion setups · its own independent list, separate from Basic/Short Term · click a column header to sort · click any data cell for its scan history · right-click a row for Rescan / Delete</span>
   </div>
   <div class="card">
     <table>
@@ -1363,6 +1363,19 @@
   <svg id="stFactHistSvg" width="222" height="96" style="display:block;margin-bottom:8px"></svg>
   <div id="stFactHistRows" style="max-height:140px;overflow-y:auto;scrollbar-width:thin"></div>
 </div>
+
+<!-- ===== QUICK SWING FEATURE =====
+     Quick Swing factor history popover — mirrors #stFactHist but kept
+     separate/independent so this stays cleanly removable. -->
+<div id="qsFactHist" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.5;padding:12px 14px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:250px;max-width:300px;pointer-events:auto;white-space:normal;border:0.5px solid rgba(255,255,255,.08)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <span id="qsFactHistTitle" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8a95a8"></span>
+    <span id="qsFactHistClose" style="cursor:pointer;color:#8a95a8;font-size:13px;line-height:1;padding:0 2px">✕</span>
+  </div>
+  <svg id="qsFactHistSvg" width="222" height="96" style="display:block;margin-bottom:8px"></svg>
+  <div id="qsFactHistRows" style="max-height:140px;overflow-y:auto;scrollbar-width:thin"></div>
+</div>
+<!-- ===== END QUICK SWING FEATURE ===== -->
 
 <!-- Vol Surge column-header info popover -->
 <!-- Watchlist how-to popover -->
@@ -2786,7 +2799,7 @@ async function scoreQuickSwingForTicker(sym){
     if (!j) return;
     if (j.rows && j.rows.length) {
       j.rows.forEach(row => {
-        if (row && row.sym && !row.error) qsRowsBySym[row.sym.toUpperCase()] = row;
+        if (row && row.sym && !row.error) { qsRowsBySym[row.sym.toUpperCase()] = row; saveQsHistory(row.sym.toUpperCase(), row); }
       });
       if (currentView === 'qs') renderQuickSwing();
     }
@@ -3157,6 +3170,177 @@ function fmtQsDollars(n){
   if (n == null) return '—';
   return n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : `$${(n / 1e6).toFixed(1)}M`;
 }
+// "Data as of" — the actual price-bar date the scores are computed from
+// (not scored_at, which is just when the scan ran). Parsed at UTC midnight
+// and rendered with timeZone:'UTC' so it can't shift a day either direction.
+function fmtQsAsOf(dateStr){
+  if (!dateStr) return '';
+  return new Date(dateStr + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Quick Swing — per-factor history popover (click any data cell)
+   Rolling window of the last 50 scans per ticker, stored in
+   localStorage. Unlike Short Term's history (one entry per calendar
+   day), this is a straight FIFO of scan events — every rescan is its
+   own entry, oldest dropped past 50, so an evening of after-hours
+   moves or same-day rescans all show up distinctly. */
+const QS_FACTOR_META = [
+  { label: 'RSI(2)',                   unit: '',   toVal: v => v != null ? +v.toFixed(1) : null },
+  { label: 'Bollinger %B',             unit: '',   toVal: v => v?.pctB != null ? +v.pctB.toFixed(2) : null },
+  { label: 'Volume Climax',            unit: 'x',  toVal: v => v != null ? +v.toFixed(2) : null },
+  { label: 'Reversal Candle',          unit: '%',  toVal: v => v != null ? +(v * 100).toFixed(0) : null },
+  { label: 'Relative Strength vs SPY', unit: 'pp', toVal: v => v?.delta != null ? +(v.delta * 100).toFixed(1) : null },
+  { label: 'Volume Dry-Up',            unit: '%',  toVal: v => v != null ? +(v * 100).toFixed(0) : null },
+  { label: 'ADR%',                     unit: '%',  toVal: v => v != null ? +v.toFixed(1) : null },
+  { label: 'Liquidity',                unit: '$M', toVal: v => v != null ? +(v / 1e6).toFixed(0) : null },
+  { label: 'After-Hours Move',         unit: '%',  toVal: v => v?.chg != null ? +(v.chg * 100).toFixed(1) : null },
+];
+const QS_COL_TO_FACTOR = { score:-1, rsi:0, pctB:1, volclimax:2, reversal:3, rs:4, dryup:5, adr:6, liq:7, ah:8 };
+
+function saveQsHistory(sym, row){
+  if (!row || !row.scored_at) return;
+  const key = 'gn_qs_hist_' + sym.toUpperCase();
+  let hist = [];
+  try { hist = JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) {}
+  hist.unshift({ scored_at: row.scored_at, dataAsOf: row.dataAsOf || null, score: row.score, verdicts: row.verdicts || [], raw: row.raw || [] });
+  if (hist.length > 50) hist = hist.slice(0, 50);
+  try { localStorage.setItem(key, JSON.stringify(hist)); } catch(e) {}
+}
+function getQsHistory(sym){
+  try { return JSON.parse(localStorage.getItem('gn_qs_hist_' + sym.toUpperCase()) || '[]'); } catch(e) { return []; }
+}
+function qsScoreColorForChart(n){ return n>=18?'#4caf87':n>=11?'#e8c068':'#c0392b'; }
+
+function buildQsFactChart(entries, factorIdx){
+  // entries passed in oldest→newest
+  const W=222, H=96, pl=30, pr=8, pt=8, pb=18;
+  const cW=W-pl-pr, cH=H-pt-pb;
+  const n = entries.length;
+  const xs = i => pl + (n < 2 ? cW/2 : i/(n-1)*cW);
+  let svg = '';
+
+  if (factorIdx === -1) {
+    const ys = v => pt + cH - (v/27)*cH;
+    [0, 11, 18, 27].forEach(v => {
+      svg += `<line x1="${pl}" y1="${ys(v)}" x2="${W-pr}" y2="${ys(v)}" stroke="rgba(255,255,255,.07)" stroke-width="0.5"/>`;
+      svg += `<text x="${pl-4}" y="${ys(v)+3.5}" text-anchor="end" fill="#606878" font-size="8">${v}</text>`;
+    });
+    const pts = entries.map((e,i) => {
+      const v = parseInt(e.score) || 0;
+      return { x: xs(i), y: ys(v), v };
+    });
+    if (n > 1) {
+      svg += `<polyline points="${pts.map(p=>`${p.x},${p.y}`).join(' ')}" fill="none" stroke="rgba(55,138,221,.5)" stroke-width="1.5" stroke-linejoin="round"/>`;
+    }
+    pts.forEach(p => {
+      svg += `<circle cx="${p.x}" cy="${p.y}" r="${n===1?4:2.5}" fill="${qsScoreColorForChart(p.v)}" stroke="#1e2230" stroke-width="1"/>`;
+    });
+  } else {
+    const meta = QS_FACTOR_META[factorIdx];
+    const vals = entries.map(e => meta.toVal(e.raw?.[factorIdx]));
+    const defined = vals.filter(v => v != null);
+
+    if (defined.length) {
+      const lo = Math.min(...defined), hi = Math.max(...defined);
+      const range = hi - lo || 1;
+      const ys = v => v != null ? pt + cH - ((v - lo)/range)*cH : null;
+
+      [lo, hi].forEach((v, gi) => {
+        const y = pt + (gi===0 ? cH : 0);
+        svg += `<line x1="${pl}" y1="${y}" x2="${W-pr}" y2="${y}" stroke="rgba(255,255,255,.07)" stroke-width="0.5"/>`;
+        const label = Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1);
+        svg += `<text x="${pl-4}" y="${y+3.5}" text-anchor="end" fill="#606878" font-size="7">${label}</text>`;
+      });
+
+      // Threshold reference lines — graduated scoring boundaries per factor
+      const thresholds = {
+        0: [5, 10, 20],        // RSI(2): deeply oversold / oversold / stretched down
+        1: [0, 0.10, 0.25],    // %B
+        3: [60, 80],           // Reversal candle %
+        4: [-5, 5, 15],        // RS vs SPY pp
+        5: [50, 70, 90],       // Volume dry-up %
+        6: [3, 8],             // ADR% sweet-spot bounds
+        7: [10, 20, 100],      // Liquidity $M
+        8: [-5, -3, -1.5, 3],  // After-hours move %
+      };
+      (thresholds[factorIdx] || []).forEach(tv => {
+        if (tv >= lo && tv <= hi) {
+          const ty = ys(tv);
+          svg += `<line x1="${pl}" y1="${ty}" x2="${W-pr}" y2="${ty}" stroke="rgba(100,180,100,.2)" stroke-width="0.8" stroke-dasharray="3,2"/>`;
+        }
+      });
+
+      const linePts = entries.map((e,i) => ({ x: xs(i), y: ys(vals[i]) })).filter(p => p.y != null);
+      if (linePts.length > 1) {
+        svg += `<polyline points="${linePts.map(p=>`${p.x},${p.y}`).join(' ')}" fill="none" stroke="rgba(55,138,221,.45)" stroke-width="1.5" stroke-linejoin="round"/>`;
+      }
+
+      entries.forEach((e,i) => {
+        const y = ys(vals[i]);
+        if (y == null) return;
+        const v = (e.verdicts?.[factorIdx]) || 'na';
+        svg += `<circle cx="${xs(i)}" cy="${y}" r="${n===1?4:2.5}" fill="${verdictColor(v)}" stroke="#1e2230" stroke-width="1"/>`;
+      });
+
+      if (meta.unit) svg += `<text x="${W-pr}" y="${pt-1}" text-anchor="end" fill="#606878" font-size="7">${meta.unit}</text>`;
+    } else {
+      const sqSize=14, sqGap=3;
+      const totalW = n * (sqSize+sqGap) - sqGap;
+      const startX = (W-totalW)/2, y = H/2 - sqSize/2;
+      entries.forEach((e,i) => {
+        const v = (e.verdicts?.[factorIdx]) || 'na';
+        svg += `<rect x="${startX+i*(sqSize+sqGap)}" y="${y}" width="${sqSize}" height="${sqSize}" rx="3" fill="${verdictColor(v)}" opacity="0.85"/>`;
+      });
+      svg += `<text x="${W/2}" y="${H-4}" text-anchor="middle" fill="#606878" font-size="8">oldest → newest</text>`;
+    }
+  }
+
+  if (n >= 1) svg += `<text x="${xs(0)}" y="${H-3}" text-anchor="start" fill="#606878" font-size="7">${fmtShortDate(entries[0].scored_at)}</text>`;
+  if (n >= 2) svg += `<text x="${xs(n-1)}" y="${H-3}" text-anchor="end" fill="#606878" font-size="7">${fmtShortDate(entries[n-1].scored_at)}</text>`;
+  return svg;
+}
+
+const qsFactHist = document.getElementById('qsFactHist');
+function openQsFactHist(sym, factorIdx, anchorEl){
+  const entries = getQsHistory(sym).slice(0, 50);
+  if (!entries.length) return;
+
+  const label = factorIdx === -1 ? 'Score' : QS_FACTOR_META[factorIdx].label;
+  document.getElementById('qsFactHistTitle').textContent = `${sym} — ${label} (${entries.length} scan${entries.length===1?'':'s'})`;
+
+  const chartEntries = [...entries].reverse(); // oldest→newest for the chart
+  document.getElementById('qsFactHistSvg').innerHTML = buildQsFactChart(chartEntries, factorIdx);
+
+  const meta = factorIdx >= 0 ? QS_FACTOR_META[factorIdx] : null;
+  document.getElementById('qsFactHistRows').innerHTML = entries.map((h,i) => {
+    const verdict  = factorIdx >= 0 ? (h.verdicts?.[factorIdx] || 'na') : null;
+    const dotColor = verdict ? verdictColor(verdict) : null;
+    const numVal   = (meta && factorIdx >= 0) ? meta.toVal(h.raw?.[factorIdx]) : null;
+    const scoreN   = factorIdx === -1 ? parseInt(h.score) : null;
+    const valStr   = factorIdx === -1
+      ? `<span style="font-weight:700;color:${qsScoreColorForChart(scoreN||0)}">${h.score||'—'}</span>`
+      : numVal != null
+        ? `<span style="font-weight:700;color:${dotColor}">${numVal}${meta.unit}</span>`
+        : `<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${dotColor||'#666'};vertical-align:middle"></span>`;
+    return `<div style="display:flex;justify-content:space-between;gap:16px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="color:#8a95a8">${fmtHistDate(h.scored_at)}${i===0?' <span style="font-size:8px;color:#555f72">(latest)</span>':''}</span>
+      ${valStr}
+    </div>`;
+  }).join('');
+
+  qsFactHist.style.display = 'block';
+  const rect = anchorEl.getBoundingClientRect();
+  const pw = qsFactHist.offsetWidth || 260, ph = qsFactHist.offsetHeight || 280;
+  let x = rect.right + 10, y = rect.top - ph/2 + rect.height/2;
+  if (x + pw > window.innerWidth - 8) x = rect.left - pw - 10;
+  qsFactHist.style.left = Math.max(8, x) + 'px';
+  qsFactHist.style.top  = Math.max(8, Math.min(y, window.innerHeight - ph - 8)) + 'px';
+}
+document.getElementById('qsFactHistClose').addEventListener('click', () => qsFactHist.style.display='none');
+document.addEventListener('click', e => {
+  if (!qsFactHist.contains(e.target)) qsFactHist.style.display='none';
+});
 
 async function ensureQsDataLoaded(){
   if (qsLoaded) { renderQuickSwing(); return; }
@@ -3222,23 +3406,37 @@ function qsRowHtml(r, idx){
   const blockedBadge = r.blocked
     ? `<span class="qs-blocked-badge" data-tip="${escHtml(r.blockedReason||'')}">Blocked</span>`
     : (r.earnings?.daysUntil != null ? `<span style="color:var(--ink-faint);font-size:10px">${r.earnings.daysUntil}d</span>` : '—');
+  const asOf = r.dataAsOf ? `<br><span style="color:var(--ink-faint);font-size:9px;font-weight:400">as of ${fmtQsAsOf(r.dataAsOf)}</span>` : '';
   return `<tr class="${r.blocked?'qs-row-blocked':''}" data-sym="${r.sym}">
     <td class="idx">${idx}.</td>
     <td><b>${escHtml(r.sym)}</b></td>
-    <td class="num">${r.price!=null?'$'+r.price.toFixed(2):'—'}</td>
-    <td class="num" style="cursor:pointer" data-tip="${escHtml('Composite score: '+(r.score||'—')+'. Each of the 9 factors scores 0-3 points (bad/weak/ok/good) for a max of 27. 18+/27 is a strong setup, 11-17 is mixed, under 11 is weak.')}"><span class="score ${scoreCls}">${escHtml(r.score||'—')}</span></td>
-    <td class="num ${vCls(0)}" data-tip="${tipFor(0)}">${typeof rsiVal==='number'?rsiVal.toFixed(1):'—'}</td>
-    <td class="num ${vCls(1)}" data-tip="${tipFor(1)}">${bb?.pctB!=null?bb.pctB.toFixed(2):'—'}</td>
-    <td class="num ${vCls(2)}" data-tip="${tipFor(2)}">${typeof volClimax==='number'?volClimax.toFixed(2)+'x':'—'}</td>
-    <td class="num ${vCls(3)}" data-tip="${tipFor(3)}">${typeof reversal==='number'?(reversal*100).toFixed(0)+'%':'—'}</td>
-    <td class="num ${vCls(4)}" data-tip="${tipFor(4)}">${rs?.delta!=null?(rs.delta>=0?'+':'')+(rs.delta*100).toFixed(1)+'pp':'—'}</td>
-    <td class="num ${vCls(5)}" data-tip="${tipFor(5)}">${typeof dryUp==='number'?(dryUp*100).toFixed(0)+'%':'—'}</td>
-    <td class="num ${vCls(6)}" data-tip="${tipFor(6)}">${typeof adr==='number'?adr.toFixed(1)+'%':'—'}</td>
-    <td class="num ${vCls(7)}" data-tip="${tipFor(7)}">${fmtQsDollars(liq)}</td>
-    <td class="num ${vCls(8)}" data-tip="${tipFor(8)}">${ah?.chg!=null?(ah.chg>=0?'+':'')+(ah.chg*100).toFixed(1)+'%':'—'}</td>
+    <td class="num">${r.price!=null?'$'+r.price.toFixed(2):'—'}${asOf}</td>
+    <td class="num" data-col="score" style="cursor:pointer" data-tip="${escHtml('Composite score: '+(r.score||'—')+'. Each of the 9 factors scores 0-3 points (bad/weak/ok/good) for a max of 27. 18+/27 is a strong setup, 11-17 is mixed, under 11 is weak. Click to see score history.')}"><span class="score ${scoreCls}">${escHtml(r.score||'—')}</span></td>
+    <td class="num ${vCls(0)}" data-col="rsi" style="cursor:pointer" data-tip="${tipFor(0)}">${typeof rsiVal==='number'?rsiVal.toFixed(1):'—'}</td>
+    <td class="num ${vCls(1)}" data-col="pctB" style="cursor:pointer" data-tip="${tipFor(1)}">${bb?.pctB!=null?bb.pctB.toFixed(2):'—'}</td>
+    <td class="num ${vCls(2)}" data-col="volclimax" style="cursor:pointer" data-tip="${tipFor(2)}">${typeof volClimax==='number'?volClimax.toFixed(2)+'x':'—'}</td>
+    <td class="num ${vCls(3)}" data-col="reversal" style="cursor:pointer" data-tip="${tipFor(3)}">${typeof reversal==='number'?(reversal*100).toFixed(0)+'%':'—'}</td>
+    <td class="num ${vCls(4)}" data-col="rs" style="cursor:pointer" data-tip="${tipFor(4)}">${rs?.delta!=null?(rs.delta>=0?'+':'')+(rs.delta*100).toFixed(1)+'pp':'—'}</td>
+    <td class="num ${vCls(5)}" data-col="dryup" style="cursor:pointer" data-tip="${tipFor(5)}">${typeof dryUp==='number'?(dryUp*100).toFixed(0)+'%':'—'}</td>
+    <td class="num ${vCls(6)}" data-col="adr" style="cursor:pointer" data-tip="${tipFor(6)}">${typeof adr==='number'?adr.toFixed(1)+'%':'—'}</td>
+    <td class="num ${vCls(7)}" data-col="liq" style="cursor:pointer" data-tip="${tipFor(7)}">${fmtQsDollars(liq)}</td>
+    <td class="num ${vCls(8)}" data-col="ah" style="cursor:pointer" data-tip="${tipFor(8)}">${ah?.chg!=null?(ah.chg>=0?'+':'')+(ah.chg*100).toFixed(1)+'%':'—'}</td>
     <td data-tip="${escHtml(r.blocked ? r.blockedReason||'' : (r.earnings?.daysUntil!=null ? `Earnings in ${r.earnings.daysUntil}d (${r.earnings.date}) — outside the 5-day blackout window` : 'No earnings calendar data'))}">${blockedBadge}</td>
   </tr>`;
 }
+
+// Click any data cell in the Quick Swing table → factor history popover
+document.getElementById('qsBody')?.addEventListener('click', e => {
+  qsFactHist.style.display = 'none';
+  const td = e.target.closest('td[data-col]');
+  if (!td) return;
+  const tr = e.target.closest('tr[data-sym]');
+  if (!tr) return;
+  const factorIdx = QS_COL_TO_FACTOR[td.dataset.col];
+  if (factorIdx === undefined) return;
+  e.stopPropagation();
+  openQsFactHist(tr.dataset.sym, factorIdx, td);
+});
 
 function renderQuickSwing(){
   const banner = document.getElementById('qsRegimeBanner');
@@ -3313,7 +3511,7 @@ async function rescanQuickSwing(e){
       if (!j) return;
       if (j.rows && j.rows.length) {
         j.rows.forEach(row => {
-          if (row && row.sym && !row.error) qsRowsBySym[row.sym.toUpperCase()] = row;
+          if (row && row.sym && !row.error) { qsRowsBySym[row.sym.toUpperCase()] = row; saveQsHistory(row.sym.toUpperCase(), row); }
         });
         renderQuickSwing();
       }
