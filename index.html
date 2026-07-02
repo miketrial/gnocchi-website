@@ -2202,7 +2202,23 @@ function render(){renderWatchlist();renderNet();}
 /* ---------------- API layer (graceful fallback to seed data) ---------------- */
 let API_LIVE=false;
 const api={
-  async get(u){const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw 0;return r.json();},
+  // Retries GET before giving up — a single cold-start/edge-propagation
+  // blip right after a fresh deploy used to be enough to permanently drop
+  // init() into API_LIVE=false "seed data" mode for the whole page load,
+  // which looked exactly like the real watchlist had been wiped (it hadn't —
+  // the blob data was untouched, this was purely a load-time race).
+  async get(u){
+    for(let attempt=0; attempt<3; attempt++){
+      try{
+        const r=await fetch(u,{cache:'no-store'});
+        if(!r.ok) throw 0;
+        return r.json();
+      }catch(e){
+        if(attempt===2) throw e;
+        await new Promise(res=>setTimeout(res, 500*(attempt+1)));
+      }
+    }
+  },
   async send(u,m,b){const r=await fetch(u,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});if(!r.ok&&r.status!==202)throw 0;return r;},
 };
 async function init(){
@@ -3259,12 +3275,14 @@ let shortLoaded = false;
 
 async function ensureShortDataLoaded(){
   if (shortLoaded) { applyStSort(); applyStSortHeaders(); renderShortWatchlist(); return; }
-  shortLoaded = true;
-  if (!API_LIVE) { renderShortWatchlist(); return; }
+  if (!API_LIVE) { shortLoaded = true; renderShortWatchlist(); return; }
   try {
     const rows = await api.get('/api/short/watchlist');
     if (Array.isArray(rows)) rows.forEach(r => { if (r && r.sym) shortRowsBySym[r.sym.toUpperCase()] = r; });
-  } catch(e) { /* leave empty, render placeholders */ }
+    shortLoaded = true; // only latch "loaded" on success — a failed fetch (api.get already
+    // retries 3x internally) should still be retried the next time this view is opened,
+    // not permanently render as an empty watchlist for the rest of the session.
+  } catch(e) { /* leave empty, render placeholders — shortLoaded stays false, will retry */ }
   // Restore saved ST sort after data is available (score needs shortRowsBySym populated)
   try {
     const saved = JSON.parse(localStorage.getItem('gn_st_sort') || 'null');
@@ -3484,12 +3502,12 @@ document.addEventListener('click', e => {
 
 async function ensureQsDataLoaded(){
   if (qsLoaded) { renderQuickSwing(); return; }
-  qsLoaded = true;
-  if (!API_LIVE) { renderQuickSwing(); return; }
+  if (!API_LIVE) { qsLoaded = true; renderQuickSwing(); return; }
   try {
     const rows = await api.get('/api/quickswing/watchlist');
     if (Array.isArray(rows)) rows.forEach(r => { if (r && r.sym) qsRowsBySym[r.sym.toUpperCase()] = r; });
-  } catch(e) { /* leave empty, render placeholders */ }
+    qsLoaded = true; // only latch on success — see ensureShortDataLoaded for why
+  } catch(e) { /* leave empty, render placeholders — qsLoaded stays false, will retry */ }
   renderQuickSwing();
 }
 
