@@ -901,12 +901,6 @@
    The inactive button raises z-index on hover so the cursor can always reach it. */
 #viewSwitch button:not(.active):hover{ z-index:3 }
 #viewSwitch button:hover{ opacity:1 }
-/* ===== QUICK SWING FEATURE ===== */
-/* Flagged red for now — signals this tab isn't at "trust the score" yet
-   while the scoring model is still being reworked. Remove once settled. */
-#viewSwitch button[data-v="qs"]{ border-color:var(--bad-fg); color:var(--bad-fg) }
-#viewSwitch button[data-v="qs"].active{ border-color:var(--bad-fg); box-shadow:2px 2px 0 0 var(--bad-fg) }
-/* ===== END QUICK SWING FEATURE ===== */
 [data-theme="white"] #viewSwitch button{ border-radius:0; border:1px solid #000; background:#fff; color:#000 }
 [data-theme="white"] #viewSwitch button.active{
   background:#fff; color:#000;
@@ -930,6 +924,27 @@
 #themeSwatch button:hover{opacity:1;transform:scale(1.15)}
 #themeSwatch button.active{opacity:1;transform:scale(1.1);box-shadow:0 0 0 2px #4a525e}
 #themeSwatch button[data-t="white"].active{box-shadow:0 0 0 2px #999}
+
+/* ===== QUICK SWING FEATURE ===== */
+/* Flagged red for now — signals this tab isn't at "trust the score" yet
+   while the scoring model is still being reworked. Remove once settled.
+   Placed after every theme block (not just the base rule) so it wins the
+   cascade under the "white" theme too — that theme redeclares
+   #viewSwitch button/.active at equal specificity, which was silently
+   clobbering an earlier, narrower version of this override. Solid fill
+   + forced opacity so it stays visibly red instead of fading to the ~70%
+   opacity every other inactive tab gets. */
+#viewSwitch button[data-v="qs"],
+[data-theme="white"] #viewSwitch button[data-v="qs"]{
+  background:var(--bad-bg); border-color:var(--bad-fg); color:var(--bad-fg);
+  opacity:1; font-weight:800;
+}
+#viewSwitch button[data-v="qs"].active,
+[data-theme="white"] #viewSwitch button[data-v="qs"].active{
+  background:var(--bad-bg); border-color:var(--bad-fg); color:var(--bad-fg);
+  box-shadow:2px 2px 0 0 var(--bad-fg);
+}
+/* ===== END QUICK SWING FEATURE ===== */
 </style>
 
 <!-- ================= APP ================= -->
