@@ -335,6 +335,16 @@
   .rowdel{cursor:pointer; color:var(--ink-faint); font-size:13px; padding:0 4px}
   .rowdel:hover{color:var(--bad-fg)}
   .addrow{margin-top:10px}
+
+  /* Shift-click multi-select + mass delete — shared across Basic, Short
+     Term, and Quick Swing tables. */
+  .bulk-bar{ display:flex; align-items:center; gap:10px; padding:8px 14px; margin-bottom:10px; border-radius:8px; background:var(--bad-bg); color:var(--bad-fg); font-size:11.5px; font-weight:600 }
+  .bulk-bar button{ font-size:10.5px; font-weight:700; padding:4px 10px; border-radius:6px; border:1px solid currentColor; background:transparent; color:inherit; cursor:pointer }
+  .bulk-bar button:hover{ background:rgba(0,0,0,.06) }
+  .bulk-bar .bulk-cancel{ margin-left:auto }
+  /* !important: must win over per-cell semantic colors (st-good/bad, sc-g/sc-r, etc.) */
+  tr.row-selected td{ background:rgba(55,138,221,.16) !important }
+  tr.row-selected:hover td{ background:rgba(55,138,221,.22) !important }
   .hidden{display:none}
   .gain-pos{color:var(--good-fg)} .gain-neg{color:var(--bad-fg)}
 
@@ -1075,6 +1085,11 @@
 
   <!-- ===== WATCHLIST VIEW ===== -->
   <div id="watchlistView">
+    <div id="wlBulkBar" class="bulk-bar hidden">
+      <span class="bulk-count"></span>
+      <button class="bulk-delete">Delete selected</button>
+      <button class="bulk-cancel">Cancel</button>
+    </div>
     <div class="card">
       <table>
         <thead>
@@ -1150,7 +1165,12 @@
   <div id="watchPanel"></div>
   <div class="wp-head" style="margin-top:18px">
     <span class="wp-title" style="border-bottom:1px dashed currentColor">Screener</span>
-    <span class="wp-sub">Click a column header to sort · click a row to see details</span>
+    <span class="wp-sub">Click a column header to sort · click a row to see details · shift-click to select a range</span>
+  </div>
+  <div id="stBulkBar" class="bulk-bar hidden">
+    <span class="bulk-count"></span>
+    <button class="bulk-delete">Delete selected</button>
+    <button class="bulk-cancel">Cancel</button>
   </div>
   <div class="card">
     <table>
@@ -1211,8 +1231,15 @@
   <div id="qsRegimeBanner"></div>
   <div class="wp-head">
     <span class="wp-title" style="border-bottom:1px dashed currentColor">Quick Swing</span>
-    <span class="wp-sub">1-2 day mean-reversion setups · its own independent list, separate from Basic/Short Term · click a column header to sort · click any data cell for its scan history · right-click a row for Rescan / Delete</span>
+    <span class="wp-sub">1-2 day mean-reversion setups · its own independent list, separate from Basic/Short Term · click a column header to sort · click any data cell for its scan history · right-click a row for Rescan / Delete · shift-click to select a range</span>
   </div>
+  <!-- ===== QUICK SWING FEATURE ===== -->
+  <div id="qsBulkBar" class="bulk-bar hidden">
+    <span class="bulk-count"></span>
+    <button class="bulk-delete">Delete selected</button>
+    <button class="bulk-cancel">Cancel</button>
+  </div>
+  <!-- ===== END QUICK SWING FEATURE ===== -->
   <div class="card">
     <table>
       <thead>
@@ -2878,6 +2905,92 @@ function flash(sym){
   const tr=document.querySelector(`tr[data-sym="${sym}"]`);
   if(tr){tr.classList.add('flash');setTimeout(()=>tr.classList.remove('flash'),700);}
 }
+
+/* ---------------- shift-click multi-select + mass delete ----------------
+   Shared mechanics for all 3 tables (Basic, Short Term, Quick Swing) — each
+   gets its own independent selection set and bulk-action bar, wired through
+   this one generic helper so the range-selection math isn't tripled.
+   Registered on the CAPTURE phase so a shift-click always wins over each
+   table's own bubble-phase click handlers (score popover, factor history,
+   watch-flag toggle) without needing to touch or reorder that code. */
+function setupRowMultiSelect(tbodyId, barId, onDelete, confirmLabel){
+  const tbody = document.getElementById(tbodyId);
+  const bar = document.getElementById(barId);
+  if (!tbody || !bar) return null;
+  let selected = new Set();
+  let anchor = null;
+  const countEl = bar.querySelector('.bulk-count');
+  const deleteBtn = bar.querySelector('.bulk-delete');
+  const cancelBtn = bar.querySelector('.bulk-cancel');
+
+  function order(){ return [...tbody.querySelectorAll('tr[data-sym]')].map(tr=>tr.dataset.sym); }
+  function refresh(){
+    tbody.querySelectorAll('tr[data-sym]').forEach(tr=>{
+      tr.classList.toggle('row-selected', selected.has(tr.dataset.sym));
+    });
+    bar.classList.toggle('hidden', selected.size===0);
+    if (selected.size) countEl.textContent = `${selected.size} selected`;
+  }
+  function clear(){ selected=new Set(); anchor=null; refresh(); }
+
+  tbody.addEventListener('click', e => {
+    const tr = e.target.closest('tr[data-sym]');
+    if (!tr) return;
+    const sym = tr.dataset.sym;
+    if (e.shiftKey) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const ord = order();
+      const a = anchor || sym;
+      const ai = ord.indexOf(a), bi = ord.indexOf(sym);
+      selected = (ai<0 || bi<0) ? new Set([sym]) : new Set(ord.slice(Math.min(ai,bi), Math.max(ai,bi)+1));
+      anchor = a;
+      refresh();
+      return;
+    }
+    if (selected.size) clear();
+    anchor = sym;
+  }, true);
+
+  deleteBtn.addEventListener('click', async () => {
+    const syms = [...selected];
+    if (!syms.length) return;
+    if (!confirm(`Delete ${syms.length} selected ticker${syms.length===1?'':'s'}${confirmLabel?' '+confirmLabel:''}? This can't be undone from here.`)) return;
+    clear();
+    await onDelete(syms);
+  });
+  cancelBtn.addEventListener('click', clear);
+  return { clear };
+}
+
+// Basic + Short Term share one underlying watchlist — deleting here removes
+// from both views, same as the existing right-click "Delete row" does.
+async function deleteBasicShortTickers(syms){
+  let flagDirty=false, demDirty=false;
+  syms.forEach(sym=>{
+    watchlist=watchlist.filter(r=>r.sym!==sym);
+    delete shortRowsBySym[sym];
+    if (watchFlags[sym])    { delete watchFlags[sym];    flagDirty=true; }
+    if (demotedRecent[sym]) { delete demotedRecent[sym]; demDirty=true; }
+  });
+  if (flagDirty) saveWatchFlags();
+  if (demDirty)  saveDemoted();
+  renderWatchlist();
+  if (currentView==='short') renderShortWatchlist();
+  if (API_LIVE) await Promise.all(syms.map(sym=>api.send('/api/watchlist/'+encodeURIComponent(sym),'DELETE').catch(()=>{})));
+}
+setupRowMultiSelect('wlBody', 'wlBulkBar', deleteBasicShortTickers, 'from the shared watchlist');
+setupRowMultiSelect('stBody', 'stBulkBar', deleteBasicShortTickers, 'from the shared watchlist');
+
+// ===== QUICK SWING FEATURE =====
+// Quick Swing's own independent list — never touches Basic/Short Term.
+async function deleteQsTickers(syms){
+  syms.forEach(sym=>delete qsRowsBySym[sym]);
+  renderQuickSwing();
+  if (API_LIVE) await Promise.all(syms.map(sym=>api.send('/api/quickswing/watchlist/'+encodeURIComponent(sym),'DELETE').catch(()=>{})));
+}
+setupRowMultiSelect('qsBody', 'qsBulkBar', deleteQsTickers, 'from Quick Swing');
+// ===== END QUICK SWING FEATURE =====
 
 /* ---------------- right-click delete ---------------- */
 const ctx=document.getElementById('ctx'); let ctxSym=null; let ctxFromView='watchlist';
