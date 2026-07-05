@@ -892,24 +892,22 @@
 #themeSwatch button[data-t="white"].active{box-shadow:0 0 0 2px #999}
 
 /* ===== QUICK SWING FEATURE ===== */
-/* A soft amber accent (not alarm-red) signals "experimental/still being
-   tuned" without looking like an error state — a thin bottom border and a
-   small dot rather than a solid fill + hard drop-shadow. Placed after every
-   theme block (not just the base rule) so it wins the cascade under the
-   "white" theme too — that theme redeclares #viewSwitch button/.active at
-   equal specificity, which was silently clobbering an earlier, narrower
-   version of this override. */
+/* Flagged red — signals this tab isn't at "trust the score" yet while the
+   scoring model is still being reworked. Placed after every theme block
+   (not just the base rule) so it wins the cascade under the "white" theme
+   too — that theme redeclares #viewSwitch button/.active at equal
+   specificity, which was silently clobbering an earlier, narrower version
+   of this override. Solid fill + forced opacity so it stays visibly red
+   instead of fading to the ~70% opacity every other inactive tab gets. */
 #viewSwitch button[data-v="qs"],
 [data-theme="white"] #viewSwitch button[data-v="qs"]{
-  position:relative; opacity:1;
-}
-#viewSwitch button[data-v="qs"]::after{
-  content:''; position:absolute; left:10px; right:10px; bottom:3px; height:2px;
-  border-radius:2px; background:#d99a3f;
+  background:var(--bad-bg); border-color:var(--bad-fg); color:var(--bad-fg);
+  opacity:1; font-weight:800;
 }
 #viewSwitch button[data-v="qs"].active,
 [data-theme="white"] #viewSwitch button[data-v="qs"].active{
-  color:#8a5a12;
+  background:var(--bad-bg); border-color:var(--bad-fg); color:var(--bad-fg);
+  box-shadow:2px 2px 0 0 var(--bad-fg);
 }
 /* ===== END QUICK SWING FEATURE ===== */
 </style>
