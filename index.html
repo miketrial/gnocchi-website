@@ -573,30 +573,34 @@
   .wp-trade-card-compact .wp-tc-rr{ border-top-color:rgba(255,255,255,.12) }
   .wp-trade-card-compact .wp-tc-lbl{ color:#6b7280 }
   /* ===== QUICK SWING FEATURE ===== */
-  .qs-regime{ display:flex;align-items:center;gap:10px;padding:10px 14px;
-    border-radius:8px;margin-bottom:14px;font-size:11.5px;font-weight:600 }
-  .qs-regime.fav{ background:var(--good-bg);color:var(--good-fg) }
-  .qs-regime.unfav{ background:var(--bad-bg);color:var(--bad-fg) }
+  /* Softer overall palette than the rest of the app's harder-edged tables —
+     Bounce is the tab a beginner is most likely to find intimidating (both
+     directions, gates, multipliers), so it leans on lighter fills, rounder
+     corners, and outlines instead of solid alarm-colored blocks. */
+  .qs-regime{ display:flex;align-items:center;gap:10px;padding:12px 16px;
+    border-radius:10px;margin-bottom:16px;font-size:11.5px;font-weight:600;
+    border:1px solid transparent }
+  .qs-regime.fav{ background:rgba(213,245,227,.4); color:var(--good-fg); border-color:rgba(76,175,135,.3) }
+  .qs-regime.unfav{ background:rgba(250,219,216,.35); color:#9e5548; border-color:rgba(158,46,34,.2) }
   .qs-regime .qs-regime-dot{ width:8px;height:8px;border-radius:50%;background:currentColor;flex:none }
-  .qs-regime-sub{ font-weight:500;opacity:.85 }
+  .qs-regime-sub{ font-weight:500;opacity:.8 }
   .qs-blocked-badge{ font-size:8.5px;font-weight:700;text-transform:uppercase;
-    letter-spacing:.03em;padding:2px 6px;border-radius:5px;
-    background:var(--bad-bg);color:var(--bad-fg);white-space:nowrap }
-  .qs-empty{ padding:24px;text-align:center;color:var(--ink-faint);font-size:11px }
-  .qs-row-blocked{ opacity:.55 }
-  /* Per-factor cell coloring — same verdict palette/treatment as Short Term's
-     #shortView td.st-* cells, scoped here instead of shared, so this stays
-     independently removable. */
-  #qsView tbody td.st-good{ background:rgba(213,245,227,.45); color:var(--good-fg); font-weight:600 }
-  #qsView tbody td.st-ok  { background:rgba(200,238,216,.35); color:var(--good-fg); font-weight:500 }
-  #qsView tbody td.st-weak{ background:rgba(253,232,184,.45); color:#9a6f00;        font-weight:500 }
-  #qsView tbody td.st-bad { background:rgba(250,219,216,.45); color:var(--bad-fg);  font-weight:600 }
-  #qsView tbody td.st-na  { background:rgba(237,231,246,.45); color:var(--pur-fg);  font-weight:500 }
-  #qsView tbody tr:hover td.st-good{ background:rgba(213,245,227,.7) }
-  #qsView tbody tr:hover td.st-ok  { background:rgba(200,238,216,.6) }
-  #qsView tbody tr:hover td.st-weak{ background:rgba(253,232,184,.7) }
-  #qsView tbody tr:hover td.st-bad { background:rgba(250,219,216,.7) }
-  #qsView tbody tr:hover td.st-na  { background:rgba(237,231,246,.7) }
+    letter-spacing:.03em;padding:3px 8px;border-radius:8px;
+    background:rgba(250,219,216,.6);color:#9e2e22;white-space:nowrap }
+  .qs-empty{ padding:32px;text-align:center;color:var(--ink-faint);font-size:12px }
+  .qs-row-blocked{ opacity:.6 }
+  /* Per-factor cell coloring — softer/lighter than Short Term's palette,
+     scoped here instead of shared, so this stays independently removable. */
+  #qsView tbody td.st-good{ background:rgba(213,245,227,.35); color:#2e7d54; font-weight:600 }
+  #qsView tbody td.st-ok  { background:rgba(200,238,216,.25); color:#2e7d54; font-weight:500 }
+  #qsView tbody td.st-weak{ background:rgba(253,232,184,.35); color:#9a6f00; font-weight:500 }
+  #qsView tbody td.st-bad { background:rgba(250,219,216,.3);  color:#9e4a3e; font-weight:600 }
+  #qsView tbody td.st-na  { background:rgba(237,231,246,.3);  color:var(--pur-fg); font-weight:500 }
+  #qsView tbody tr:hover td.st-good{ background:rgba(213,245,227,.55) }
+  #qsView tbody tr:hover td.st-ok  { background:rgba(200,238,216,.45) }
+  #qsView tbody tr:hover td.st-weak{ background:rgba(253,232,184,.55) }
+  #qsView tbody tr:hover td.st-bad { background:rgba(250,219,216,.5) }
+  #qsView tbody tr:hover td.st-na  { background:rgba(237,231,246,.5) }
   /* Bidirectional additions: a mirrored factor (RSI/%B/VolClimax/Reversal/
      RS/AHMove) picks st-good/st-ok/st-weak when its BUY side is the
      stronger read, st-sell-bad/st-sell-ok/st-weak when its SELL side is —
@@ -606,25 +610,27 @@
      for a mirrored factor where NEITHER side is signaling (0 points both
      ways) — deliberately unstyled/muted rather than reusing st-bad, since
      "no signal" isn't the same as "bad" in a two-sided model. */
-  #qsView tbody td.st-sell-bad{ background:rgba(250,219,216,.45); color:var(--bad-fg); font-weight:600 }
-  #qsView tbody td.st-sell-ok { background:rgba(253,232,184,.45); color:#9a6f00;       font-weight:500 }
+  #qsView tbody td.st-sell-bad{ background:rgba(250,219,216,.3); color:#9e4a3e; font-weight:600 }
+  #qsView tbody td.st-sell-ok { background:rgba(253,232,184,.35); color:#9a6f00; font-weight:500 }
   #qsView tbody td.st-neutral { color:var(--ink-faint); font-weight:400 }
-  #qsView tbody tr:hover td.st-sell-bad{ background:rgba(250,219,216,.7) }
-  #qsView tbody tr:hover td.st-sell-ok { background:rgba(253,232,184,.7) }
-  .qs-verdict{ font-weight:700; padding:2px 8px; border-radius:4px; font-size:11px; white-space:nowrap }
-  .qs-verdict-buy     { background:var(--good-bg); color:var(--good-fg) }
-  .qs-verdict-sell    { background:var(--bad-bg);  color:var(--bad-fg) }
-  .qs-verdict-neutral { background:rgba(237,231,246,.35); color:var(--ink-faint) }
-  .qs-verdict-blocked { background:rgba(150,150,150,.2); color:var(--ink-faint) }
+  #qsView tbody tr:hover td.st-sell-bad{ background:rgba(250,219,216,.5) }
+  #qsView tbody tr:hover td.st-sell-ok { background:rgba(253,232,184,.55) }
+  .qs-verdict{ font-weight:700; padding:4px 12px; border-radius:12px; font-size:11.5px; white-space:nowrap; display:inline-block }
+  .qs-verdict-buy     { background:rgba(213,245,227,.6); color:#2e7d54 }
+  .qs-verdict-sell    { background:rgba(250,219,216,.55); color:#9e4a3e }
+  .qs-verdict-neutral { background:rgba(237,231,246,.3); color:var(--ink-faint) }
+  .qs-verdict-blocked { background:rgba(150,150,150,.15); color:var(--ink-faint) }
   .qs-tier-strong  { font-weight:800 }
   .qs-tier-moderate{ font-weight:700 }
   .qs-tier-weak    { font-weight:500; opacity:.8 }
-  .qs-subscore{ display:block; font-size:9px; color:var(--ink-faint); font-weight:400; margin-top:0; line-height:1.2 }
-  /* Tighter rows — the verdict/price cells stack two lines (badge+subscore,
-     price+as-of-date), which otherwise inflates every row well past the
-     other two tables' single-line rows. */
-  #qsView tbody td{ padding:1px 5px; line-height:1.15 }
-  #qsView tbody td br{ line-height:1 }
+  .qs-subscore{ display:block; font-size:9.5px; color:var(--ink-faint); font-weight:400; margin-top:3px; line-height:1.3 }
+  /* Roomier than the rest of the app's tables on purpose — this is the tab
+     with the most to read per cell (two-line verdict/price cells, gates,
+     tooltips), so a little extra breathing room makes it feel less like a
+     dense spreadsheet and easier to scan for a beginner. */
+  #qsView tbody td{ padding:9px 10px; line-height:1.4 }
+  #qsView tbody td br{ line-height:1.6 }
+  #qsView thead th{ padding-top:10px; padding-bottom:12px }
   /* ===== END QUICK SWING FEATURE ===== */
   /* Ready sub-tier divider headings (Premium / Standard) */
   .wp-tier-head{ width:100%;display:flex;align-items:center;gap:6px;
@@ -886,23 +892,24 @@
 #themeSwatch button[data-t="white"].active{box-shadow:0 0 0 2px #999}
 
 /* ===== QUICK SWING FEATURE ===== */
-/* Flagged red for now — signals this tab isn't at "trust the score" yet
-   while the scoring model is still being reworked. Remove once settled.
-   Placed after every theme block (not just the base rule) so it wins the
-   cascade under the "white" theme too — that theme redeclares
-   #viewSwitch button/.active at equal specificity, which was silently
-   clobbering an earlier, narrower version of this override. Solid fill
-   + forced opacity so it stays visibly red instead of fading to the ~70%
-   opacity every other inactive tab gets. */
+/* A soft amber accent (not alarm-red) signals "experimental/still being
+   tuned" without looking like an error state — a thin bottom border and a
+   small dot rather than a solid fill + hard drop-shadow. Placed after every
+   theme block (not just the base rule) so it wins the cascade under the
+   "white" theme too — that theme redeclares #viewSwitch button/.active at
+   equal specificity, which was silently clobbering an earlier, narrower
+   version of this override. */
 #viewSwitch button[data-v="qs"],
 [data-theme="white"] #viewSwitch button[data-v="qs"]{
-  background:var(--bad-bg); border-color:var(--bad-fg); color:var(--bad-fg);
-  opacity:1; font-weight:800;
+  position:relative; opacity:1;
+}
+#viewSwitch button[data-v="qs"]::after{
+  content:''; position:absolute; left:10px; right:10px; bottom:3px; height:2px;
+  border-radius:2px; background:#d99a3f;
 }
 #viewSwitch button[data-v="qs"].active,
 [data-theme="white"] #viewSwitch button[data-v="qs"].active{
-  background:var(--bad-bg); border-color:var(--bad-fg); color:var(--bad-fg);
-  box-shadow:2px 2px 0 0 var(--bad-fg);
+  color:#8a5a12;
 }
 /* ===== END QUICK SWING FEATURE ===== */
 </style>
