@@ -623,14 +623,14 @@
   .qs-tier-strong  { font-weight:800 }
   .qs-tier-moderate{ font-weight:700 }
   .qs-tier-weak    { font-weight:500; opacity:.8 }
-  .qs-subscore{ display:block; font-size:9.5px; color:var(--ink-faint); font-weight:400; margin-top:3px; line-height:1.3 }
-  /* Roomier than the rest of the app's tables on purpose — this is the tab
-     with the most to read per cell (two-line verdict/price cells, gates,
-     tooltips), so a little extra breathing room makes it feel less like a
-     dense spreadsheet and easier to scan for a beginner. */
-  #qsView tbody td{ padding:9px 10px; line-height:1.4 }
-  #qsView tbody td br{ line-height:1.6 }
-  #qsView thead th{ padding-top:10px; padding-bottom:12px }
+  .qs-subscore{ display:block; font-size:9px; color:var(--ink-faint); font-weight:400; margin-top:1px; line-height:1.15 }
+  /* A little roomier than the tightest possible layout (still not as dense
+     as Basic/Swing's single-line rows, since these cells stack 2-4 lines),
+     but roughly half the height of the previous pass — that one over-
+     corrected too far toward spacious. */
+  #qsView tbody td{ padding:3px 8px; line-height:1.15 }
+  #qsView tbody td br{ line-height:1.2 }
+  #qsView thead th{ padding-top:6px; padding-bottom:8px }
   /* ===== END QUICK SWING FEATURE ===== */
   /* Ready sub-tier divider headings (Premium / Standard) */
   .wp-tier-head{ width:100%;display:flex;align-items:center;gap:6px;
