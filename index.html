@@ -636,6 +636,33 @@
   #qsView tbody td{ padding:3px 8px; line-height:1.15 }
   #qsView tbody td br{ line-height:1.2 }
   #qsView thead th{ padding-top:6px; padding-bottom:8px }
+  /* --- Backtest ("as-if") paper-trade log --- */
+  .qs-bt{ margin:14px 0 4px }
+  .qs-bt-toggle{ display:flex; align-items:baseline; gap:8px; width:100%; text-align:left;
+    background:none; border:none; cursor:pointer; padding:6px 2px; color:var(--ink);
+    font-size:12.5px; font-weight:700 }
+  .qs-bt-caret{ display:inline-block; transition:transform .15s; font-size:10px; color:var(--ink-soft) }
+  .qs-bt-toggle[aria-expanded="true"] .qs-bt-caret{ transform:rotate(90deg) }
+  .qs-bt-sub{ font-weight:400; font-size:10px; color:var(--ink-soft) }
+  .qs-bt-body{ padding:6px 2px 2px }
+  .qs-bt-stats{ display:flex; flex-wrap:wrap; gap:8px 18px; padding:8px 0 12px }
+  .qs-bt-stat{ display:flex; flex-direction:column; gap:1px }
+  .qs-bt-stat .k{ font-size:9px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-soft) }
+  .qs-bt-stat .v{ font-size:15px; font-weight:700; color:var(--ink) }
+  .qs-bt-sec-head{ font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+    color:var(--ink-soft); margin:10px 0 4px }
+  table.qs-bt-table{ width:100%; border-collapse:collapse; font-size:11px }
+  table.qs-bt-table th{ text-align:right; padding:3px 8px; color:var(--ink-soft); font-weight:600;
+    border-bottom:1px solid rgba(0,0,0,.08); white-space:nowrap }
+  table.qs-bt-table th:first-child{ text-align:left }
+  table.qs-bt-table td{ text-align:right; padding:3px 8px; white-space:nowrap }
+  table.qs-bt-table td:first-child{ text-align:left; font-weight:700 }
+  table.qs-bt-table tr:hover td{ background:rgba(0,0,0,.02) }
+  .qs-bt-pos{ color:#2e7d54; font-weight:700 }
+  .qs-bt-neg{ color:#c0392b; font-weight:700 }
+  .qs-bt-reason{ font-size:9px; color:var(--ink-faint) }
+  .qs-bt-empty{ font-size:11px; color:var(--ink-soft); padding:6px 2px }
+  .qs-bt-note{ font-size:9.5px; color:var(--ink-faint); margin-top:10px; line-height:1.4 }
   /* ===== END QUICK SWING FEATURE ===== */
   /* Ready sub-tier divider headings (Premium / Standard) */
   .wp-tier-head{ width:100%;display:flex;align-items:center;gap:6px;
@@ -1253,6 +1280,20 @@
       <tbody id="qsBody"></tbody>
     </table>
   </div>
+  <!-- ===== QUICK SWING FEATURE ===== Backtest ("as-if") paper-trade log -->
+  <div id="qsBtPanel" class="qs-bt">
+    <button id="qsBtToggle" class="qs-bt-toggle" type="button" aria-expanded="false">
+      <span class="qs-bt-caret">▸</span> Backtest log
+      <span class="qs-bt-sub">as-if you bought every BUY and sold when it stopped being BUY · long only</span>
+    </button>
+    <div id="qsBtBody" class="qs-bt-body hidden">
+      <div id="qsBtStats" class="qs-bt-stats"></div>
+      <div id="qsBtOpen"></div>
+      <div id="qsBtClosed"></div>
+      <div class="qs-bt-note">Forward-only log — a new datapoint is recorded each time you open the app or rescan, at the price that scan saw. No slippage or commissions modeled. Cumulative $ assumes a fixed $10,000 per trade.</div>
+    </div>
+  </div>
+  <!-- ===== END QUICK SWING FEATURE ===== -->
   <div class="legend">
     <div class="ttl">Bounce scoring &nbsp;·&nbsp; bidirectional BUY/SELL, tuned for a 1-2 day mean-reversion hold</div>
     <span style="color:var(--ink-soft)">This is a genuinely different trade philosophy from Swing — that view is trend-following (buy strength, ride weeks); this one bets on a snap-back after price gets stretched, in either direction (oversold dip = BUY, overbought top = SELL). Lower hit-rate by design, so earnings is a hard gate, and Liquidity/ADR dampen both Buy and Sell scores rather than just docking points on one side.</span>
@@ -2846,7 +2887,7 @@ async function scoreQuickSwingForTicker(sym){
       stopCheckAnim(up);
       rescanBtn.disabled = false; rescanBtn.innerHTML = 'Rescan';
       if (j.status === 'error') { if (qsRowsBySym[up]) qsRowsBySym[up].scoring = false; if (currentView === 'qs') renderQuickSwing(); showToast(j.error || `${up} Bounce scoring failed.`); }
-      else { flash(up); showToast(`${up} added to Bounce.`); }
+      else { flash(up); showToast(`${up} added to Bounce.`); loadQsBacktest(); }
     }
   }, 3000);
 }
@@ -3550,6 +3591,7 @@ async function ensureQsDataLoaded(){
     qsLoaded = true; // only latch on success — see ensureShortDataLoaded for why
   } catch(e) { /* leave empty, render placeholders — qsLoaded stays false, will retry */ }
   renderQuickSwing();
+  loadQsBacktest(); // ===== QUICK SWING FEATURE ===== populate the backtest panel
 }
 
 function qsSortVal(r, col){
@@ -3721,6 +3763,107 @@ document.getElementById('qsView')?.addEventListener('click', e => {
   renderQuickSwing();
 });
 
+/* ===== QUICK SWING FEATURE ===== Backtest ("as-if") paper-trade log (client) */
+let qsBacktestLogs = [];          // [{ sym, open, closed:[...] }, ...]
+let qsBtExpanded = false;
+const QS_BT_NOTIONAL = 10000;     // "as if $X per trade" for cumulative $
+
+async function loadQsBacktest(){
+  if (!API_LIVE) return;
+  try {
+    const logs = await api.get('/api/quickswing/backtest');
+    if (Array.isArray(logs)) { qsBacktestLogs = logs; renderQsBacktest(); }
+  } catch(e) { /* non-critical — leave the panel as-is */ }
+}
+
+function qsBtPnlClass(p){ return p >= 0 ? 'qs-bt-pos' : 'qs-bt-neg'; }
+function qsBtPct(p){ return (p >= 0 ? '+' : '') + p.toFixed(2) + '%'; }
+function qsBtDate(iso){
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return isNaN(d) ? '—' : d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+}
+function qsBtPrice(v){ return (v > 0) ? '$' + Number(v).toFixed(2) : '—'; }
+
+function renderQsBacktest(){
+  const stats = document.getElementById('qsBtStats');
+  const openEl = document.getElementById('qsBtOpen');
+  const closedEl = document.getElementById('qsBtClosed');
+  if (!stats || !openEl || !closedEl) return;
+
+  const openTrades = qsBacktestLogs.filter(l => l && l.open).map(l => l.open);
+  const closed = [].concat(...qsBacktestLogs.map(l => (l && Array.isArray(l.closed)) ? l.closed : []))
+                   .sort((a, b) => (Date.parse(b.exitScoredAt || b.exitAt) || 0) - (Date.parse(a.exitScoredAt || a.exitAt) || 0));
+
+  // --- Summary stats over closed trades ---
+  const n = closed.length;
+  if (!n) {
+    stats.innerHTML = `<div class="qs-bt-empty">No closed trades yet — a trade closes the first time a ticker's verdict stops being BUY. Rescan across a verdict flip to populate this.</div>`;
+  } else {
+    const wins = closed.filter(t => t.pnlPct > 0).length;
+    const winRate = (wins / n) * 100;
+    const avgPnl = closed.reduce((s, t) => s + t.pnlPct, 0) / n;
+    const holds = closed.map(t => t.holdDays).filter(h => h != null).sort((a, b) => a - b);
+    const medHold = holds.length ? holds[Math.floor((holds.length - 1) / 2)] : null;
+    const best = closed.reduce((m, t) => t.pnlPct > m.pnlPct ? t : m, closed[0]);
+    const worst = closed.reduce((m, t) => t.pnlPct < m.pnlPct ? t : m, closed[0]);
+    // Cumulative $: fixed notional per trade, compounded additively (each trade
+    // sized the same $ regardless of prior outcome — a clean "as-if" read).
+    const cumDollars = closed.reduce((s, t) => s + QS_BT_NOTIONAL * (t.pnlPct / 100), 0);
+    const stat = (k, v, cls) => `<div class="qs-bt-stat"><span class="k">${k}</span><span class="v ${cls||''}">${v}</span></div>`;
+    stats.innerHTML =
+      stat('Closed trades', n) +
+      stat('Win rate', winRate.toFixed(0) + '%') +
+      stat('Avg P/L', qsBtPct(avgPnl), qsBtPnlClass(avgPnl)) +
+      stat('Median hold', medHold == null ? '—' : medHold + 'd') +
+      stat('Best', qsBtPct(best.pnlPct) + ' ' + escHtml(best.sym), 'qs-bt-pos') +
+      stat('Worst', qsBtPct(worst.pnlPct) + ' ' + escHtml(worst.sym), 'qs-bt-neg') +
+      stat('Cumulative', (cumDollars >= 0 ? '+' : '−') + '$' + Math.abs(cumDollars).toLocaleString(undefined,{maximumFractionDigits:0}), qsBtPnlClass(cumDollars));
+  }
+
+  // --- Open positions (unrealized against the live row price) ---
+  if (!openTrades.length) {
+    openEl.innerHTML = '';
+  } else {
+    const rows = openTrades.map(o => {
+      const live = qsRowsBySym[o.sym?.toUpperCase()]?.price;
+      const unreal = (live > 0 && o.entryPrice > 0) ? ((live - o.entryPrice) / o.entryPrice) * 100 : null;
+      return `<tr><td>${escHtml(o.sym)}</td><td>${qsBtDate(o.entryScoredAt || o.entryAt)}</td>` +
+        `<td>${qsBtPrice(o.entryPrice)}</td><td>${qsBtPrice(live)}</td>` +
+        `<td class="${unreal==null?'':qsBtPnlClass(unreal)}">${unreal==null?'—':qsBtPct(unreal)}</td></tr>`;
+    }).join('');
+    openEl.innerHTML = `<div class="qs-bt-sec-head">Open positions (${openTrades.length})</div>` +
+      `<table class="qs-bt-table"><thead><tr><th>Ticker</th><th>Entry</th><th>Entry $</th><th>Now $</th><th>Unrealized</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  // --- Closed trades ---
+  if (!n) {
+    closedEl.innerHTML = '';
+  } else {
+    const rows = closed.map(t => {
+      const reason = t.exitReason ? `<span class="qs-bt-reason">${escHtml(t.exitReason)}</span>` : '';
+      return `<tr><td>${escHtml(t.sym)}</td>` +
+        `<td>${qsBtDate(t.entryScoredAt || t.entryAt)}</td><td>${qsBtPrice(t.entryPrice)}</td>` +
+        `<td>${qsBtDate(t.exitScoredAt || t.exitAt)}</td><td>${qsBtPrice(t.exitPrice)}</td>` +
+        `<td>${t.holdDays==null?'—':t.holdDays+'d'}</td>` +
+        `<td class="${qsBtPnlClass(t.pnlPct)}">${qsBtPct(t.pnlPct)}</td>` +
+        `<td>${reason}</td></tr>`;
+    }).join('');
+    closedEl.innerHTML = `<div class="qs-bt-sec-head">Closed trades (${n})</div>` +
+      `<table class="qs-bt-table"><thead><tr><th>Ticker</th><th>Entry</th><th>Entry $</th><th>Exit</th><th>Exit $</th><th>Hold</th><th>P/L</th><th>Exit on</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+}
+
+document.getElementById('qsBtToggle')?.addEventListener('click', () => {
+  qsBtExpanded = !qsBtExpanded;
+  const body = document.getElementById('qsBtBody');
+  const toggle = document.getElementById('qsBtToggle');
+  body?.classList.toggle('hidden', !qsBtExpanded);
+  toggle?.setAttribute('aria-expanded', String(qsBtExpanded));
+  if (qsBtExpanded) { renderQsBacktest(); loadQsBacktest(); }
+});
+/* ===== END QUICK SWING FEATURE ===== */
+
 async function rescanQuickSwing(e){
   const force = true; // Rescan always force-fetches fresh FMP, same as Short Term.
   localStorage.setItem('gn_qs_last_rescan', Date.now()); updateRescanTimer();
@@ -3766,7 +3909,7 @@ async function rescanQuickSwing(e){
         btn.disabled = false;
         btn.innerHTML = 'Rescan';
         if (j.status === 'error') showToast(j.error || 'Bounce rescan failed.');
-        else if (j.rows) showToast(`Bounce: rescored ${j.rows.filter(r => !r.error && r.verdict).length} ticker(s).`);
+        else if (j.rows) { showToast(`Bounce: rescored ${j.rows.filter(r => !r.error && r.verdict).length} ticker(s).`); loadQsBacktest(); }
       }
     }, 3000);
   } catch (err) {

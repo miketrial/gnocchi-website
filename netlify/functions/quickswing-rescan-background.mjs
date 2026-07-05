@@ -2,7 +2,8 @@
    1-2 day mean-reversion view. Self-contained and independently removable —
    see the removal checklist in netlify/lib/quickswing-pipeline.mjs. */
 import { scoreTickerQuickSwing, getMarketRegime } from "../lib/quickswing-pipeline.mjs";
-import { listQuickswingRows, putQuickswingRow, putJob, acquireRescanLock, releaseRescanLock } from "../lib/store.mjs";
+import { recordQuickswingTransition } from "../lib/quickswing-backtest.mjs";
+import { listQuickswingRows, putQuickswingRow, getQuickswingTrades, putQuickswingTrades, putJob, acquireRescanLock, releaseRescanLock } from "../lib/store.mjs";
 
 export default async (req) => {
   const { jobId, force, tickers: onlyTickers, clientTickers } = await req.json().catch(() => ({}));
@@ -56,6 +57,14 @@ async function runQuickSwingScan({ jobId, force, onlyTickers, clientTickers }) {
       const skipCache = !!force || !!(onlyTickers && onlyTickers.length);
       const row = await scoreTickerQuickSwing(sym, { skipCache, marketRegime: regime });
       await putQuickswingRow(sym, row).catch(() => {});
+      // Fold this scan into the ticker's "as-if" paper-trade log — opens a
+      // paper long on a BUY verdict, closes it the moment the verdict stops
+      // being BUY. Best-effort: a store hiccup here must not fail the scan.
+      try {
+        const prevLog = await getQuickswingTrades(sym);
+        const nextLog = recordQuickswingTransition(row, prevLog);
+        await putQuickswingTrades(sym, nextLog);
+      } catch (e) { /* backtest log is non-critical — ignore */ }
       rows.push(row);
     } catch (e) {
       rows.push({ sym, error: String(e?.message || e) });

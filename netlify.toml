@@ -67,6 +67,11 @@
   from = "/api/quickswing/watchlist/*"
   to = "/.netlify/functions/quickswing-delete/:splat"
   status = 200
+
+[[redirects]]
+  from = "/api/quickswing/backtest"
+  to = "/.netlify/functions/quickswing-backtest"
+  status = 200
 # ===== END QUICK SWING FEATURE =====
 
 [[redirects]]

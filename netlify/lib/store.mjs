@@ -13,6 +13,7 @@ const shortRowStore    = () => getStore("short-rows");   // key = TICKER, per-ti
 const shortFmpStore    = () => getStore("short-fmp");    // key = TICKER, per-ticker raw FMP fan-out cache (24h TTL)
 const epsSnapStore     = () => getStore("eps-snapshots");// key = TICKER (object: {YYYY-MM-DD: fwdEps})
 const qsRowStore       = () => getStore("qs-rows");      // key = TICKER, per-ticker quickswing-pipeline score blob
+const qsTradesStore    = () => getStore("qs-trades");    // key = TICKER, per-ticker paper-trade backtest log
 const qsFmpStore       = () => getStore("qs-fmp");       // key = TICKER, per-ticker raw FMP fan-out cache (24h TTL)
 const spyHistStore     = () => getStore("spy-hist");     // key = "SPY", one shared blob for the whole scan batch
 
@@ -273,6 +274,27 @@ export async function putQuickswingRow(ticker, row) {
 }
 export async function deleteQuickswingRow(ticker) {
   await qsRowStore().delete(ticker.toUpperCase()).catch(() => {});
+}
+
+/* ---------- Quick Swing: paper-trade backtest log ----------
+   One blob per ticker: { open: {...}|null, closed: [...newest-first] }. Records
+   the "as-if" trade that would result from acting on the BUY/exit verdicts.
+   Written from the rescan loop; read by the quickswing-backtest endpoint.
+   Removable with the rest of the QUICK SWING FEATURE block. */
+export async function listQuickswingTrades() {
+  const s = qsTradesStore();
+  const { blobs } = await s.list();
+  const logs = await Promise.all(blobs.map(b => s.get(b.key, { type: "json" }).catch(() => null)));
+  return logs.filter(Boolean);
+}
+export async function getQuickswingTrades(ticker) {
+  return qsTradesStore().get(ticker.toUpperCase(), { type: "json" }).catch(() => null);
+}
+export async function putQuickswingTrades(ticker, log) {
+  await qsTradesStore().setJSON(ticker.toUpperCase(), log);
+}
+export async function deleteQuickswingTrades(ticker) {
+  await qsTradesStore().delete(ticker.toUpperCase()).catch(() => {});
 }
 
 /* ---------- Quick Swing: raw FMP fan-out cache (separate from Short Term) ---------- */
