@@ -15,9 +15,26 @@
    FEATURE block (see the checklist in quickswing-pipeline.mjs). */
 
 const MAX_CLOSED = 200; // cap the per-ticker closed-trade history
+export const BT_WINDOW_DAYS = 50; // rolling window: trades older than this drop off
+export const BT_SEED_DAYS = 15;   // history backfilled the first time a ticker is added
 
-function emptyLog() {
+export function emptyLog() {
   return { open: null, closed: [] };
+}
+
+/* Rolling-window prune: drop closed trades whose exit is older than `days` ago,
+   measured from now. A freshly-seeded ticker carries ~15 days of history (all
+   inside the window, so nothing drops); as forward days accumulate the window
+   fills toward 50, then rolls — the oldest day falling off as each new one is
+   added. The open position is never pruned. */
+export function pruneTradeWindow(log, days = BT_WINDOW_DAYS) {
+  if (!log || typeof log !== "object") return emptyLog();
+  const cutoff = Date.now() - days * 86400000;
+  const closed = (Array.isArray(log.closed) ? log.closed : []).filter(t => {
+    const ts = Date.parse(t.exitScoredAt || t.exitAt);
+    return !isFinite(ts) || ts >= cutoff;
+  });
+  return { open: log.open ?? null, closed: closed.slice(0, MAX_CLOSED) };
 }
 
 /* Whole days between two ISO timestamps, rounded to one decimal (a 1-2 day

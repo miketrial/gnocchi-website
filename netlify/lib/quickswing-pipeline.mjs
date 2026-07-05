@@ -80,6 +80,7 @@ import {
 } from "./store.mjs";
 import { round2, na, scored, trueRange, atrFrom } from "./ta-helpers.mjs";
 import { safe, delay } from "./fmp-client.mjs";
+import { recordQuickswingTransition, emptyLog, BT_SEED_DAYS } from "./quickswing-backtest.mjs";
 
 /* ---------- Sanity gates (reject implausible values before they reach a chip) ---------- */
 function sane(value, min, max) {
@@ -731,4 +732,121 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
 
   await putQuickswingFmpCache(sym, { _v: 5, row }).catch(() => {});
   return row;
+}
+
+/* ---------- Historical backtest seed ----------
+   The live pipeline only produces a verdict for "right now." To give the
+   backtest log something to show the moment a ticker is first added, replay
+   the screener over the trailing EOD price history and synthesize the same
+   BUY/exit trades it WOULD have booked.
+
+   Deliberately EOD-only: the after-hours and live-intraday legs can't be
+   reconstructed from a historical daily bar, and VIX history isn't on the
+   stable /quote endpoint — so those are treated as neutral (AH = n/a, VIX
+   multiplier = 1). Every deterministic factor (RSI2, %B, Vol Climax, Reversal,
+   RS-vs-SPY, Vol Dry-Up, ATR Expansion, ADR/Liquidity gates, earnings gate,
+   SPY market regime) IS reconstructed as of each historical close, so the seed
+   is a faithful replay of the parts of the model that don't depend on
+   right-now-only data. Numbers can therefore differ slightly from what the
+   live tool showed on those days — this is a plausible reconstruction, not a
+   recording. */
+
+/* Newest-first slice of `hist` as of (and including) `asOfDate`. */
+function histAsOf(hist, asOfDate) {
+  return hist.filter(d => d.date <= asOfDate);
+}
+
+/* Market-regime favorability reconstructed from SPY as of a past date. Returns
+   true/false/null (null = not enough SPY history to judge → no adjustment). */
+function historicalRegimeFavorable(spyAsOf) {
+  if (!spyAsOf || spyAsOf.length < 200) return null;
+  const closes = spyAsOf.map(d => d.close);
+  const sma50 = closes.slice(0, 50).reduce((s, x) => s + x, 0) / 50;
+  const sma200 = closes.slice(0, 200).reduce((s, x) => s + x, 0) / 200;
+  const uptrend = closes[0] > sma50 && sma50 > sma200;
+  const distDays = distributionDayCount(spyAsOf);
+  return uptrend && (distDays == null || distDays <= 5);
+}
+
+/* Was the ticker inside the 5-day pre-earnings blackout as of `asOfDate`? */
+function historicalEarningsBlocked(earningsHist, asOfDate) {
+  if (!earningsHist || !earningsHist.length) return false;
+  const next = earningsHist
+    .filter(e => e.date > asOfDate)
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+  if (!next) return false;
+  const daysUntil = Math.ceil((new Date(next.date) - new Date(asOfDate)) / 86400000);
+  return daysUntil <= 5;
+}
+
+/* Compute just the headline verdict for one historical close — the EOD subset
+   of scoreTickerQuickSwing, reusing the same factor functions and multipliers. */
+function historicalVerdict(hAsOf, spyAsOf, earningsHist, asOfDate) {
+  const mirrored = [
+    checkRsi2(hAsOf),
+    checkBollinger(hAsOf),
+    checkVolumeClimax(hAsOf),
+    checkReversalCandle(hAsOf),
+    checkRelativeStrength(hAsOf, spyAsOf),
+    naMirror("No historical after-hours data"), // AH leg — not reconstructable
+  ];
+  const shared = [checkVolumeDryUp(hAsOf), checkAtrExpansion(hAsOf)];
+  const adr = checkAdr(hAsOf);
+  const liq = checkLiquidity(hAsOf);
+
+  const rawBuyScore = mirrored.reduce((s, c) => s + (c.buy.points ?? 0), 0) + shared.reduce((s, c) => s + (c.points ?? 0), 0);
+  const rawSellScore = mirrored.reduce((s, c) => s + (c.sell.points ?? 0), 0) + shared.reduce((s, c) => s + (c.points ?? 0), 0);
+
+  const liqMultiplier = liqMultiplierFor(liq.points);
+  const adrMultiplier = adrMultiplierFor(adr.points);
+  const regimeFavorable = historicalRegimeFavorable(spyAsOf);
+  const regimeMultiplierBuy = regimeFavorable === false ? 0.75 : 1.0;
+  const regimeMultiplierSell = regimeFavorable === false ? 1.15 : 1.0;
+  // VIX history unavailable → neutral (1.0), matching the header note.
+
+  const buyScore = Math.min(QS_MAX_SCORE, Math.round(rawBuyScore * liqMultiplier * adrMultiplier * regimeMultiplierBuy));
+  const sellScore = Math.min(QS_MAX_SCORE, Math.round(rawSellScore * liqMultiplier * adrMultiplier * regimeMultiplierSell));
+  const blocked = historicalEarningsBlocked(earningsHist, asOfDate);
+  return deriveVerdict({ buyScore, sellScore, blocked }).verdict;
+}
+
+/* Replay the last `daysBack` sessions and fold each day's verdict through the
+   same transition logic the live loop uses, producing a seeded trade log. */
+export function replayQuickSwingTrades(sym, hist, spyHist, earningsHist, { daysBack = BT_SEED_DAYS } = {}) {
+  let log = emptyLog();
+  if (!hist || hist.length < 21) return log; // not enough bars to score anything
+  // Oldest → newest over the trailing window, so trades open/close in order.
+  const dates = hist.slice(0, daysBack).map(b => b.date).reverse();
+  for (const date of dates) {
+    const hAsOf = histAsOf(hist, date);
+    if (hAsOf.length < 21) continue;
+    const spyAsOf = spyHist ? histAsOf(spyHist, date) : null;
+    const verdict = historicalVerdict(hAsOf, spyAsOf, earningsHist, date);
+    const syntheticRow = {
+      sym,
+      price: hAsOf[0].close,
+      priceIsLive: false,
+      verdict,
+      scored_at: `${date}T21:00:00.000Z`, // ~US market close
+    };
+    log = recordQuickswingTransition(syntheticRow, log);
+  }
+  return log;
+}
+
+/* Fetch what the replay needs and produce the seed log. Own FMP fetch (hist +
+   earnings); SPY history is passed in from the shared regime object to avoid a
+   redundant index fetch. Called once, the first time a ticker is tracked. */
+export async function seedQuickSwingBacktest(sym, { daysBack = BT_SEED_DAYS, spyHist = null } = {}) {
+  const t = sym.toUpperCase();
+  let rawHist = [], earningsHist = [];
+  try {
+    rawHist = await safe("historical-price-eod/full", t, "&limit=320"); await delay(200);
+    earningsHist = await safe("earnings", t, "&limit=12");
+  } catch (e) {
+    console.error(`[quickswing] ${t} seed fetch error:`, e?.message || e);
+    return emptyLog();
+  }
+  const hist = cleanHist(rawHist);
+  return replayQuickSwingTrades(t, hist, spyHist, earningsHist, { daysBack });
 }
