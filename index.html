@@ -599,6 +599,29 @@
   #qsView tbody tr:hover td.st-weak{ background:rgba(253,232,184,.7) }
   #qsView tbody tr:hover td.st-bad { background:rgba(250,219,216,.7) }
   #qsView tbody tr:hover td.st-na  { background:rgba(237,231,246,.7) }
+  /* Bidirectional additions: a mirrored factor (RSI/%B/VolClimax/Reversal/
+     RS/AHMove) picks st-good/st-ok/st-weak when its BUY side is the
+     stronger read, st-sell-bad/st-sell-ok/st-weak when its SELL side is —
+     "bad"/"ok" naming kept parallel to the buy-side classes above (a
+     strong sell read is exactly as notable as a strong buy read, so it
+     gets the same visual weight, just red instead of green). st-neutral is
+     for a mirrored factor where NEITHER side is signaling (0 points both
+     ways) — deliberately unstyled/muted rather than reusing st-bad, since
+     "no signal" isn't the same as "bad" in a two-sided model. */
+  #qsView tbody td.st-sell-bad{ background:rgba(250,219,216,.45); color:var(--bad-fg); font-weight:600 }
+  #qsView tbody td.st-sell-ok { background:rgba(253,232,184,.45); color:#9a6f00;       font-weight:500 }
+  #qsView tbody td.st-neutral { color:var(--ink-faint); font-weight:400 }
+  #qsView tbody tr:hover td.st-sell-bad{ background:rgba(250,219,216,.7) }
+  #qsView tbody tr:hover td.st-sell-ok { background:rgba(253,232,184,.7) }
+  .qs-verdict{ font-weight:700; padding:2px 8px; border-radius:4px; font-size:11px; white-space:nowrap }
+  .qs-verdict-buy     { background:var(--good-bg); color:var(--good-fg) }
+  .qs-verdict-sell    { background:var(--bad-bg);  color:var(--bad-fg) }
+  .qs-verdict-neutral { background:rgba(237,231,246,.35); color:var(--ink-faint) }
+  .qs-verdict-blocked { background:rgba(150,150,150,.2); color:var(--ink-faint) }
+  .qs-tier-strong  { font-weight:800 }
+  .qs-tier-moderate{ font-weight:700 }
+  .qs-tier-weak    { font-weight:500; opacity:.8 }
+  .qs-subscore{ display:block; font-size:9px; color:var(--ink-faint); font-weight:400; margin-top:2px }
   /* ===== END QUICK SWING FEATURE ===== */
   /* Ready sub-tier divider headings (Premium / Standard) */
   .wp-tier-head{ width:100%;display:flex;align-items:center;gap:6px;
@@ -1268,25 +1291,26 @@
           <th></th>
           <th class="sortable" data-qssort="sym">Ticker</th>
           <th class="num sortable" data-qssort="price">Price</th>
-          <th class="num sortable" data-qssort="score" data-tip="Sum of 9 factors (RSI(2), Bollinger %B, volume climax, reversal candle, relative strength vs SPY, volume dry-up, ADR%, liquidity, after-hours move), each 0-3 points, out of 27.">Score<span class="sub">of 27</span></th>
-          <th class="num sortable" data-qssort="rsi" data-tip="2-day RSI — a much more reactive oversold/overbought read than the standard 14-day RSI, tuned to catch 1-2 day extremes rather than multi-week trend. Lower = more oversold: ≤5 deeply oversold, ≤10 oversold, ≤20 stretched down. Live during market hours — uses the current quote as today's in-progress bar, not just yesterday's close.">RSI(2)</th>
-          <th class="num sortable" data-qssort="pctB" data-tip="Bollinger %B(20,2σ) — where price sits inside its own 20-day volatility band. The more negative, the further outside the lower band and the more stretched from its own normal range. Live during market hours.">%B</th>
-          <th class="num sortable" data-qssort="volclimax" data-tip="Last session's volume vs its own 20-day average, read against direction. A huge spike on a down day often marks capitulation (the sellers who were going to sell, already have); a spike on an up day can mean the bounce is already underway. Updates once daily after close — mid-session volume-so-far isn't comparable to a full day's average, so this can't be shown live without being misleading.">Vol Climax</th>
-          <th class="num sortable" data-qssort="reversal" data-tip="Where the close sits within the day's own high-low range. Closing near the day's highs after a down day is a rough 'buyers stepped in' tell. Updates once daily after close — the whole signal is where price ends up by the close, so it isn't answerable mid-session.">Reversal</th>
-          <th class="num sortable" data-qssort="rs" data-tip="Simplified relative strength vs SPY — weighted 3/6/9/12-month return, ticker minus SPY. Only fade dips in stocks beating the market — this keeps the system from buying dips in laggards. Live during market hours — both legs use current quotes.">RS vs SPY</th>
-          <th class="num sortable" data-qssort="dryup" data-tip="Last 5 days' average volume vs the 20 days before that. Counterintuitively bullish: low volume during a consolidation (nobody's selling) often precedes a move better than a volume spike does. Updates once daily after close, same reason as Vol Climax.">Vol Dry-Up</th>
-          <th class="num sortable" data-qssort="adr" data-tip="Average Daily Range % — how much this stock typically moves per day. Too low = won't move enough in 1-2 days; too high = whipsaw risk that runs through a tight stop. Updates once daily — a slow-moving structural stat, a live tick wouldn't change it meaningfully.">ADR%</th>
-          <th class="num sortable" data-qssort="liq" data-tip="20-day average dollar volume. Thin stocks gap on small flows and can trap you on exit — a liquidity floor is the cheapest risk control, same reasoning as Short Term's. Updates once daily — same reasoning as ADR%.">Liquidity</th>
-          <th class="num sortable" data-qssort="ah" data-tip="Post-close move vs today's regular-session close, from FMP's live after-hours quote. A sharp drop adds to the 'stretched' read; a sharp pop gets partial credit (the bounce may already be starting). No premarket leg — FMP's stable API doesn't offer one.">AH Move</th>
-          <th data-tip="Hard gate, not a graduated score — a 1-2 day hold can't absorb an earnings-day gap. Blocked inside 5 days of the next print.">Earnings</th>
+          <th class="num sortable" data-qssort="verdict" data-tip="BUY/SELL/NEUTRAL verdict, reduced from independent Buy and Sell scores (each 0-24, summed across 6 bidirectional factors + 2 volatility-context factors, then scaled by the Liquidity and ADR gates and the market-regime read). 75%+ = strong, 55%+ = moderate, 40%+ = weak. BLOCKED overrides everything inside the earnings blackout window.">Verdict</th>
+          <th class="num sortable" data-qssort="rsi" data-tip="2-day RSI — a much more reactive oversold/overbought read than the standard 14-day RSI, tuned to catch 1-2 day extremes rather than multi-week trend. Lower = more oversold (BUY): ≤5 deeply oversold, ≤10 oversold, ≤20 stretched down. Higher = more overbought (SELL): ≥95 deeply overbought, ≥90 overbought, ≥80 stretched up. Live during market hours — uses the current quote as today's in-progress bar, not just yesterday's close.">RSI(2)</th>
+          <th class="num sortable" data-qssort="pctB" data-tip="Bollinger %B(20,2σ) — where price sits inside its own 20-day volatility band. Below 0 (BUY): below the lower band, the more negative the more stretched down. Above 1 (SELL): above the upper band, the more it exceeds 1 the more stretched up. Live during market hours.">%B</th>
+          <th class="num sortable" data-qssort="volclimax" data-tip="Last session's volume vs its own 20-day average, read against direction. A huge spike on a down day often marks capitulation (BUY — the sellers who were going to sell, already have); a huge spike on an up day can mark a blow-off top (SELL — the buyers who were going to buy, already have). Updates once daily after close — mid-session volume-so-far isn't comparable to a full day's average, so this can't be shown live without being misleading.">Vol Climax</th>
+          <th class="num sortable" data-qssort="reversal" data-tip="Where the close sits within the day's own high-low range. Closing near the day's highs after a down day is a 'buyers stepped in' tell (BUY); closing near the day's lows after an up day is a 'sellers stepped in' tell (SELL). Updates once daily after close — the whole signal is where price ends up by the close, so it isn't answerable mid-session.">Reversal</th>
+          <th class="num sortable" data-qssort="rs" data-tip="Simplified relative strength vs SPY — weighted 3/6/9/12-month return, ticker minus SPY. Beating the market (BUY context) vs lagging the market (SELL context) — only fade dips in market leaders, only watch exits more closely in market laggards. Live during market hours — both legs use current quotes.">RS vs SPY</th>
+          <th class="num sortable" data-qssort="ah" data-tip="Post-close move vs today's regular-session close, from FMP's live after-hours quote. A sharp drop adds to the 'stretched down' read (BUY); a sharp pop adds to the 'stretched up' read (SELL) — a clean mirror. No premarket leg — FMP's stable API doesn't offer one.">AH Move</th>
+          <th class="num sortable" data-qssort="dryup" data-tip="Last 5 days' average volume vs the 20 days before that. Context, not directional — low volume during a consolidation (nobody's selling, nobody's buying) precedes a move in EITHER direction equally well, so this feeds both the Buy and Sell scores the same amount. Updates once daily after close.">Vol Dry-Up</th>
+          <th class="num sortable" data-qssort="volexp" data-tip="5-day ATR vs 20-day ATR, as a ratio. Context, not directional — this answers 'is volatility expanding right now,' the concrete high-volatility gate: a RSI(2)/%B extreme during ATR expansion is a higher-conviction signal than the same reading during ATR contraction (a quiet, directionless tape). Feeds both Buy and Sell scores equally.">Vol Expansion</th>
+          <th class="num sortable" data-qssort="adr" data-tip="GATE — Average Daily Range %, how much this stock typically moves per day. Too low = won't move enough in 1-2 days; too high = whipsaw risk that runs through a tight stop. Dampens BOTH the Buy and Sell scores, not just one direction — a too-quiet or too-wild regime makes an exit exactly as unreliable as an entry. Updates once daily — a slow-moving structural stat.">ADR Gate</th>
+          <th class="num sortable" data-qssort="liq" data-tip="GATE — 20-day average dollar volume. Thin stocks can gap against a fresh entry just as easily as they can trap you on the way out — dampens BOTH the Buy and Sell scores. Updates once daily.">Liquidity</th>
+          <th data-tip="Hard gate, not a graduated score — a 1-2 day hold can't absorb an earnings-day gap whether entering or exiting. Blocks the headline verdict (shows BLOCKED) inside 5 days of the next print; underlying Buy/Sell scores still shown for context.">Earnings</th>
         </tr>
       </thead>
       <tbody id="qsBody"></tbody>
     </table>
   </div>
   <div class="legend">
-    <div class="ttl">Quick Swing scoring &nbsp;·&nbsp; 9 factors tuned for a 1-2 day mean-reversion hold</div>
-    <span style="color:var(--ink-soft)">This is a genuinely different trade philosophy from Short Term — that view is trend-following (buy strength, ride weeks); this one bets on a snap-back after price gets stretched. Lower hit-rate by design, so earnings and thin liquidity are hard gates, not just docked points.</span>
+    <div class="ttl">Quick Swing scoring &nbsp;·&nbsp; bidirectional BUY/SELL, tuned for a 1-2 day mean-reversion hold</div>
+    <span style="color:var(--ink-soft)">This is a genuinely different trade philosophy from Short Term — that view is trend-following (buy strength, ride weeks); this one bets on a snap-back after price gets stretched, in either direction (oversold dip = BUY, overbought top = SELL). Lower hit-rate by design, so earnings is a hard gate, and Liquidity/ADR dampen both Buy and Sell scores rather than just docking points on one side.</span>
   </div>
 </div>
 <!-- ===== END QUICK SWING FEATURE ===== -->
@@ -2444,7 +2468,7 @@ document.querySelectorAll('#viewSwitch button').forEach(b=>{
     const v=b.dataset.v;
     if(v==='basic') setView('watchlist');
     else if(v==='short'){ setView('short'); ensureShortDataLoaded(); }
-    else if(v==='qs'){ setView('qs'); ensureQsDataLoaded(); } // ===== QUICK SWING FEATURE =====
+    else if(v==='qs'){ setView('qs'); ensureQsDataLoaded(); maybeAutoRescanQuickSwing(); } // ===== QUICK SWING FEATURE =====
   });
 });
 // Default landing view = Short Term — but the setView('short') call itself
@@ -2944,6 +2968,33 @@ function updateRescanTimer(){
 }
 updateRescanTimer();
 setInterval(updateRescanTimer,15000);
+
+/* ===== QUICK SWING FEATURE =====
+   Auto-refresh on load — Quick Swing is the one view checked hourly, so
+   rather than a server-side cron (no such infra exists in this app), just
+   check the same 'gn_qs_last_rescan' timestamp the timer above already
+   reads whenever the user switches into the Quick Swing tab, and if it's
+   stale (>1hr) or has never run, kick off the exact same rescanQuickSwing()
+   path a manual click would — same job/poll/button-state/toast, so an
+   auto-triggered scan looks identical to one the user asked for, nothing
+   silent. qsAutoRescanAttempted guards against re-firing on every tab
+   flip within one page load; the staleness check itself is what prevents
+   re-firing across quick reloads; the existing server-side rescan lock
+   (acquireRescanLock in store.mjs) already covers the two-tabs-open case
+   since this calls the same endpoint a manual rescan does. */
+const QS_AUTO_RESCAN_MS = 60 * 60 * 1000; // 1 hour
+let qsAutoRescanAttempted = false;
+function maybeAutoRescanQuickSwing(){
+  if (qsAutoRescanAttempted) return;
+  qsAutoRescanAttempted = true;
+  if (!API_LIVE || document.hidden) return;
+  const ts = Number(localStorage.getItem('gn_qs_last_rescan'));
+  const staleOrNever = !ts || (Date.now() - ts) > QS_AUTO_RESCAN_MS;
+  if (!staleOrNever) return;
+  rescanQuickSwing();
+}
+/* ===== END QUICK SWING FEATURE ===== */
+
 function flash(sym){
   const tr=document.querySelector(`tr[data-sym="${sym}"]`);
   if(tr){tr.classList.add('flash');setTimeout(()=>tr.classList.remove('flash'),700);}
@@ -3301,23 +3352,24 @@ async function ensureShortDataLoaded(){
    netlify/lib/quickswing-pipeline.mjs. */
 let qsRowsBySym = Object.create(null);
 let qsLoaded = false;
-let qsSortCol = 'score';
+let qsSortCol = 'verdict';
 let qsSortDir = -1;
 
-// Tooltip text for each of the 9 Quick Swing factors (factor, why it matters,
-// rule) — same "name: computed reason" per-cell convention as Short Term's
-// SHORT_LABELS/tipForChip (see above). Order matches the checks array in
-// netlify/lib/quickswing-pipeline.mjs.
+// Tooltip text for each of the 8 Quick Swing bidirectional/context factors
+// (factor, why it matters, rule) — same "name: computed reason" per-cell
+// convention as Short Term's SHORT_LABELS/tipForChip (see above). Order
+// matches the mirrored+shared arrays in netlify/lib/quickswing-pipeline.mjs.
+// ADR% and Liquidity are gates now (not scored factors), so they're not
+// listed here — they render as their own non-clickable columns.
 const QS_LABELS = [
   { name: "RSI(2)" },
   { name: "Bollinger %B" },
   { name: "Volume Climax" },
   { name: "Reversal Candle" },
   { name: "Relative Strength vs SPY" },
-  { name: "Volume Dry-Up" },
-  { name: "ADR%" },
-  { name: "Liquidity" },
   { name: "After-Hours Move" },
+  { name: "Volume Dry-Up" },
+  { name: "Vol Expansion" },
 ];
 function qsTipForChip(idx, reason){
   const l = QS_LABELS[idx];
@@ -3349,26 +3401,62 @@ const QS_FACTOR_META = [
   { label: 'Volume Climax',            unit: 'x',  toVal: v => v != null ? +v.toFixed(2) : null },
   { label: 'Reversal Candle',          unit: '%',  toVal: v => v != null ? +(v * 100).toFixed(0) : null },
   { label: 'Relative Strength vs SPY', unit: 'pp', toVal: v => v?.delta != null ? +(v.delta * 100).toFixed(1) : null },
-  { label: 'Volume Dry-Up',            unit: '%',  toVal: v => v != null ? +(v * 100).toFixed(0) : null },
-  { label: 'ADR%',                     unit: '%',  toVal: v => v != null ? +v.toFixed(1) : null },
-  { label: 'Liquidity',                unit: '$M', toVal: v => v != null ? +(v / 1e6).toFixed(0) : null },
   { label: 'After-Hours Move',         unit: '%',  toVal: v => v?.chg != null ? +(v.chg * 100).toFixed(1) : null },
+  { label: 'Volume Dry-Up',            unit: '%',  toVal: v => v != null ? +(v * 100).toFixed(0) : null },
+  { label: 'Vol Expansion',            unit: 'x',  toVal: v => v != null ? +v.toFixed(2) : null },
 ];
-const QS_COL_TO_FACTOR = { score:-1, rsi:0, pctB:1, volclimax:2, reversal:3, rs:4, dryup:5, adr:6, liq:7, ah:8 };
+// score:-1 keeps its meaning (aggregate — now plots Buy+Sell as two lines,
+// see buildQsFactChart). ADR/Liquidity are gates, not indexed factors, so
+// they're deliberately absent — those cells aren't clickable.
+const QS_COL_TO_FACTOR = { verdict:-1, rsi:0, pctB:1, volclimax:2, reversal:3, rs:4, ah:5, dryup:6, volexp:7 };
+
+// Picks whichever side (buy/sell) is the stronger read for a given factor at
+// a given history entry — same "which side is actually signaling" logic as
+// the live table's vCls(), so the popover chart/list agree with what's shown
+// in the row. Shared factors (dryup/volexp) always have buy===sell.
+function qsEntrySideVerdict(entry, factorIdx){
+  const bv = entry.buyVerdicts?.[factorIdx], sv = entry.sellVerdicts?.[factorIdx];
+  if (!bv || !sv) return entry.verdicts?.[factorIdx] || 'na'; // legacy entry fallback
+  if (bv === sv || bv === 'na') return bv;
+  const rank = v => v==='good'?3:v==='ok'?2:v==='weak'?1:0;
+  return rank(bv) >= rank(sv) ? bv : sv;
+}
+// Direction-aware color: a SELL-leaning read shows on the red scale even
+// though its own verdict token ('good'/'ok') is the same string a BUY read
+// would use — verdictColor() alone can't tell direction apart.
+function qsEntrySideColor(entry, factorIdx){
+  const bv = entry.buyVerdicts?.[factorIdx], sv = entry.sellVerdicts?.[factorIdx];
+  if (!bv || !sv) return verdictColor(entry.verdicts?.[factorIdx] || 'na');
+  if (bv === 'na') return verdictColor('na');
+  if (bv === sv) return verdictColor(bv); // shared factor
+  const rank = v => v==='good'?3:v==='ok'?2:v==='weak'?1:0;
+  const b = rank(bv), s = rank(sv);
+  if (b === 0 && s === 0) return '#606878'; // neither side signaling
+  if (b >= s) return verdictColor(bv);
+  return sv === 'good' ? '#c0392b' : sv === 'ok' ? '#d97a42' : '#e8c068';
+}
 
 function saveQsHistory(sym, row){
   if (!row || !row.scored_at) return;
-  const key = 'gn_qs_hist_' + sym.toUpperCase();
+  const key = 'gn_qs_hist2_' + sym.toUpperCase();
   let hist = [];
   try { hist = JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) {}
-  hist.unshift({ scored_at: row.scored_at, dataAsOf: row.dataAsOf || null, score: row.score, verdicts: row.verdicts || [], raw: row.raw || [] });
+  hist.unshift({
+    scored_at: row.scored_at, dataAsOf: row.dataAsOf || null,
+    verdict: row.verdict, tier: row.tier,
+    buyScore: row.buyScore, sellScore: row.sellScore,
+    buyVerdicts: row.buyVerdicts || [], sellVerdicts: row.sellVerdicts || [],
+    raw: row.raw || [],
+  });
   if (hist.length > 50) hist = hist.slice(0, 50);
   try { localStorage.setItem(key, JSON.stringify(hist)); } catch(e) {}
 }
 function getQsHistory(sym){
-  try { return JSON.parse(localStorage.getItem('gn_qs_hist_' + sym.toUpperCase()) || '[]'); } catch(e) { return []; }
+  try { return JSON.parse(localStorage.getItem('gn_qs_hist2_' + sym.toUpperCase()) || '[]'); } catch(e) { return []; }
 }
-function qsScoreColorForChart(n){ return n>=18?'#4caf87':n>=11?'#e8c068':'#c0392b'; }
+function qsVerdictColorForChart(verdict){
+  return verdict==='BUY' ? '#4caf87' : verdict==='SELL' ? '#c0392b' : verdict==='BLOCKED' ? '#7b8291' : '#8a95a8';
+}
 
 function buildQsFactChart(entries, factorIdx){
   // entries passed in oldest→newest
@@ -3379,21 +3467,27 @@ function buildQsFactChart(entries, factorIdx){
   let svg = '';
 
   if (factorIdx === -1) {
-    const ys = v => pt + cH - (v/27)*cH;
-    [0, 11, 18, 27].forEach(v => {
+    // Aggregate view now plots BOTH Buy and Sell as separate lines against
+    // a /24 scale (replacing the old single /27 score line) — gridlines at
+    // 0, the NEUTRAL/weak boundary (~40%=10), the moderate boundary
+    // (~55%=13), and the strong boundary (75%=18).
+    const ys = v => pt + cH - (v/24)*cH;
+    [0, 10, 13, 18, 24].forEach(v => {
       svg += `<line x1="${pl}" y1="${ys(v)}" x2="${W-pr}" y2="${ys(v)}" stroke="rgba(255,255,255,.07)" stroke-width="0.5"/>`;
       svg += `<text x="${pl-4}" y="${ys(v)+3.5}" text-anchor="end" fill="#606878" font-size="8">${v}</text>`;
     });
-    const pts = entries.map((e,i) => {
-      const v = parseInt(e.score) || 0;
-      return { x: xs(i), y: ys(v), v };
-    });
+    const buyPts = entries.map((e,i) => ({ x: xs(i), y: ys(parseInt(e.buyScore) || 0) }));
+    const sellPts = entries.map((e,i) => ({ x: xs(i), y: ys(parseInt(e.sellScore) || 0) }));
     if (n > 1) {
-      svg += `<polyline points="${pts.map(p=>`${p.x},${p.y}`).join(' ')}" fill="none" stroke="rgba(55,138,221,.5)" stroke-width="1.5" stroke-linejoin="round"/>`;
+      svg += `<polyline points="${buyPts.map(p=>`${p.x},${p.y}`).join(' ')}" fill="none" stroke="rgba(76,175,135,.6)" stroke-width="1.5" stroke-linejoin="round"/>`;
+      svg += `<polyline points="${sellPts.map(p=>`${p.x},${p.y}`).join(' ')}" fill="none" stroke="rgba(192,57,43,.6)" stroke-width="1.5" stroke-linejoin="round"/>`;
     }
-    pts.forEach(p => {
-      svg += `<circle cx="${p.x}" cy="${p.y}" r="${n===1?4:2.5}" fill="${qsScoreColorForChart(p.v)}" stroke="#1e2230" stroke-width="1"/>`;
+    entries.forEach((e,i) => {
+      svg += `<circle cx="${buyPts[i].x}" cy="${buyPts[i].y}" r="${n===1?4:2.5}" fill="#4caf87" stroke="#1e2230" stroke-width="1"/>`;
+      svg += `<circle cx="${sellPts[i].x}" cy="${sellPts[i].y}" r="${n===1?4:2.5}" fill="#c0392b" stroke="#1e2230" stroke-width="1"/>`;
     });
+    svg += `<text x="${W-pr}" y="${pt-1}" text-anchor="end" fill="#4caf87" font-size="7">Buy</text>`;
+    svg += `<text x="${W-pr-22}" y="${pt-1}" text-anchor="end" fill="#c0392b" font-size="7">Sell</text>`;
   } else {
     const meta = QS_FACTOR_META[factorIdx];
     const vals = entries.map(e => meta.toVal(e.raw?.[factorIdx]));
@@ -3411,16 +3505,18 @@ function buildQsFactChart(entries, factorIdx){
         svg += `<text x="${pl-4}" y="${y+3.5}" text-anchor="end" fill="#606878" font-size="7">${label}</text>`;
       });
 
-      // Threshold reference lines — graduated scoring boundaries per factor
+      // Threshold reference lines — graduated scoring boundaries per factor.
+      // Bidirectional factors show BOTH the buy-side and sell-side boundary
+      // set on the same chart (e.g. RSI(2) shows 5/10/20 oversold AND
+      // 80/90/95 overbought) since one line can cross into either read.
       const thresholds = {
-        0: [5, 10, 20],        // RSI(2): deeply oversold / oversold / stretched down
-        1: [0, 0.10, 0.25],    // %B
-        3: [60, 80],           // Reversal candle %
-        4: [-5, 5, 15],        // RS vs SPY pp
-        5: [50, 70, 90],       // Volume dry-up %
-        6: [3, 8],             // ADR% sweet-spot bounds
-        7: [10, 20, 100],      // Liquidity $M
-        8: [-5, -3, -1.5, 3],  // After-hours move %
+        0: [5, 10, 20, 80, 90, 95],       // RSI(2): oversold ... overbought
+        1: [0, 0.10, 0.25, 0.75, 0.90, 1.0], // %B: below band ... above band
+        3: [20, 40, 60, 80],              // Reversal candle %: bearish ... bullish
+        4: [-15, -5, 5, 15],              // RS vs SPY pp: lagging ... beating
+        5: [-5, -3, -1.5, 1.5, 3, 5],     // After-hours move %: drop ... pop
+        6: [50, 70, 90],                  // Volume dry-up %
+        7: [1.0, 1.2, 1.5],               // Vol Expansion ratio
       };
       (thresholds[factorIdx] || []).forEach(tv => {
         if (tv >= lo && tv <= hi) {
@@ -3437,8 +3533,7 @@ function buildQsFactChart(entries, factorIdx){
       entries.forEach((e,i) => {
         const y = ys(vals[i]);
         if (y == null) return;
-        const v = (e.verdicts?.[factorIdx]) || 'na';
-        svg += `<circle cx="${xs(i)}" cy="${y}" r="${n===1?4:2.5}" fill="${verdictColor(v)}" stroke="#1e2230" stroke-width="1"/>`;
+        svg += `<circle cx="${xs(i)}" cy="${y}" r="${n===1?4:2.5}" fill="${qsEntrySideColor(e, factorIdx)}" stroke="#1e2230" stroke-width="1"/>`;
       });
 
       if (meta.unit) svg += `<text x="${W-pr}" y="${pt-1}" text-anchor="end" fill="#606878" font-size="7">${meta.unit}</text>`;
@@ -3447,8 +3542,7 @@ function buildQsFactChart(entries, factorIdx){
       const totalW = n * (sqSize+sqGap) - sqGap;
       const startX = (W-totalW)/2, y = H/2 - sqSize/2;
       entries.forEach((e,i) => {
-        const v = (e.verdicts?.[factorIdx]) || 'na';
-        svg += `<rect x="${startX+i*(sqSize+sqGap)}" y="${y}" width="${sqSize}" height="${sqSize}" rx="3" fill="${verdictColor(v)}" opacity="0.85"/>`;
+        svg += `<rect x="${startX+i*(sqSize+sqGap)}" y="${y}" width="${sqSize}" height="${sqSize}" rx="3" fill="${qsEntrySideColor(e, factorIdx)}" opacity="0.85"/>`;
       });
       svg += `<text x="${W/2}" y="${H-4}" text-anchor="middle" fill="#606878" font-size="8">oldest → newest</text>`;
     }
@@ -3464,7 +3558,7 @@ function openQsFactHist(sym, factorIdx, anchorEl){
   const entries = getQsHistory(sym).slice(0, 50);
   if (!entries.length) return;
 
-  const label = factorIdx === -1 ? 'Score' : QS_FACTOR_META[factorIdx].label;
+  const label = factorIdx === -1 ? 'Buy / Sell Score' : QS_FACTOR_META[factorIdx].label;
   document.getElementById('qsFactHistTitle').textContent = `${sym} — ${label} (${entries.length} scan${entries.length===1?'':'s'})`;
 
   const chartEntries = [...entries].reverse(); // oldest→newest for the chart
@@ -3472,12 +3566,10 @@ function openQsFactHist(sym, factorIdx, anchorEl){
 
   const meta = factorIdx >= 0 ? QS_FACTOR_META[factorIdx] : null;
   document.getElementById('qsFactHistRows').innerHTML = entries.map((h,i) => {
-    const verdict  = factorIdx >= 0 ? (h.verdicts?.[factorIdx] || 'na') : null;
-    const dotColor = verdict ? verdictColor(verdict) : null;
     const numVal   = (meta && factorIdx >= 0) ? meta.toVal(h.raw?.[factorIdx]) : null;
-    const scoreN   = factorIdx === -1 ? parseInt(h.score) : null;
+    const dotColor = factorIdx >= 0 ? qsEntrySideColor(h, factorIdx) : null;
     const valStr   = factorIdx === -1
-      ? `<span style="font-weight:700;color:${qsScoreColorForChart(scoreN||0)}">${h.score||'—'}</span>`
+      ? `<span style="font-weight:700;color:#4caf87">${h.buyScore||'—'}</span> <span style="color:#606878">/</span> <span style="font-weight:700;color:#c0392b">${h.sellScore||'—'}</span>`
       : numVal != null
         ? `<span style="font-weight:700;color:${dotColor}">${numVal}${meta.unit}</span>`
         : `<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${dotColor||'#666'};vertical-align:middle"></span>`;
@@ -3511,53 +3603,64 @@ async function ensureQsDataLoaded(){
   renderQuickSwing();
 }
 
-function qsScoreClass(score){
-  const n = parseInt((score||'').toString());
-  if (isNaN(n)) return 'na';
-  if (n >= 18) return 'g';   // ≥18/27 (67%)
-  if (n >= 11) return 'y';   // ≥11/27 (41%)
-  return 'r';
-}
-
 function qsSortVal(r, col){
   if (!r) return null;
   switch (col) {
     case 'sym':       return r.sym;
     case 'price':     return r.price;
-    case 'score':     { const n = parseInt((r.score||'').toString()); return isNaN(n) ? null : n; }
+    // Positive = buy-leaning, negative = sell-leaning, magnitude = conviction.
+    case 'verdict':   { const b=parseInt((r.buyScore||'0/24').split('/')[0])||0, s=parseInt((r.sellScore||'0/24').split('/')[0])||0; return b - s; }
     case 'rsi':       return typeof r.raw?.[0] === 'number' ? r.raw[0] : null;
     case 'pctB':      return r.raw?.[1]?.pctB ?? null;
     case 'volclimax': return typeof r.raw?.[2] === 'number' ? r.raw[2] : null;
     case 'reversal':  return typeof r.raw?.[3] === 'number' ? r.raw[3] : null;
     case 'rs':        return r.raw?.[4]?.delta ?? null;
-    case 'dryup':     return typeof r.raw?.[5] === 'number' ? r.raw[5] : null;
-    case 'adr':       return typeof r.raw?.[6] === 'number' ? r.raw[6] : null;
-    case 'liq':       return typeof r.raw?.[7] === 'number' ? r.raw[7] : null;
-    case 'ah':        return r.raw?.[8]?.chg ?? null;
+    case 'ah':        return r.raw?.[5]?.chg ?? null;
+    case 'dryup':     return typeof r.raw?.[6] === 'number' ? r.raw[6] : null;
+    case 'volexp':    return typeof r.raw?.[7] === 'number' ? r.raw[7] : null;
+    case 'adr':       return typeof r.volatility?.adrPct === 'number' ? r.volatility.adrPct : null;
+    case 'liq':       return typeof r.liquidity?.value === 'number' ? r.liquidity.value : null;
     default:          return null;
   }
 }
 
+// A mirrored factor (index < QS_MIRRORED_COUNT) picks whichever side (buy or
+// sell) is the stronger read for its cell color; a shared/context factor
+// (dryup, volexp) always has buyVerdicts[k] === sellVerdicts[k].
+const QS_MIRRORED_COUNT = 6;
+function qsVCls(r, k){
+  const bv = r.buyVerdicts?.[k], sv = r.sellVerdicts?.[k];
+  if (!bv || !sv || bv === 'na') return 'st-na';
+  if (k >= QS_MIRRORED_COUNT || bv === sv) {
+    return bv === 'good' ? 'st-good' : bv === 'ok' ? 'st-ok' : bv === 'weak' ? 'st-weak' : 'st-bad';
+  }
+  const rank = v => v==='good'?3:v==='ok'?2:v==='weak'?1:0;
+  const b = rank(bv), s = rank(sv);
+  if (b === 0 && s === 0) return 'st-neutral'; // neither side signaling — not "bad", just quiet
+  if (b >= s) return bv === 'good' ? 'st-good' : bv === 'ok' ? 'st-ok' : 'st-weak';
+  return sv === 'good' ? 'st-sell-bad' : sv === 'ok' ? 'st-sell-ok' : 'st-weak';
+}
+
 function qsRowHtml(r, idx){
   if (r.error) {
-    return `<tr><td class="idx">${idx}.</td><td>${escHtml(r.sym)}</td><td colspan="12" style="color:var(--bad-fg)">Error: ${escHtml(r.error)}</td></tr>`;
+    return `<tr><td class="idx">${idx}.</td><td>${escHtml(r.sym)}</td><td colspan="13" style="color:var(--bad-fg)">Error: ${escHtml(r.error)}</td></tr>`;
   }
-  const scoreCls = qsScoreClass(r.score);
+  // Legacy row from before the bidirectional overhaul — no verdict/buyScore
+  // yet, only ever true for a moment right after deploy until the next
+  // rescan (manual or the auto-refresh-on-load) upgrades it in place.
+  if (!r.verdict) {
+    return `<tr data-sym="${r.sym}"><td class="idx">${idx}.</td><td class="co-cell"><b>${escHtml(r.sym)}</b></td><td colspan="13" style="color:var(--ink-faint)">Legacy row from the old scoring model — click Rescan to upgrade.</td></tr>`;
+  }
   const rsiVal = r.raw?.[0];
   const bb = r.raw?.[1];
   const volClimax = r.raw?.[2];
   const reversal = r.raw?.[3];
   const rs = r.raw?.[4];
-  const dryUp = r.raw?.[5];
-  const adr = r.raw?.[6];
-  const liq = r.raw?.[7];
-  const ah = r.raw?.[8];
-  // Per-factor cell coloring — same verdict → class mapping Short Term uses
-  // (vCls in shortRowHtml), reusing the same st-* class names.
-  const vCls = k => {
-    const v = r.verdicts?.[k];
-    return v === 'good' ? 'st-good' : v === 'ok' ? 'st-ok' : v === 'weak' ? 'st-weak' : v === 'bad' ? 'st-bad' : 'st-na';
-  };
+  const ah = r.raw?.[5];
+  const dryUp = r.raw?.[6];
+  const volExp = r.raw?.[7];
+  const adrPct = r.volatility?.adrPct;
+  const liqVal = r.liquidity?.value;
   // Per-cell reasoning tooltip — "Factor name: computed reason", same
   // convention as Short Term's tipFor/tipForChip.
   const tipFor = k => escHtml(qsTipForChip(k, r.reasons?.[k]));
@@ -3565,25 +3668,30 @@ function qsRowHtml(r, idx){
     ? `<span class="qs-blocked-badge" data-tip="${escHtml(r.blockedReason||'')}">Blocked</span>`
     : (r.earnings?.daysUntil != null ? `<span style="color:var(--ink-faint);font-size:10px">${r.earnings.daysUntil}d</span>` : '—');
   const priceTag = r.priceIsLive
-    ? `<br><span data-tip="${escHtml('Live intraday price from FMP. RSI(2), %B, and RS vs SPY are computed using this live price too. Vol Climax, Reversal, Vol Dry-Up, ADR%, and Liquidity still use the completed session as of '+fmtQsAsOf(r.dataAsOf)+' — those need a finished day to mean anything.')}" style="color:var(--good-fg,#2f7d4f);font-size:9px;font-weight:600;cursor:default">● live</span>`
+    ? `<br><span data-tip="${escHtml('Live intraday price from FMP. RSI(2), %B, and RS vs SPY are computed using this live price too. Vol Climax, Reversal, Vol Dry-Up, Vol Expansion, ADR%, and Liquidity still use the completed session as of '+fmtQsAsOf(r.dataAsOf)+' — those need a finished day to mean anything.')}" style="color:var(--good-fg,#2f7d4f);font-size:9px;font-weight:600;cursor:default">● live</span>`
     : (r.dataAsOf ? `<br><span style="color:var(--ink-faint);font-size:9px;font-weight:400">as of ${fmtQsAsOf(r.dataAsOf)}</span>` : '');
   const symCell = r.scoring
     ? `<td class="co-cell"><span class="sym" style="opacity:0.3">${escHtml(r.sym)}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
     : `<td class="co-cell"><b>${escHtml(r.sym)}</b></td>`;
+  const verdictTip = escHtml(`${r.tier ? r.tier+' ' : ''}${r.verdict} — Buy ${r.buyScore||'—'} · Sell ${r.sellScore||'—'} (each out of 24). Liquidity/ADR gates and market regime already applied. Click to see history.`);
   return `<tr class="${r.scoring?'scoring':(r.blocked?'qs-row-blocked':'')}" data-sym="${r.sym}">
     <td class="idx">${idx}.</td>
     ${symCell}
     <td class="num">${r.price!=null?'$'+r.price.toFixed(2):'—'}${priceTag}</td>
-    <td class="num" data-col="score" style="cursor:pointer" data-tip="${escHtml('Composite score: '+(r.score||'—')+'. Each of the 9 factors scores 0-3 points (bad/weak/ok/good) for a max of 27. 18+/27 is a strong setup, 11-17 is mixed, under 11 is weak. Click to see score history.')}"><span class="score ${scoreCls}">${escHtml(r.score||'—')}</span></td>
-    <td class="num ${vCls(0)}" data-col="rsi" style="cursor:pointer" data-tip="${tipFor(0)}">${typeof rsiVal==='number'?rsiVal.toFixed(1):'—'}</td>
-    <td class="num ${vCls(1)}" data-col="pctB" style="cursor:pointer" data-tip="${tipFor(1)}">${bb?.pctB!=null?bb.pctB.toFixed(2):'—'}</td>
-    <td class="num ${vCls(2)}" data-col="volclimax" style="cursor:pointer" data-tip="${tipFor(2)}">${typeof volClimax==='number'?volClimax.toFixed(2)+'x':'—'}</td>
-    <td class="num ${vCls(3)}" data-col="reversal" style="cursor:pointer" data-tip="${tipFor(3)}">${typeof reversal==='number'?(reversal*100).toFixed(0)+'%':'—'}</td>
-    <td class="num ${vCls(4)}" data-col="rs" style="cursor:pointer" data-tip="${tipFor(4)}">${rs?.delta!=null?(rs.delta>=0?'+':'')+(rs.delta*100).toFixed(1)+'pp':'—'}</td>
-    <td class="num ${vCls(5)}" data-col="dryup" style="cursor:pointer" data-tip="${tipFor(5)}">${typeof dryUp==='number'?(dryUp*100).toFixed(0)+'%':'—'}</td>
-    <td class="num ${vCls(6)}" data-col="adr" style="cursor:pointer" data-tip="${tipFor(6)}">${typeof adr==='number'?adr.toFixed(1)+'%':'—'}</td>
-    <td class="num ${vCls(7)}" data-col="liq" style="cursor:pointer" data-tip="${tipFor(7)}">${fmtQsDollars(liq)}</td>
-    <td class="num ${vCls(8)}" data-col="ah" style="cursor:pointer" data-tip="${tipFor(8)}">${ah?.chg!=null?(ah.chg>=0?'+':'')+(ah.chg*100).toFixed(1)+'%':'—'}</td>
+    <td class="num" data-col="verdict" style="cursor:pointer" data-tip="${verdictTip}">
+      <span class="qs-verdict qs-verdict-${r.verdict.toLowerCase()} qs-tier-${r.tier||'none'}">${r.verdict}</span>
+      <span class="qs-subscore">Buy ${escHtml(r.buyScore||'—')} · Sell ${escHtml(r.sellScore||'—')}</span>
+    </td>
+    <td class="num ${qsVCls(r,0)}" data-col="rsi" style="cursor:pointer" data-tip="${tipFor(0)}">${typeof rsiVal==='number'?rsiVal.toFixed(1):'—'}</td>
+    <td class="num ${qsVCls(r,1)}" data-col="pctB" style="cursor:pointer" data-tip="${tipFor(1)}">${bb?.pctB!=null?bb.pctB.toFixed(2):'—'}</td>
+    <td class="num ${qsVCls(r,2)}" data-col="volclimax" style="cursor:pointer" data-tip="${tipFor(2)}">${typeof volClimax==='number'?volClimax.toFixed(2)+'x':'—'}</td>
+    <td class="num ${qsVCls(r,3)}" data-col="reversal" style="cursor:pointer" data-tip="${tipFor(3)}">${typeof reversal==='number'?(reversal*100).toFixed(0)+'%':'—'}</td>
+    <td class="num ${qsVCls(r,4)}" data-col="rs" style="cursor:pointer" data-tip="${tipFor(4)}">${rs?.delta!=null?(rs.delta>=0?'+':'')+(rs.delta*100).toFixed(1)+'pp':'—'}</td>
+    <td class="num ${qsVCls(r,5)}" data-col="ah" style="cursor:pointer" data-tip="${tipFor(5)}">${ah?.chg!=null?(ah.chg>=0?'+':'')+(ah.chg*100).toFixed(1)+'%':'—'}</td>
+    <td class="num ${qsVCls(r,6)}" data-col="dryup" style="cursor:pointer" data-tip="${tipFor(6)}">${typeof dryUp==='number'?(dryUp*100).toFixed(0)+'%':'—'}</td>
+    <td class="num ${qsVCls(r,7)}" data-col="volexp" style="cursor:pointer" data-tip="${tipFor(7)}">${typeof volExp==='number'?volExp.toFixed(2)+'x':'—'}</td>
+    <td class="num" data-tip="${escHtml('GATE — '+(r.volatility?.label||'—')+'. Dampens both Buy and Sell scores equally (multiplier '+(r.adrMultiplier!=null?r.adrMultiplier.toFixed(2):'1.00')+'x).')}">${typeof adrPct==='number'?adrPct.toFixed(1)+'%':'—'}</td>
+    <td class="num" data-tip="${escHtml('GATE — '+(r.liquidity?.label||'—')+'. Dampens both Buy and Sell scores equally (multiplier '+(r.liqMultiplier!=null?r.liqMultiplier.toFixed(2):'1.00')+'x).')}">${fmtQsDollars(liqVal)}</td>
     <td data-tip="${escHtml(r.blocked ? r.blockedReason||'' : (r.earnings?.daysUntil!=null ? `Earnings in ${r.earnings.daysUntil}d (${r.earnings.date}) — outside the 5-day blackout window` : 'No earnings calendar data'))}">${blockedBadge}</td>
   </tr>`;
 }
@@ -3621,7 +3729,7 @@ function renderQuickSwing(){
   }
 
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="14"><div class="qs-empty">No Quick Swing data yet — click Rescan to score your watchlist.</div></td></tr>`;
+    body.innerHTML = `<tr><td colspan="15"><div class="qs-empty">No Quick Swing data yet — click Rescan to score your watchlist.</div></td></tr>`;
     return;
   }
 
@@ -3690,7 +3798,7 @@ async function rescanQuickSwing(e){
         btn.disabled = false;
         btn.innerHTML = 'Rescan';
         if (j.status === 'error') showToast(j.error || 'Quick Swing rescan failed.');
-        else if (j.rows) showToast(`Quick Swing: rescored ${j.rows.filter(r => !r.error && r.score).length} ticker(s).`);
+        else if (j.rows) showToast(`Quick Swing: rescored ${j.rows.filter(r => !r.error && r.verdict).length} ticker(s).`);
       }
     }, 3000);
   } catch (err) {
