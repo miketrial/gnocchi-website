@@ -127,8 +127,6 @@
   tr.pin-divider{display:none}
   tbody tr.pin-last td{border-bottom:3px double #c0c4cc}
   tbody tr.pin-first td{border-top:none}
-  [data-theme="dark"] tbody tr.pin-last td{border-bottom-color:#4a4f5c}
-  [data-theme="warm"] tbody tr.pin-last td{border-bottom-color:#a89e90}
   [data-theme="white"] tbody tr.pin-last td{border-bottom:3px double #000}
 
   /* Pinned row indicator — star before sym */
@@ -621,7 +619,12 @@
   .qs-tier-strong  { font-weight:800 }
   .qs-tier-moderate{ font-weight:700 }
   .qs-tier-weak    { font-weight:500; opacity:.8 }
-  .qs-subscore{ display:block; font-size:9px; color:var(--ink-faint); font-weight:400; margin-top:2px }
+  .qs-subscore{ display:block; font-size:9px; color:var(--ink-faint); font-weight:400; margin-top:0; line-height:1.2 }
+  /* Tighter rows — the verdict/price cells stack two lines (badge+subscore,
+     price+as-of-date), which otherwise inflates every row well past the
+     other two tables' single-line rows. */
+  #qsView tbody td{ padding:1px 5px; line-height:1.15 }
+  #qsView tbody td br{ line-height:1 }
   /* ===== END QUICK SWING FEATURE ===== */
   /* Ready sub-tier divider headings (Premium / Standard) */
   .wp-tier-head{ width:100%;display:flex;align-items:center;gap:6px;
@@ -684,70 +687,6 @@
 
 <!-- ================= THEMES ================= -->
 <style>
-/* ── Dark ─────────────────────────────────────────────────────────────── */
-[data-theme="dark"]{
-  --ink:#e8eaf0; --ink-soft:#b0b8c8; --ink-faint:#6b7588;
-  --page:#16181d; --card:#1e2129;
-  --good-bg:#1a3a28; --good-fg:#4caf80;
-  --bad-bg:#3a1a1a;  --bad-fg:#e57373;
-  --yel-bg:#2e2a14;  --yel-fg:#d4ac3a;
-  --neu-bg:#1a2540;  --neu-fg:#6ea3d8;
-  --gray-bg:#2a2e38; --gray-fg:#8a95a8;
-  --pur-bg:#2a1a3e;  --pur-fg:#b39ddb;
-}
-[data-theme="dark"] body{background:var(--page);color:var(--ink)}
-[data-theme="dark"] header.bar{background:linear-gradient(var(--page) 72%,transparent)}
-[data-theme="dark"] .btn,[data-theme="dark"] .net-link,[data-theme="dark"] .search{background:#2a2e38;color:var(--ink)}
-[data-theme="dark"] .search input{color:var(--ink)}
-[data-theme="dark"] tbody td{border-top-color:#252830}
-[data-theme="dark"] tbody tr:hover{background:#22262f}
-[data-theme="dark"] tbody tr:hover td:nth-child(1),
-[data-theme="dark"] tbody tr:hover td:nth-child(2){background:#22262f}
-[data-theme="dark"] tbody tr.flash{background:#1e2d3a}
-[data-theme="dark"] thead tr.grphdr th{border-bottom-color:#2e323c;background:var(--card)}
-[data-theme="dark"] thead tr:nth-child(2) th.grp-start,
-[data-theme="dark"] tbody td.grp-start{border-left-color:#2e323c}
-[data-theme="dark"] thead th:nth-child(1),[data-theme="dark"] tbody td:nth-child(1),
-[data-theme="dark"] thead th:nth-child(2),[data-theme="dark"] tbody td:nth-child(2){background:var(--card)}
-[data-theme="dark"] .legend span b{background:#2a2e38;color:#8a95a8}
-[data-theme="dark"] #ctx{background:#22262f;border-color:#2e323c;color:var(--ink)}
-[data-theme="dark"] #scoreHist{background:#1e2129}
-[data-theme="dark"] #acDrop{background:#22262f;border-color:#2e323c}
-[data-theme="dark"] .ac-item:hover,.ac-item.sel{background:#2a2e38}
-[data-theme="dark"] #pipelineModal > div{background:#1e2129}
-[data-theme="dark"] .num{color:#8a95a8}
-[data-theme="dark"] .sym{color:#c8d0dc}
-[data-theme="dark"] .price-cell{color:#c8d0dc}
-
-/* ── Warm ─────────────────────────────────────────────────────────────── */
-[data-theme="warm"]{
-  --ink:#1e1510; --ink-soft:#4a3c2c; --ink-faint:#78685a;
-  --page:#f5f0e8; --card:#f5f0e8;
-  --good-bg:#c8ead4; --good-fg:#1e6038;
-  --bad-bg:#f8d8d2;  --bad-fg:#9e2e22;
-  --yel-bg:#f8ecc8;  --yel-fg:#7a5808;
-  --neu-bg:#dce6f8;  --neu-fg:#1e3e6e;
-  --gray-bg:#e4ddd4; --gray-fg:#584e44;
-  --pur-bg:#e8e0f4;  --pur-fg:#5a2890;
-}
-[data-theme="warm"] body{background:var(--page);color:var(--ink);font-family:Georgia,"Times New Roman",serif}
-[data-theme="warm"] .brand,.btn,.name,.sym,.num,.txt,.score,.pill,.legend{font-family:Georgia,"Times New Roman",serif}
-[data-theme="warm"] header.bar{background:linear-gradient(var(--page) 72%,transparent)}
-[data-theme="warm"] .btn,[data-theme="warm"] .net-link{background:#e4ddd4;color:var(--ink);border:1px solid #ccc4b8}
-[data-theme="warm"] .search{background:#e4ddd4;border:1px solid #ccc4b8}
-[data-theme="warm"] .search input{color:var(--ink)}
-[data-theme="warm"] tbody td{border-top-color:#e0d8ce}
-[data-theme="warm"] tbody tr:hover{background:#ece6da}
-[data-theme="warm"] tbody tr:hover td:nth-child(1),
-[data-theme="warm"] tbody tr:hover td:nth-child(2){background:#ece6da}
-[data-theme="warm"] thead tr.grphdr th{border-bottom-color:#c8beb4;background:var(--card)}
-[data-theme="warm"] thead tr:nth-child(2) th.grp-start,
-[data-theme="warm"] tbody td.grp-start{border-left-color:#d4ccc4}
-[data-theme="warm"] .num{color:#584e44}
-[data-theme="warm"] .sym{color:#1e1510}
-[data-theme="warm"] .price-cell{color:#1e1510}
-[data-theme="warm"] .legend span b{background:#e4ddd4;color:#584e44}
-
 /* ── White (sharp B&W technical) ──────────────────────────────────────── */
 [data-theme="white"]{
   --ink:#000; --ink-soft:#000; --ink-faint:#222;
@@ -940,8 +879,6 @@
   transition:transform .15s,box-shadow .15s,opacity .15s;
   flex-shrink:0;
 }
-#themeSwatch button[data-t="dark"] {background:#111}
-#themeSwatch button[data-t="warm"] {background:#d4c4a8}
 #themeSwatch button[data-t="white"]{background:#fff;border-color:#ccc}
 #themeSwatch button:not(.active){opacity:.55}
 #themeSwatch button:hover{opacity:1;transform:scale(1.15)}
@@ -973,11 +910,11 @@
 <!-- ================= APP ================= -->
 <div id="app">
   <header class="bar" id="bar">
-    <div id="viewSwitch" title="Switch between Basic (full screener) and Short Term (1wk-3mo swing setups)">
-      <button data-v="basic">Basic</button>
-      <button data-v="short">Short Term</button>
+    <div id="viewSwitch" title="Switch between Long-Term (full screener) and Swing (1wk-3mo swing setups)">
+      <button data-v="basic">Long-Term</button>
+      <button data-v="short">Swing</button>
       <!-- ===== QUICK SWING FEATURE ===== -->
-      <button data-v="qs" title="1-2 day mean-reversion setups — separate trade philosophy from Short Term">Quick Swing</button>
+      <button data-v="qs" title="1-2 day mean-reversion setups — separate trade philosophy from Swing">Bounce</button>
       <!-- ===== END QUICK SWING FEATURE ===== -->
     </div>
     <div class="rescan-wrap" id="wlLeft">
@@ -1119,8 +1056,6 @@
     </div>
 
     <div id="themeSwatch">
-      <button data-t="dark"  title="Dark"></button>
-      <button data-t="warm"  title="Warm"></button>
       <button data-t="white" title="White"></button>
     </div>
 
@@ -1249,7 +1184,7 @@
   </div>
 
   <div class="legend">
-    <div class="ttl">Short Term scoring &nbsp;·&nbsp; 10 factors tuned for 1wk-3mo swing trades</div>
+    <div class="ttl">Swing scoring &nbsp;·&nbsp; 10 factors tuned for 1wk-3mo swing trades</div>
     <span><b style="background:var(--good-bg);color:var(--good-fg)">●</b><span style="color:var(--good-fg);font-weight:600">Green</span> · factor passes</span>
     <span><b style="background:var(--bad-bg);color:var(--bad-fg)">●</b><span style="color:var(--bad-fg);font-weight:600">Red</span> · factor fails</span>
     <span><b style="background:var(--pur-bg);color:var(--pur-fg)">●</b><span style="color:var(--pur-fg);font-weight:600">Purple</span> · data not available from FMP for this ticker</span>
@@ -1274,8 +1209,8 @@
 <div id="qsView" class="hidden">
   <div id="qsRegimeBanner"></div>
   <div class="wp-head">
-    <span class="wp-title" style="border-bottom:1px dashed currentColor">Quick Swing</span>
-    <span class="wp-sub">1-2 day mean-reversion setups · its own independent list, separate from Basic/Short Term · click a column header to sort · click any data cell for its scan history · right-click a row for Rescan / Delete · shift-click to select a range</span>
+    <span class="wp-title" style="border-bottom:1px dashed currentColor">Bounce</span>
+    <span class="wp-sub">1-2 day mean-reversion setups · its own independent list, separate from Long-Term/Swing · click a column header to sort · click any data cell for its scan history · right-click a row for Rescan / Delete · shift-click to select a range</span>
   </div>
   <!-- ===== QUICK SWING FEATURE ===== -->
   <div id="qsBulkBar" class="bulk-bar hidden">
@@ -1309,8 +1244,8 @@
     </table>
   </div>
   <div class="legend">
-    <div class="ttl">Quick Swing scoring &nbsp;·&nbsp; bidirectional BUY/SELL, tuned for a 1-2 day mean-reversion hold</div>
-    <span style="color:var(--ink-soft)">This is a genuinely different trade philosophy from Short Term — that view is trend-following (buy strength, ride weeks); this one bets on a snap-back after price gets stretched, in either direction (oversold dip = BUY, overbought top = SELL). Lower hit-rate by design, so earnings is a hard gate, and Liquidity/ADR dampen both Buy and Sell scores rather than just docking points on one side.</span>
+    <div class="ttl">Bounce scoring &nbsp;·&nbsp; bidirectional BUY/SELL, tuned for a 1-2 day mean-reversion hold</div>
+    <span style="color:var(--ink-soft)">This is a genuinely different trade philosophy from Swing — that view is trend-following (buy strength, ride weeks); this one bets on a snap-back after price gets stretched, in either direction (oversold dip = BUY, overbought top = SELL). Lower hit-rate by design, so earnings is a hard gate, and Liquidity/ADR dampen both Buy and Sell scores rather than just docking points on one side.</span>
   </div>
 </div>
 <!-- ===== END QUICK SWING FEATURE ===== -->
@@ -2432,7 +2367,7 @@ function setView(v){
   const isQs=v==='qs';
   // Quick Swing has its own independent ticker list — make the shared search
   // box's placeholder reflect which list Enter will add to.
-  addInput.placeholder = isQs ? 'Add to Quick Swing…' : 'Add to watchlist…';
+  addInput.placeholder = isQs ? 'Add to Bounce…' : 'Add to watchlist…';
   // ===== END QUICK SWING FEATURE =====
   const isWL=v==='watchlist'||v==='net';
   const isShort=v==='short';
@@ -2755,7 +2690,7 @@ function pickAc(i){
   const r=acItems[i]; if(!r) return;
   const have=currentView==='qs' ? !!qsRowsBySym[r.symbol] : watchlist.some(w=>w.sym&&w.sym.toUpperCase()===r.symbol);
   if(have){
-    acHide(); addInput.value=''; showToast(`${r.symbol} is already in your ${currentView==='qs'?'Quick Swing list':'watchlist'}.`); return;
+    acHide(); addInput.value=''; showToast(`${r.symbol} is already in your ${currentView==='qs'?'Bounce list':'watchlist'}.`); return;
   }
   addInput.value=r.symbol;
   acHide();
@@ -2885,7 +2820,7 @@ async function scoreQuickSwingForTicker(sym){
       clearInterval(t);
       stopCheckAnim(up);
       rescanBtn.disabled = false; rescanBtn.innerHTML = 'Rescan';
-      showToast(`${up} Quick Swing scoring timed out — try Rescan on the Quick Swing tab.`);
+      showToast(`${up} Bounce scoring timed out — try Rescan on the Bounce tab.`);
       return;
     }
     const j = await api.get('/api/jobs/'+jobId).catch(()=>null);
@@ -2900,8 +2835,8 @@ async function scoreQuickSwingForTicker(sym){
       clearInterval(t);
       stopCheckAnim(up);
       rescanBtn.disabled = false; rescanBtn.innerHTML = 'Rescan';
-      if (j.status === 'error') { if (qsRowsBySym[up]) qsRowsBySym[up].scoring = false; if (currentView === 'qs') renderQuickSwing(); showToast(j.error || `${up} Quick Swing scoring failed.`); }
-      else { flash(up); showToast(`${up} added to Quick Swing.`); }
+      if (j.status === 'error') { if (qsRowsBySym[up]) qsRowsBySym[up].scoring = false; if (currentView === 'qs') renderQuickSwing(); showToast(j.error || `${up} Bounce scoring failed.`); }
+      else { flash(up); showToast(`${up} added to Bounce.`); }
     }
   }, 3000);
 }
@@ -3083,7 +3018,7 @@ async function deleteQsTickers(syms){
   renderQuickSwing();
   if (API_LIVE) await Promise.all(syms.map(sym=>api.send('/api/quickswing/watchlist/'+encodeURIComponent(sym),'DELETE').catch(()=>{})));
 }
-setupRowMultiSelect('qsBody', 'qsBulkBar', deleteQsTickers, 'from Quick Swing');
+setupRowMultiSelect('qsBody', 'qsBulkBar', deleteQsTickers, 'from Bounce');
 // ===== END QUICK SWING FEATURE =====
 
 /* ---------------- right-click delete ---------------- */
@@ -3285,9 +3220,13 @@ window.addEventListener('scroll',()=>{
     btns.forEach(b=>b.classList.toggle('active',b.dataset.t===t));
     try{localStorage.setItem('gn_theme',t)}catch(e){}
   }
-  // Restore saved theme on load
-  const saved=localStorage.getItem('gn_theme')||'warm';
-  applyTheme(saved);
+  // Restore saved theme on load. Dark/Warm were removed as options — a
+  // value saved from before that removal must not silently break theming
+  // (data-theme has no unthemed fallback; every CSS var is defined only
+  // inside a [data-theme="x"] block), so coerce anything but "white" back
+  // to "white" instead of trusting the stored value.
+  const saved=localStorage.getItem('gn_theme');
+  applyTheme(saved==='white'?saved:'white');
   btns.forEach(b=>b.addEventListener('click',()=>applyTheme(b.dataset.t)));
 })();
 
@@ -3729,7 +3668,7 @@ function renderQuickSwing(){
   }
 
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="15"><div class="qs-empty">No Quick Swing data yet — click Rescan to score your watchlist.</div></td></tr>`;
+    body.innerHTML = `<tr><td colspan="15"><div class="qs-empty">No Bounce data yet — click Rescan to score your watchlist.</div></td></tr>`;
     return;
   }
 
@@ -3780,7 +3719,7 @@ async function rescanQuickSwing(e){
         clearInterval(t);
         targetSyms.forEach(sym => stopCheckAnim(sym));
         btn.disabled = false; btn.innerHTML = 'Rescan';
-        showToast('Quick Swing rescan timed out — some rows may be incomplete. Try again.');
+        showToast('Bounce rescan timed out — some rows may be incomplete. Try again.');
         return;
       }
       const j = await api.get('/api/jobs/' + jobId).catch(() => null);
@@ -3797,13 +3736,13 @@ async function rescanQuickSwing(e){
         renderQuickSwing();
         btn.disabled = false;
         btn.innerHTML = 'Rescan';
-        if (j.status === 'error') showToast(j.error || 'Quick Swing rescan failed.');
-        else if (j.rows) showToast(`Quick Swing: rescored ${j.rows.filter(r => !r.error && r.verdict).length} ticker(s).`);
+        if (j.status === 'error') showToast(j.error || 'Bounce rescan failed.');
+        else if (j.rows) showToast(`Bounce: rescored ${j.rows.filter(r => !r.error && r.verdict).length} ticker(s).`);
       }
     }, 3000);
   } catch (err) {
     btn.disabled = false; btn.innerHTML = 'Rescan';
-    showToast('Quick Swing rescan failed — try again.');
+    showToast('Bounce rescan failed — try again.');
   }
 }
 /* ===== END QUICK SWING FEATURE ===== */
@@ -4497,7 +4436,7 @@ const RULE_CARDS = {
       ['Use as a risk filter, not a buy signal.', 'A cheap stock with no momentum stays cheap. A premium-priced stock with momentum still works — just trim faster.'],
       ['Sector matters more than absolute P/E.', '30× is rich for a bank, cheap for cloud software.'],
     ],
-    footer: 'Same data as the Basic page VS Sector column. Sector median is the static SECTOR_PE_MAP.',
+    footer: 'Same data as the Long-Term page VS Sector column. Sector median is the static SECTOR_PE_MAP.',
   },
   trend: {
     title: 'Trend — price vs 50DMA / 200DMA',
@@ -5288,7 +5227,7 @@ async function rescanShort(e){
         btn.innerHTML = 'Rescan';
         renderShortWatchlist();
         if (j.status === 'error') showToast(j.error || 'Short rescan failed.');
-        else if (j.rows) showToast(`Short Term: rescored ${j.rows.filter(r => !r.error && r.score).length} ticker(s).`);
+        else if (j.rows) showToast(`Swing: rescored ${j.rows.filter(r => !r.error && r.score).length} ticker(s).`);
       }
     }, 3000);
   } catch (err) {
