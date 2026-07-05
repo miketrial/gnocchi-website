@@ -1233,7 +1233,7 @@
           <th></th>
           <th class="sortable" data-qssort="sym">Ticker</th>
           <th class="num sortable" data-qssort="price">Price</th>
-          <th class="num sortable" data-qssort="verdict" data-tip="BUY/SELL/NEUTRAL verdict, reduced from independent Buy and Sell scores (each 0-24, summed across 6 bidirectional factors + 2 volatility-context factors, then scaled by the Liquidity and ADR gates and the market-regime read). 75%+ = strong, 55%+ = moderate, 40%+ = weak. BLOCKED overrides everything inside the earnings blackout window.">Verdict</th>
+          <th class="num sortable" data-qssort="verdict" data-tip="BUY/SELL/NEUTRAL verdict, reduced from independent Buy and Sell scores (each 0-24, summed across 6 bidirectional factors + 2 volatility-context factors, then scaled by the Liquidity, ADR, market-regime, and VIX gates). 75%+ = strong, 55%+ = moderate, 40%+ = weak. BLOCKED overrides everything inside the earnings blackout window. Also shows how many of the 6 directional factors agree with the call, and a suggested stop (1.5x ATR(5)) when a BUY or SELL fires.">Verdict</th>
           <th class="num sortable" data-qssort="rsi" data-tip="2-day RSI — a much more reactive oversold/overbought read than the standard 14-day RSI, tuned to catch 1-2 day extremes rather than multi-week trend. Lower = more oversold (BUY): ≤5 deeply oversold, ≤10 oversold, ≤20 stretched down. Higher = more overbought (SELL): ≥95 deeply overbought, ≥90 overbought, ≥80 stretched up. Live during market hours — uses the current quote as today's in-progress bar, not just yesterday's close.">RSI(2)</th>
           <th class="num sortable" data-qssort="pctB" data-tip="Bollinger %B(20,2σ) — where price sits inside its own 20-day volatility band. Below 0 (BUY): below the lower band, the more negative the more stretched down. Above 1 (SELL): above the upper band, the more it exceeds 1 the more stretched up. Live during market hours.">%B</th>
           <th class="num sortable" data-qssort="volclimax" data-tip="Last session's volume vs its own 20-day average, read against direction. A huge spike on a down day often marks capitulation (BUY — the sellers who were going to sell, already have); a huge spike on an up day can mark a blow-off top (SELL — the buyers who were going to buy, already have). Updates once daily after close — mid-session volume-so-far isn't comparable to a full day's average, so this can't be shown live without being misleading.">Vol Climax</th>
@@ -3619,7 +3619,17 @@ function qsRowHtml(r, idx){
   const symCell = r.scoring
     ? `<td class="co-cell"><span class="sym" style="opacity:0.3">${escHtml(r.sym)}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
     : `<td class="co-cell"><b>${escHtml(r.sym)}</b></td>`;
-  const verdictTip = escHtml(`${r.tier ? r.tier+' ' : ''}${r.verdict} — Buy ${r.buyScore||'—'} · Sell ${r.sellScore||'—'} (each out of 24). Liquidity/ADR gates and market regime already applied. Click to see history.`);
+  const verdictTip = escHtml(`${r.tier ? r.tier+' ' : ''}${r.verdict} — Buy ${r.buyScore||'—'} · Sell ${r.sellScore||'—'} (each out of 24). Liquidity, ADR, market regime, and VIX gates already applied. Click to see history.`);
+  // Only surface agreement breadth once there's an actual call to corroborate —
+  // showing "2/6 lean BUY" on a NEUTRAL row (not yet a real signal) would read
+  // as a signal that isn't there.
+  const isActionable = r.verdict === 'BUY' || r.verdict === 'SELL';
+  const agreementLine = isActionable && r.agreement?.count > 0
+    ? `<span class="qs-subscore" data-tip="${escHtml('Of the 6 directional factors (RSI, %B, Vol Climax, Reversal, RS vs SPY, AH Move), '+r.agreement.count+' independently lean '+r.agreement.direction+' — breadth of agreement, separate from the weighted score above. Broad agreement across several modest factors is often more trustworthy than one factor screaming alone.')}">${r.agreement.count}/${r.agreement.of} factors agree</span>`
+    : '';
+  const stopLine = r.stop
+    ? `<span class="qs-subscore" data-tip="${escHtml('Suggested stop ('+r.stop.basis+'), '+(r.stop.side==='short'?'if shorting this SELL signal':'if long on this BUY signal')+' — not a guarantee, just a mechanical risk line based on recent volatility.')}">Stop ${r.stop.side==='short'?'above':'below'} $${r.stop.price.toFixed(2)} (${r.stop.pctFromEntry>=0?'+':''}${r.stop.pctFromEntry.toFixed(1)}%)</span>`
+    : '';
   return `<tr class="${r.scoring?'scoring':(r.blocked?'qs-row-blocked':'')}" data-sym="${r.sym}">
     <td class="idx">${idx}.</td>
     ${symCell}
@@ -3627,6 +3637,8 @@ function qsRowHtml(r, idx){
     <td class="num" data-col="verdict" style="cursor:pointer" data-tip="${verdictTip}">
       <span class="qs-verdict qs-verdict-${r.verdict.toLowerCase()} qs-tier-${r.tier||'none'}">${r.verdict}</span>
       <span class="qs-subscore">Buy ${escHtml(r.buyScore||'—')} · Sell ${escHtml(r.sellScore||'—')}</span>
+      ${agreementLine}
+      ${stopLine}
     </td>
     <td class="num ${qsVCls(r,0)}" data-col="rsi" style="cursor:pointer" data-tip="${tipFor(0)}">${typeof rsiVal==='number'?rsiVal.toFixed(1):'—'}</td>
     <td class="num ${qsVCls(r,1)}" data-col="pctB" style="cursor:pointer" data-tip="${tipFor(1)}">${bb?.pctB!=null?bb.pctB.toFixed(2):'—'}</td>
@@ -3661,14 +3673,16 @@ function renderQuickSwing(){
   if (!banner || !body) return;
 
   const rows = Object.values(qsRowsBySym);
-  // Market regime banner — every row carries the same marketRegime object
-  // (computed once per scan batch), so just read it off any row that has one.
+  // Market regime + VIX banner — every row carries the same marketRegime/vix
+  // objects (both computed once per scan batch), so just read them off
+  // whichever row has one.
   const regime = rows.find(r => r && r.marketRegime)?.marketRegime;
+  const vix = rows.find(r => r && r.vix)?.vix;
   if (regime) {
     banner.className = 'qs-regime ' + (regime.favorable ? 'fav' : 'unfav');
     banner.innerHTML = `<span class="qs-regime-dot"></span>` +
       `<span>Market regime: ${escHtml(regime.label)}</span>` +
-      `<span class="qs-regime-sub">${regime.distributionDays} distribution day${regime.distributionDays===1?'':'s'} in the last 25 sessions</span>`;
+      `<span class="qs-regime-sub">${regime.distributionDays} distribution day${regime.distributionDays===1?'':'s'} in the last 25 sessions${vix ? ` · VIX ${vix.level.toFixed(1)} — ${escHtml(vix.label)}` : ''}</span>`;
   } else {
     banner.className = 'qs-regime';
     banner.innerHTML = '';
