@@ -39,16 +39,19 @@
    range," unanswerable before the close. Liquidity and ADR% are slow-moving
    structural stats where a live tick adds nothing.
 
-   Every factor is computed from data already fetched elsewhere in the app
-   (historical-price-eod/full + earnings + a live /stable/quote) — confirmed
-   against FMP's live API that there is no native Bollinger Bands, ATR,
-   Relative-Strength-rank, or distribution-day endpoint, so all of this is
-   self-computed arithmetic, not a new data source. ATR% Expansion (new) is
-   the same story — pure arithmetic on OHLCV already fetched, via the
-   existing atrFrom() helper, no new endpoint required. The one shared fetch
-   is SPY's own price history + live quote, needed for relative-strength-vs-
-   market and the market-regime gate — fetched ONCE per scan batch (see
-   getMarketRegime) and shared across every ticker, not re-fetched per ticker.
+   Every per-ticker factor is computed from data already fetched elsewhere in
+   the app (historical-price-eod/full + earnings + a live /stable/quote) —
+   confirmed against FMP's live API that there is no native Bollinger Bands,
+   ATR, Relative-Strength-rank, or distribution-day endpoint, so all of this
+   is self-computed arithmetic, not a new data source. ATR% Expansion is the
+   same story — pure arithmetic on OHLCV already fetched, via the existing
+   atrFrom() helper, no new endpoint required. SPY's own price history + live
+   quote (needed for relative-strength-vs-market and the market-regime gate)
+   and ^VIX's live quote (the market-wide volatility gate) are both fetched
+   ONCE per scan batch (see getMarketRegime) and shared across every ticker,
+   not re-fetched per ticker — ^VIX is the one genuinely NEW FMP fetch this
+   file makes (confirmed live on /stable/quote), everything else above is
+   arithmetic on data already being pulled.
 
    ---------- REMOVAL CHECKLIST (if this feature doesn't earn its keep) ----------
    Delete, in order:
@@ -77,6 +80,7 @@ import {
 } from "./store.mjs";
 import { round2, na, scored, trueRange, atrFrom } from "./ta-helpers.mjs";
 import { safe, delay } from "./fmp-client.mjs";
+import { recordQuickswingTransition, emptyLog, BT_SEED_DAYS } from "./quickswing-backtest.mjs";
 
 /* ---------- Sanity gates (reject implausible values before they reach a chip) ---------- */
 function sane(value, min, max) {
@@ -459,6 +463,27 @@ function earningsGate(earningsHist) {
   return { blocked: false, reason: `Earnings in ${daysUntil}d (${next.date}) — outside blackout window`, daysUntil, date: next.date };
 }
 
+/* ---------- VIX — market-wide volatility gate (shared, computed ONCE per batch) ----------
+   Distinct from per-ticker ATR% Expansion: that answers "is THIS stock
+   choppier than usual"; this answers "is the WHOLE MARKET choppier than
+   usual right now." Confirmed live on FMP's stable /quote endpoint (see
+   comment in getMarketRegime for the fetch). Standard, widely-recognized
+   VIX bands — deliberately absolute thresholds rather than a ratio-to-its-
+   own-history like ATR Expansion uses, since VIX is already a normalized
+   index with well-known conventional levels (a beginner can look these up
+   anywhere and get the same bands). Non-directional, same spirit as Vol
+   Dry-Up / ATR Expansion — a spiked VIX doesn't say which way a stock will
+   move, just that whatever signal IS firing deserves more weight, so it
+   multiplies both the buy and sell totals identically rather than favoring
+   one side. */
+function classifyVix(level) {
+  if (level == null || !isFinite(level)) return null;
+  if (level < 15) return { label: "low / complacent", multiplier: 0.85 };
+  if (level < 20) return { label: "normal", multiplier: 1.0 };
+  if (level < 30) return { label: "elevated", multiplier: 1.15 };
+  return { label: "high fear", multiplier: 1.3 };
+}
+
 /* ---------- Market regime (SPY-level, computed ONCE per scan batch) ----------
    CANSLIM's "M" — don't fight the tape. This is a portfolio-wide gate, not
    a per-ticker factor: scoring "is SPY above its own 200DMA" separately for
@@ -495,7 +520,7 @@ export async function getMarketRegime() {
     if (spyHist.length >= 200) await putSpyHistCache(spyHist).catch(() => {});
   }
   if (!spyHist || spyHist.length < 200) {
-    return { ok: false, reason: "Insufficient SPY history", hist: spyHist, liveHist: spyHist };
+    return { ok: false, reason: "Insufficient SPY history", hist: spyHist, liveHist: spyHist, vix: null };
   }
   const closes = spyHist.map(d => d.close);
   const sma50 = closes.slice(0, 50).reduce((s, x) => s + x, 0) / 50;
@@ -514,9 +539,15 @@ export async function getMarketRegime() {
   // would silently mis-measure the delta.
   const spyLiveQuote = (await safe("quote", "SPY").catch(() => []))?.[0] || null;
   const liveHist = injectLiveBar(spyHist, spyLiveQuote);
+  // VIX — also fetched once per batch, same reasoning as SPY. Confirmed live
+  // on the /quote endpoint (returns price, priceAvg50/200, dayHigh/Low).
+  const vixQuote = (await safe("quote", "^VIX").catch(() => []))?.[0] || null;
+  const vixLevel = vixQuote?.price ?? null;
+  const vixClass = classifyVix(vixLevel);
+  const vix = vixClass ? { level: vixLevel, label: vixClass.label, multiplier: vixClass.multiplier } : null;
   return {
     ok: true, price, sma50, sma200, uptrend, distributionDays: distDays,
-    favorable: uptrend && distDays <= 5, label, hist: spyHist, liveHist,
+    favorable: uptrend && distDays <= 5, label, hist: spyHist, liveHist, vix,
   };
 }
 
@@ -548,13 +579,54 @@ function deriveVerdict({ buyScore, sellScore, blocked }) {
   return { verdict: "NEUTRAL", tier: null };
 }
 
+/* ---------- Suggested stop distance ----------
+   Turns atr5 (already computed for other purposes) into an actual, actionable
+   price level — 1.5x ATR is the same swing-trading convention already
+   referenced elsewhere in this file (see checkAdr's "Qullamaggie-style"
+   comment). BUY reads as a long entry (stop below price); SELL is ambiguous
+   on its own — it could mean "exit an existing long" or "short entry
+   candidate" — so it's computed as the short-entry case (stop above price)
+   and the UI must label it "if shorting" rather than imply the tool is
+   telling you to short. No stop for NEUTRAL/BLOCKED — nothing to protect. */
+function computeStop(verdict, price, atr5) {
+  if (!(price > 0) || !(atr5 > 0)) return null;
+  if (verdict === "BUY") {
+    const stopPrice = round2(price - 1.5 * atr5);
+    return { price: stopPrice, pctFromEntry: round2(((stopPrice - price) / price) * 100), basis: "1.5x ATR(5)", side: "long" };
+  }
+  if (verdict === "SELL") {
+    const stopPrice = round2(price + 1.5 * atr5);
+    return { price: stopPrice, pctFromEntry: round2(((stopPrice - price) / price) * 100), basis: "1.5x ATR(5)", side: "short" };
+  }
+  return null;
+}
+
+/* ---------- Signal-agreement count ----------
+   Breadth, not magnitude: of the 6 mirrored (directional) factors, how many
+   independently lean toward the winning direction — separate from the
+   point-weighted buy/sell score. A stock where 5 of 6 factors mildly agree
+   is a broader, more corroborated read than one factor screaming (3/3
+   points) while the rest are silent, even if the raw weighted score comes
+   out similar — this is informational for now, not (yet) a gate on the
+   verdict/tier itself. Only scoped to the 6 mirrored factors — Vol Dry-Up
+   and ATR Expansion aren't directional, so they can't "agree" either way. */
+function computeAgreement(mirrored, direction) {
+  if (!direction) return { count: 0, of: mirrored.length, direction: null };
+  const count = mirrored.filter(c => {
+    const b = c.buy.points ?? 0, s = c.sell.points ?? 0;
+    if (b === 0 && s === 0) return false; // no signal at all from this factor
+    return direction === "BUY" ? b > s : s > b;
+  }).length;
+  return { count, of: mirrored.length, direction };
+}
+
 /* ---------- Main entry point ---------- */
 export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketRegime = null } = {}) {
   const sym = ticker.toUpperCase();
 
   if (!skipCache) {
     const cached = await getQuickswingFmpCache(sym);
-    if (cached && cached._v === 4) return cached.row;
+    if (cached && cached._v === 5) return cached.row;
   } else {
     await deleteQuickswingFmpCache(sym).catch(() => {});
   }
@@ -618,15 +690,21 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
   const regimeFavorable = regime?.ok ? regime.favorable : null;
   const regimeMultiplierBuy = regimeFavorable === false ? 0.75 : 1.0;
   const regimeMultiplierSell = regimeFavorable === false ? 1.15 : 1.0;
+  // VIX — non-directional, so the SAME multiplier applies to both sides
+  // (unlike the regime multiplier above, which favors one direction).
+  const vixMultiplier = regime?.vix?.multiplier ?? 1.0;
 
-  const buyScore = Math.min(QS_MAX_SCORE, Math.round(rawBuyScore * liqMultiplier * adrMultiplier * regimeMultiplierBuy));
-  const sellScore = Math.min(QS_MAX_SCORE, Math.round(rawSellScore * liqMultiplier * adrMultiplier * regimeMultiplierSell));
+  const buyScore = Math.min(QS_MAX_SCORE, Math.round(rawBuyScore * liqMultiplier * adrMultiplier * regimeMultiplierBuy * vixMultiplier));
+  const sellScore = Math.min(QS_MAX_SCORE, Math.round(rawSellScore * liqMultiplier * adrMultiplier * regimeMultiplierSell * vixMultiplier));
 
   const { verdict, tier } = deriveVerdict({ buyScore, sellScore, blocked: eGate.blocked });
 
   const priceIsLive = liveHist[0]?.live === true;
   const price = liveHist[0]?.close ?? hist[0]?.close ?? null;
   const atr5 = round2(atrFrom(hist, 0, 5));
+  const stop = computeStop(verdict, price, atr5);
+  const agreementDirection = buyScore === sellScore ? null : (buyScore > sellScore ? "BUY" : "SELL");
+  const agreement = computeAgreement(mirrored, agreementDirection);
 
   const row = {
     sym,
@@ -637,11 +715,14 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
     buyScore: `${buyScore}/${QS_MAX_SCORE}`,
     sellScore: `${sellScore}/${QS_MAX_SCORE}`,
     reasons, raw, buyVerdicts, sellVerdicts,
+    stop,
+    agreement,
     atr5,
     atrExpansionRatio: shared[1]?.value ?? null,
     liquidity: { value: liq.value, points: liq.points, label: liq.summary },
     volatility: { adrPct: adr.value, points: adr.points, label: adr.summary },
-    liqMultiplier, adrMultiplier, regimeMultiplierBuy, regimeMultiplierSell,
+    vix: regime?.vix ? { level: regime.vix.level, label: regime.vix.label } : null,
+    liqMultiplier, adrMultiplier, regimeMultiplierBuy, regimeMultiplierSell, vixMultiplier,
     blocked: eGate.blocked,
     blockedReason: eGate.blocked ? eGate.reason : null,
     earnings: { daysUntil: eGate.daysUntil ?? null, date: eGate.date ?? null },
@@ -649,6 +730,123 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
     scored_at: new Date().toISOString(),
   };
 
-  await putQuickswingFmpCache(sym, { _v: 4, row }).catch(() => {});
+  await putQuickswingFmpCache(sym, { _v: 5, row }).catch(() => {});
   return row;
+}
+
+/* ---------- Historical backtest seed ----------
+   The live pipeline only produces a verdict for "right now." To give the
+   backtest log something to show the moment a ticker is first added, replay
+   the screener over the trailing EOD price history and synthesize the same
+   BUY/exit trades it WOULD have booked.
+
+   Deliberately EOD-only: the after-hours and live-intraday legs can't be
+   reconstructed from a historical daily bar, and VIX history isn't on the
+   stable /quote endpoint — so those are treated as neutral (AH = n/a, VIX
+   multiplier = 1). Every deterministic factor (RSI2, %B, Vol Climax, Reversal,
+   RS-vs-SPY, Vol Dry-Up, ATR Expansion, ADR/Liquidity gates, earnings gate,
+   SPY market regime) IS reconstructed as of each historical close, so the seed
+   is a faithful replay of the parts of the model that don't depend on
+   right-now-only data. Numbers can therefore differ slightly from what the
+   live tool showed on those days — this is a plausible reconstruction, not a
+   recording. */
+
+/* Newest-first slice of `hist` as of (and including) `asOfDate`. */
+function histAsOf(hist, asOfDate) {
+  return hist.filter(d => d.date <= asOfDate);
+}
+
+/* Market-regime favorability reconstructed from SPY as of a past date. Returns
+   true/false/null (null = not enough SPY history to judge → no adjustment). */
+function historicalRegimeFavorable(spyAsOf) {
+  if (!spyAsOf || spyAsOf.length < 200) return null;
+  const closes = spyAsOf.map(d => d.close);
+  const sma50 = closes.slice(0, 50).reduce((s, x) => s + x, 0) / 50;
+  const sma200 = closes.slice(0, 200).reduce((s, x) => s + x, 0) / 200;
+  const uptrend = closes[0] > sma50 && sma50 > sma200;
+  const distDays = distributionDayCount(spyAsOf);
+  return uptrend && (distDays == null || distDays <= 5);
+}
+
+/* Was the ticker inside the 5-day pre-earnings blackout as of `asOfDate`? */
+function historicalEarningsBlocked(earningsHist, asOfDate) {
+  if (!earningsHist || !earningsHist.length) return false;
+  const next = earningsHist
+    .filter(e => e.date > asOfDate)
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+  if (!next) return false;
+  const daysUntil = Math.ceil((new Date(next.date) - new Date(asOfDate)) / 86400000);
+  return daysUntil <= 5;
+}
+
+/* Compute just the headline verdict for one historical close — the EOD subset
+   of scoreTickerQuickSwing, reusing the same factor functions and multipliers. */
+function historicalVerdict(hAsOf, spyAsOf, earningsHist, asOfDate) {
+  const mirrored = [
+    checkRsi2(hAsOf),
+    checkBollinger(hAsOf),
+    checkVolumeClimax(hAsOf),
+    checkReversalCandle(hAsOf),
+    checkRelativeStrength(hAsOf, spyAsOf),
+    naMirror("No historical after-hours data"), // AH leg — not reconstructable
+  ];
+  const shared = [checkVolumeDryUp(hAsOf), checkAtrExpansion(hAsOf)];
+  const adr = checkAdr(hAsOf);
+  const liq = checkLiquidity(hAsOf);
+
+  const rawBuyScore = mirrored.reduce((s, c) => s + (c.buy.points ?? 0), 0) + shared.reduce((s, c) => s + (c.points ?? 0), 0);
+  const rawSellScore = mirrored.reduce((s, c) => s + (c.sell.points ?? 0), 0) + shared.reduce((s, c) => s + (c.points ?? 0), 0);
+
+  const liqMultiplier = liqMultiplierFor(liq.points);
+  const adrMultiplier = adrMultiplierFor(adr.points);
+  const regimeFavorable = historicalRegimeFavorable(spyAsOf);
+  const regimeMultiplierBuy = regimeFavorable === false ? 0.75 : 1.0;
+  const regimeMultiplierSell = regimeFavorable === false ? 1.15 : 1.0;
+  // VIX history unavailable → neutral (1.0), matching the header note.
+
+  const buyScore = Math.min(QS_MAX_SCORE, Math.round(rawBuyScore * liqMultiplier * adrMultiplier * regimeMultiplierBuy));
+  const sellScore = Math.min(QS_MAX_SCORE, Math.round(rawSellScore * liqMultiplier * adrMultiplier * regimeMultiplierSell));
+  const blocked = historicalEarningsBlocked(earningsHist, asOfDate);
+  return deriveVerdict({ buyScore, sellScore, blocked }).verdict;
+}
+
+/* Replay the last `daysBack` sessions and fold each day's verdict through the
+   same transition logic the live loop uses, producing a seeded trade log. */
+export function replayQuickSwingTrades(sym, hist, spyHist, earningsHist, { daysBack = BT_SEED_DAYS } = {}) {
+  let log = emptyLog();
+  if (!hist || hist.length < 21) return log; // not enough bars to score anything
+  // Oldest → newest over the trailing window, so trades open/close in order.
+  const dates = hist.slice(0, daysBack).map(b => b.date).reverse();
+  for (const date of dates) {
+    const hAsOf = histAsOf(hist, date);
+    if (hAsOf.length < 21) continue;
+    const spyAsOf = spyHist ? histAsOf(spyHist, date) : null;
+    const verdict = historicalVerdict(hAsOf, spyAsOf, earningsHist, date);
+    const syntheticRow = {
+      sym,
+      price: hAsOf[0].close,
+      priceIsLive: false,
+      verdict,
+      scored_at: `${date}T21:00:00.000Z`, // ~US market close
+    };
+    log = recordQuickswingTransition(syntheticRow, log);
+  }
+  return log;
+}
+
+/* Fetch what the replay needs and produce the seed log. Own FMP fetch (hist +
+   earnings); SPY history is passed in from the shared regime object to avoid a
+   redundant index fetch. Called once, the first time a ticker is tracked. */
+export async function seedQuickSwingBacktest(sym, { daysBack = BT_SEED_DAYS, spyHist = null } = {}) {
+  const t = sym.toUpperCase();
+  let rawHist = [], earningsHist = [];
+  try {
+    rawHist = await safe("historical-price-eod/full", t, "&limit=320"); await delay(200);
+    earningsHist = await safe("earnings", t, "&limit=12");
+  } catch (e) {
+    console.error(`[quickswing] ${t} seed fetch error:`, e?.message || e);
+    return emptyLog();
+  }
+  const hist = cleanHist(rawHist);
+  return replayQuickSwingTrades(t, hist, spyHist, earningsHist, { daysBack });
 }
