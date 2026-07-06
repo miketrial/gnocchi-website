@@ -15,7 +15,11 @@
    FEATURE block (see the checklist in quickswing-pipeline.mjs). */
 
 const MAX_CLOSED = 200; // cap the per-ticker closed-trade history
-export const BT_WINDOW_DAYS = 50; // rolling window: trades older than this drop off
+// Rolling window: a trade drops off once its ENTRY is older than this. Pruning
+// by entry (not exit) guarantees nothing older than the cap ever shows — a
+// trade's exit is always later than its entry, so entry-within-15d ⇒ the whole
+// trade is within 15d. 15 is the hard "furthest back, ever" for this log.
+export const BT_WINDOW_DAYS = 15;
 export const BT_SEED_DAYS = 15;   // history backfilled the first time a ticker is added
 // Bump when the scoring calibration OR exit rule changes so already-seeded logs
 // get a one-time re-seed (they'd otherwise keep showing trades from the old rules).
@@ -24,7 +28,20 @@ export const BT_SEED_DAYS = 15;   // history backfilled the first time a ticker 
 // v4: per-trade SPY buy-and-hold benchmark (spyPct).
 // v5: high-conviction BUY gate (RS ≥ 0 AND ≥3/6 factors agree).
 // v6: BUY gate loosened to RS ≥ 0 only (dropped the agreement requirement).
-export const BT_SEED_VERSION = 6;
+// v7: overnight-gap BUY-conviction damper (gappier names need a stronger read).
+// v8: 15-day window, pruned by ENTRY date (was 50-day, pruned by exit).
+// v9: 2.5×ATR(5) stop-loss exit (in addition to the SELL flip).
+export const BT_SEED_VERSION = 9;
+
+// Stop-loss: a long is cut once price falls 2.5×ATR(5)-at-entry below the entry.
+// Calibrated on an 8-ticker/250-session replay: vs the SELL-only rule it trims
+// the worst trade from −26% to −14% while keeping ~98% of cumulative P&L and the
+// full win rate — wide, volatility-scaled so normal wiggles breathe but a real
+// structural break is cut. (Tighter multiples and hard % caps all bled far more
+// return; a −13%/day name like SNDK simply can't be stopped tightly without
+// cutting its winners too — size those down instead.) See the stop-loss study.
+export const QS_STOP_ATR_MULT = 2.5;
+const round2 = x => Math.round(x * 100) / 100;
 
 export function emptyLog() {
   return { open: null, closed: [] };
@@ -36,16 +53,18 @@ export function needsSeed(log) {
   return !log || log.seedVersion !== BT_SEED_VERSION;
 }
 
-/* Rolling-window prune: drop closed trades whose exit is older than `days` ago,
-   measured from now. A freshly-seeded ticker carries ~15 days of history (all
-   inside the window, so nothing drops); as forward days accumulate the window
-   fills toward 50, then rolls — the oldest day falling off as each new one is
-   added. The open position is never pruned. */
+/* Rolling-window prune: drop closed trades whose ENTRY is older than `days` ago,
+   measured from now. Pruning on entry (not exit) is what enforces the hard
+   "furthest back, ever" guarantee — a trade entered inside the window is wholly
+   inside it, so no entry date older than the cap can ever leak into the log via
+   a long hold. A freshly-seeded ticker carries ~15 days of history; as forward
+   days accumulate the window rolls, the oldest entry falling off as each new day
+   is added. The open position is never pruned. */
 export function pruneTradeWindow(log, days = BT_WINDOW_DAYS) {
   if (!log || typeof log !== "object") return emptyLog();
   const cutoff = Date.now() - days * 86400000;
   const closed = (Array.isArray(log.closed) ? log.closed : []).filter(t => {
-    const ts = Date.parse(t.exitScoredAt || t.exitAt);
+    const ts = Date.parse(t.entryScoredAt || t.entryAt);
     return !isFinite(ts) || ts >= cutoff;
   });
   // Preserve the seed markers — they record that the one-time historical
@@ -136,27 +155,52 @@ export function recordQuickswingTransition(newRow, prevLog) {
   if (!log.open) {
     // Flat: a BUY opens a paper long. Anything else is a no-op.
     if (newRow.verdict === "BUY") {
+      // Pin the stop at entry: entry − 2.5×ATR(5)-at-entry. atr5 rides on the row
+      // (live scorer and the historical replay both supply it); if it's missing
+      // the position simply carries no stop rather than a bogus one.
+      const atr5 = newRow.atr5 > 0 ? newRow.atr5 : null;
       log.open = {
         sym: newRow.sym,
         entryAt: new Date().toISOString(),
         entryScoredAt: newRow.scored_at || null,
         entryPrice: newRow.price,
         entryPriceIsLive: !!newRow.priceIsLive,
+        atr5,
+        stopPrice: atr5 ? round2(newRow.price - QS_STOP_ATR_MULT * atr5) : null,
       };
     }
     return log;
   }
 
-  // In a trade: hold until the verdict flips to SELL (an actual overbought
-  // reversal). NEUTRAL just means "no longer stretched" — not a reason to bail.
-  // Backtested across 14 tickers / 250 sessions, exiting on SELL rather than on
-  // the first non-BUY read roughly DOUBLED avg P/L per trade (+3.2% vs +1.6%)
-  // at an equal win rate, and made every exit a clean, single-meaning signal.
-  // Trade-off: longer holds (~4.6d vs ~1.8d). See the calibration study.
-  if (newRow.verdict !== "SELL") return log;
-
   const o = log.open;
-  const exitPrice = newRow.price;
+
+  // Exit rule, in priority order:
+  //  1. STOP — price broke the entry-time 2.5×ATR stop. Cut regardless of verdict
+  //     (a mean-reversion read may scream BUY into a crash; the stop overrides).
+  //  2. SELL — the verdict flipped to an actual overbought reversal. NEUTRAL alone
+  //     is NOT an exit: backtested across 250 sessions, holding until SELL rather
+  //     than bailing on the first non-BUY read roughly DOUBLED avg P/L per trade
+  //     (+3.2% vs +1.6%) at equal win rate. Trade-off: longer holds. See the study.
+  // A stop breach on a completed daily bar (replay) is the day's LOW piercing the
+  // stop; on a live snapshot it's the current price. Fill: a gap through the stop
+  // at the open fills at the open; an intraday touch is assumed filled at the stop.
+  let exitPrice = null, exitReason = null;
+  if (o.stopPrice != null) {
+    const low = newRow.low > 0 ? newRow.low : null;
+    const breachRef = low != null ? low : newRow.price;
+    if (breachRef > 0 && breachRef <= o.stopPrice) {
+      if (newRow.open > 0 && newRow.open <= o.stopPrice) exitPrice = newRow.open; // gapped below at the open
+      else if (low != null) exitPrice = o.stopPrice;                              // intraday touch
+      else exitPrice = Math.min(newRow.price, o.stopPrice);                       // live snapshot
+      exitReason = "STOP";
+    }
+  }
+  if (exitReason == null) {
+    if (newRow.verdict !== "SELL") return log;
+    exitPrice = newRow.price;
+    exitReason = "SELL";
+  }
+
   const pnlPct = Math.round(((exitPrice - o.entryPrice) / o.entryPrice) * 100 * 100) / 100;
   const closed = {
     sym: o.sym,
@@ -164,11 +208,12 @@ export function recordQuickswingTransition(newRow, prevLog) {
     entryScoredAt: o.entryScoredAt,
     entryPrice: o.entryPrice,
     entryPriceIsLive: o.entryPriceIsLive,
+    stopPrice: o.stopPrice ?? null,
     exitAt: new Date().toISOString(),
     exitScoredAt: newRow.scored_at || null,
     exitPrice,
     exitPriceIsLive: !!newRow.priceIsLive,
-    exitReason: newRow.verdict, // always SELL under the current exit rule
+    exitReason, // "STOP" or "SELL"
     pnlPct,
     holdDays: holdDaysBetween(o.entryScoredAt || o.entryAt, newRow.scored_at || new Date().toISOString()),
   };
