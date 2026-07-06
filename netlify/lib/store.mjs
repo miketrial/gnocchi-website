@@ -15,6 +15,7 @@ const epsSnapStore     = () => getStore("eps-snapshots");// key = TICKER (object
 const qsRowStore       = () => getStore("qs-rows");      // key = TICKER, per-ticker quickswing-pipeline score blob
 const qsTradesStore    = () => getStore("qs-trades");    // key = TICKER, per-ticker paper-trade backtest log
 const qsFmpStore       = () => getStore("qs-fmp");       // key = TICKER, per-ticker raw FMP fan-out cache (24h TTL)
+const qsAlertStore     = () => getStore("qs-alert-state");// key = TICKER, last verdict a Telegram alert was sent for (dedup)
 const spyHistStore     = () => getStore("spy-hist");     // key = "SPY", one shared blob for the whole scan batch
 
 /* ---------- FMP cache (24h TTL) ---------- */
@@ -295,6 +296,21 @@ export async function putQuickswingTrades(ticker, log) {
 }
 export async function deleteQuickswingTrades(ticker) {
   await qsTradesStore().delete(ticker.toUpperCase()).catch(() => {});
+}
+
+/* ---------- Quick Swing: Telegram alert dedup state ----------
+   One tiny blob per ticker holding the last verdict we actually *sent* a
+   Telegram alert for. The alert cron diffs the freshly-scored verdict against
+   this so a still-open BUY doesn't re-notify every 5 minutes — only genuine
+   transitions (entry / exit) fire. Removable with the QUICK SWING FEATURE block. */
+export async function getQsAlertState(ticker) {
+  return qsAlertStore().get(ticker.toUpperCase(), { type: "json" }).catch(() => null);
+}
+export async function putQsAlertState(ticker, verdict) {
+  await qsAlertStore().setJSON(ticker.toUpperCase(), { verdict, at: new Date().toISOString() });
+}
+export async function deleteQsAlertState(ticker) {
+  await qsAlertStore().delete(ticker.toUpperCase()).catch(() => {});
 }
 
 /* ---------- Quick Swing: raw FMP fan-out cache (separate from Short Term) ---------- */

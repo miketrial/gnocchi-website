@@ -59,17 +59,24 @@
      2. netlify/functions/quickswing-rescan-background.mjs
      3. netlify/functions/quickswing-watchlist.mjs
      3b. netlify/functions/quickswing-delete.mjs
+     3c. Telegram alert layer (notifications):
+         netlify/functions/quickswing-alert-cron.mjs
+         netlify/functions/quickswing-alert-background.mjs
+         netlify/lib/quickswing-alert.mjs
+         netlify/lib/telegram.mjs
+         (also unset the TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID Netlify env vars)
      4. netlify.toml — remove the block between the
         "===== QUICK SWING FEATURE =====" / "===== END QUICK SWING FEATURE ====="
         comment markers
      5. netlify/lib/store.mjs — remove the "Quick Swing: per-ticker score
-        blobs", "Quick Swing: raw FMP fan-out cache", and "Shared SPY history
-        cache" sections (each is delimited by its own header comment)
+        blobs", "Quick Swing: Telegram alert dedup state", "Quick Swing: raw FMP
+        fan-out cache", and "Shared SPY history cache" sections (each is
+        delimited by its own header comment)
      6. index.html — grep for QUICK SWING and remove every marked HTML/JS/CSS
         block (start and end markers are paired, one feature per pair)
-     7. Optional cleanup: delete the "qs-rows", "qs-fmp", and "spy-hist" Netlify
-        Blobs stores (Netlify dashboard → Blobs) — stale data, not referenced
-        by anything else once the above is gone.
+     7. Optional cleanup: delete the "qs-rows", "qs-alert-state", "qs-fmp", and
+        "spy-hist" Netlify Blobs stores (Netlify dashboard → Blobs) — stale data,
+        not referenced by anything else once the above is gone.
    NOT removable without also touching short-pipeline.mjs (shared, keep):
      netlify/lib/ta-helpers.mjs, netlify/lib/fmp-client.mjs — short-pipeline.mjs
      depends on these too; they pre-date nothing here breaking if quickswing
