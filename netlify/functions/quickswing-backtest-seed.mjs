@@ -12,7 +12,7 @@
    long enough to hit the function timeout. */
 import { listQuickswingRows, getQuickswingTrades, putQuickswingTrades } from "../lib/store.mjs";
 import { seedQuickSwingBacktest, getMarketRegime } from "../lib/quickswing-pipeline.mjs";
-import { mergeSeed, pruneTradeWindow, needsSeed, BT_SEED_VERSION, BT_SEED_DAYS, BT_WINDOW_DAYS } from "../lib/quickswing-backtest.mjs";
+import { mergeSeed, pruneTradeWindow, needsSeed, annotateBenchmarks, BT_SEED_VERSION, BT_SEED_DAYS, BT_WINDOW_DAYS } from "../lib/quickswing-backtest.mjs";
 
 const BATCH = 4; // tickers seeded per request — keeps each call well under the timeout
 
@@ -50,6 +50,7 @@ export default async () => {
           const seed = await seedQuickSwingBacktest(sym, { daysBack: BT_SEED_DAYS, spyHist: regime?.hist });
           next = pruneTradeWindow(mergeSeed(existing, seed));
         }
+        annotateBenchmarks(next, regime?.hist); // fill SPY benchmark on any trade still missing it
         next.seeded = true;
         next.seedVersion = BT_SEED_VERSION;
         await putQuickswingTrades(sym, next);

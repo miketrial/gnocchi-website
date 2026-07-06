@@ -21,7 +21,8 @@ export const BT_SEED_DAYS = 15;   // history backfilled the first time a ticker 
 // get a one-time re-seed (they'd otherwise keep showing trades from the old rules).
 // v2: extreme-read override + 0.30 weak threshold + 0.85 BUY regime penalty.
 // v3: exit on SELL (not on the first non-BUY read).
-export const BT_SEED_VERSION = 3;
+// v4: per-trade SPY buy-and-hold benchmark (spyPct).
+export const BT_SEED_VERSION = 4;
 
 export function emptyLog() {
   return { open: null, closed: [] };
@@ -52,6 +53,37 @@ export function pruneTradeWindow(log, days = BT_WINDOW_DAYS) {
   if (log.seeded) out.seeded = true;
   if (log.seedVersion != null) out.seedVersion = log.seedVersion;
   return out;
+}
+
+/* ---------- Buy-and-hold benchmark (vs SPY over the same dates) ----------
+   For each closed trade we record what SPY returned over the SAME entry→exit
+   window. That's the honest yardstick for a market-timing strategy: "did
+   catching the bounce beat simply being in the market those days?" — without
+   it, a big cumulative $ can just be a rising tide. */
+function spyCloseAsOf(spyHist, dateStr) {
+  // spyHist is newest-first; the first bar dated on/before dateStr is the
+  // most recent SPY close as of that day (handles weekends/holidays).
+  for (const b of spyHist) if (b.date <= dateStr) return b.close;
+  return null;
+}
+export function spyReturnBetween(spyHist, entryIso, exitIso) {
+  if (!Array.isArray(spyHist) || !spyHist.length || !entryIso || !exitIso) return null;
+  const e = spyCloseAsOf(spyHist, String(entryIso).slice(0, 10));
+  const x = spyCloseAsOf(spyHist, String(exitIso).slice(0, 10));
+  if (!(e > 0) || !(x > 0)) return null;
+  return Math.round(((x - e) / e) * 100 * 100) / 100;
+}
+/* Fill spyPct on any closed trade that doesn't have it yet. Idempotent — safe
+   to call from the seed replay, the rescan close path, and the seed endpoint. */
+export function annotateBenchmarks(log, spyHist) {
+  if (!log || !Array.isArray(log.closed) || !Array.isArray(spyHist) || !spyHist.length) return log;
+  for (const t of log.closed) {
+    if (t.spyPct == null) {
+      const r = spyReturnBetween(spyHist, t.entryScoredAt || t.entryAt, t.exitScoredAt || t.exitAt);
+      if (r != null) t.spyPct = r;
+    }
+  }
+  return log;
 }
 
 /* Whole days between two ISO timestamps, rounded to one decimal (a 1-2 day

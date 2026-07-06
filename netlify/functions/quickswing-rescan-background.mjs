@@ -2,7 +2,7 @@
    1-2 day mean-reversion view. Self-contained and independently removable —
    see the removal checklist in netlify/lib/quickswing-pipeline.mjs. */
 import { scoreTickerQuickSwing, getMarketRegime } from "../lib/quickswing-pipeline.mjs";
-import { recordQuickswingTransition, pruneTradeWindow } from "../lib/quickswing-backtest.mjs";
+import { recordQuickswingTransition, pruneTradeWindow, annotateBenchmarks } from "../lib/quickswing-backtest.mjs";
 import { listQuickswingRows, putQuickswingRow, getQuickswingTrades, putQuickswingTrades, putJob, acquireRescanLock, releaseRescanLock } from "../lib/store.mjs";
 
 export default async (req) => {
@@ -68,6 +68,7 @@ async function runQuickSwingScan({ jobId, force, onlyTickers, clientTickers }) {
         let log = await getQuickswingTrades(sym);
         log = recordQuickswingTransition(row, log);
         log = pruneTradeWindow(log);
+        annotateBenchmarks(log, regime?.hist); // tag any newly-closed trade with its SPY-same-days return
         await putQuickswingTrades(sym, log);
       } catch (e) { /* backtest log is non-critical — ignore */ }
       rows.push(row);

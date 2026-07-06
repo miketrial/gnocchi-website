@@ -80,7 +80,7 @@ import {
 } from "./store.mjs";
 import { round2, na, scored, trueRange, atrFrom } from "./ta-helpers.mjs";
 import { safe, delay } from "./fmp-client.mjs";
-import { recordQuickswingTransition, emptyLog, BT_SEED_DAYS } from "./quickswing-backtest.mjs";
+import { recordQuickswingTransition, emptyLog, annotateBenchmarks, BT_SEED_DAYS } from "./quickswing-backtest.mjs";
 
 /* ---------- Sanity gates (reject implausible values before they reach a chip) ---------- */
 function sane(value, min, max) {
@@ -865,6 +865,9 @@ export function replayQuickSwingTrades(sym, hist, spyHist, earningsHist, { daysB
     };
     log = recordQuickswingTransition(syntheticRow, log);
   }
+  // Tag each closed trade with SPY's return over the same dates (buy-and-hold
+  // benchmark) — spyHist is right here, so it's free to compute during replay.
+  annotateBenchmarks(log, spyHist);
   return log;
 }
 
