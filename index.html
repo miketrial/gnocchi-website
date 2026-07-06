@@ -896,37 +896,35 @@
 [data-theme="white"] .rescan-timer{color:#000}
 
 
-/* ── view switch (Basic | Short Term) — 70s overlapping-tab pill ──────── */
+/* ── view switch (Long-Term | Swing | Bounce) — sliding-indicator pill ─── */
 #viewSwitch{
   display:inline-flex; position:relative; align-items:center;
-  margin-right:4px;
+  margin-right:4px; gap:2px;
+  padding:3px; border-radius:12px;
+  background:var(--page,#eef0f3); border:1px solid var(--ink-faint,#b0b8c4);
+}
+#viewSwitch .vs-indicator{
+  position:absolute; top:3px; left:3px; height:calc(100% - 6px);
+  border-radius:9px; background:var(--card,#fff);
+  box-shadow:0 1px 3px rgba(0,0,0,.18);
+  transition:left .25s cubic-bezier(.4,0,.2,1), width .25s cubic-bezier(.4,0,.2,1),
+             background .2s, box-shadow .2s;
+  z-index:1; pointer-events:none;
 }
 #viewSwitch button{
   font-size:11px; font-weight:600; cursor:pointer;
-  padding:8px 14px; background:var(--card,#fff); color:var(--ink,#222);
-  border:1.5px solid var(--ink-faint,#b0b8c4); border-radius:10px;
-  transition:transform .15s, box-shadow .15s, opacity .15s, z-index 0s;
-  position:relative; z-index:1; opacity:.7;
+  padding:8px 14px; background:transparent; color:var(--ink,#222);
+  border:none; border-radius:9px;
+  transition:opacity .2s, color .2s;
+  position:relative; z-index:2; opacity:.62;
   white-space:nowrap;
 }
-#viewSwitch button + button{ margin-left:-6px } /* slight overlap */
-#viewSwitch button.active{
-  z-index:2; opacity:1;
-  transform:scale(1.05) translateY(-1px);
-  box-shadow:2px 2px 0 0 var(--ink-faint,#b0b8c4);
-  border-color:var(--ink,#222);
-}
-/* Active button shouldn't steal clicks from the inactive one's exposed area.
-   The inactive button raises z-index on hover so the cursor can always reach it. */
-#viewSwitch button:not(.active):hover{ z-index:3 }
+#viewSwitch button.active{ opacity:1; }
 #viewSwitch button:hover{ opacity:1 }
-[data-theme="white"] #viewSwitch button{ border-radius:0; border:1px solid #000; background:#fff; color:#000 }
-[data-theme="white"] #viewSwitch button.active{
-  background:#fff; color:#000;
-  border:2px solid #000;
-  font-weight:800; letter-spacing:.3px;
-  box-shadow:3px 3px 0 0 #000;
-}
+[data-theme="white"] #viewSwitch{ border-radius:0; border:1px solid #000; background:#f4f4f4; }
+[data-theme="white"] .vs-indicator{ border-radius:0; background:#fff; box-shadow:2px 2px 0 0 #000; }
+[data-theme="white"] #viewSwitch button{ color:#000 }
+[data-theme="white"] #viewSwitch button.active{ font-weight:800; letter-spacing:.3px }
 
 /* ── theme swatch strip ───────────────────────────────────────────────── */
 #themeSwatch{display:flex;flex-direction:row;align-items:center;gap:5px;align-self:stretch;margin-top:-25px}
@@ -952,13 +950,15 @@
    instead of fading to the ~70% opacity every other inactive tab gets. */
 #viewSwitch button[data-v="qs"],
 [data-theme="white"] #viewSwitch button[data-v="qs"]{
-  background:var(--bad-bg); border-color:var(--bad-fg); color:var(--bad-fg);
-  opacity:1; font-weight:800;
+  color:var(--bad-fg); opacity:.85; font-weight:800;
 }
 #viewSwitch button[data-v="qs"].active,
 [data-theme="white"] #viewSwitch button[data-v="qs"].active{
-  background:var(--bad-bg); border-color:var(--bad-fg); color:var(--bad-fg);
-  box-shadow:2px 2px 0 0 var(--bad-fg);
+  color:var(--bad-fg); opacity:1;
+}
+#viewSwitch .vs-indicator.qs,
+[data-theme="white"] .vs-indicator.qs{
+  background:var(--bad-bg); box-shadow:0 0 0 1.5px var(--bad-fg), 0 1px 3px rgba(0,0,0,.18);
 }
 /* ===== END QUICK SWING FEATURE ===== */
 </style>
@@ -967,6 +967,7 @@
 <div id="app">
   <header class="bar" id="bar">
     <div id="viewSwitch" title="Switch between Long-Term (full screener) and Swing (1wk-3mo swing setups)">
+      <div class="vs-indicator" id="vsIndicator"></div>
       <button data-v="basic">Long-Term</button>
       <button data-v="short">Swing</button>
       <!-- ===== QUICK SWING FEATURE ===== -->
@@ -1268,7 +1269,7 @@
     <span class="wp-title" style="border-bottom:1px dashed currentColor">Bounce</span>
     <span class="wp-sub">1-2 day mean-reversion setups · its own independent list, separate from Long-Term/Swing · click a column header to sort · click any data cell for its scan history · right-click a row for Rescan / Delete · shift-click to select a range</span>
     <!-- ===== QUICK SWING FEATURE ===== Backtest log opener (top-right, mirrors the Watchlist Backtest button) -->
-    <span id="qsBtBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="As-if you bought every BUY and sold when it stopped being BUY — long only, rolling 50-day window">▢ Backtest log</span>
+    <span id="qsBtBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="As-if you bought every BUY and sold when it flipped to SELL — long only, rolling 50-day window">▢ Backtest log</span>
     <!-- ===== END QUICK SWING FEATURE ===== -->
   </div>
   <!-- ===== QUICK SWING FEATURE ===== -->
@@ -1480,7 +1481,7 @@
     <span style="font-size:12px;font-weight:700;letter-spacing:.3px">Bounce backtest · as-if trade log</span>
     <span id="qsBtClose" style="cursor:pointer;color:#8a95a8;font-size:13px;padding:0 2px">✕</span>
   </div>
-  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px">Bought every BUY, sold the moment it stopped being BUY · long only · rolling 50-day window (each ticker seeds 15 days of history the first time you open this)</div>
+  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px">Bought every BUY, sold when it flipped to SELL · long only · rolling 50-day window (each ticker seeds 15 days of history the first time you open this)</div>
   <div id="qsBtStatus" style="display:none;font-size:10px;color:#fbbf24;margin-bottom:10px">⟳ Backfilling 15-day history…</div>
   <div class="qs-bt-layout">
     <aside class="qs-bt-key">
@@ -1492,7 +1493,7 @@
         <dt>Best / Worst</dt><dd>Biggest single winner and loser.</dd>
         <dt>Cumulative</dt><dd>Total $ if you'd put a fixed $10,000 into every trade.</dd>
         <dt>Open</dt><dd>A BUY still running. <em>Now</em> is the live price, <em>Unrealized</em> the paper gain so far.</dd>
-        <dt>Closed</dt><dd>A finished BUY → exit. <em>Exit on</em> is the verdict that closed it (SELL or NEUTRAL).</dd>
+        <dt>Closed</dt><dd>A finished BUY → SELL trade. <em>Exit on</em> is the verdict that closed it (always SELL under the current rule).</dd>
       </dl>
     </aside>
     <div class="qs-bt-main">
@@ -2443,6 +2444,17 @@ function pollJob(jobId){
 }
 
 /* ---------------- view toggle ---------------- */
+function moveViewSwitchIndicator(btn){
+  const ind=document.getElementById('vsIndicator');
+  if(!ind||!btn) return;
+  ind.style.left=btn.offsetLeft+'px';
+  ind.style.width=btn.offsetWidth+'px';
+  ind.classList.toggle('qs',btn.dataset.v==='qs');
+}
+window.addEventListener('resize',()=>{
+  const active=document.querySelector('#viewSwitch button.active');
+  if(active) moveViewSwitchIndicator(active);
+});
 let currentView='watchlist';
 function setView(v){
   currentView=v;
@@ -2480,6 +2492,7 @@ function setView(v){
     const target=b.dataset.v;
     const active=(target==='short'&&isShort)||(target==='qs'&&isQs)||(target==='basic'&&!isShort&&!isQs&&v!=='tw');
     b.classList.toggle('active',active);
+    if(active) moveViewSwitchIndicator(b);
   });
   // Per-view rescan timer & render
   updateRescanTimer();

@@ -12,7 +12,7 @@
    long enough to hit the function timeout. */
 import { listQuickswingRows, getQuickswingTrades, putQuickswingTrades } from "../lib/store.mjs";
 import { seedQuickSwingBacktest, getMarketRegime } from "../lib/quickswing-pipeline.mjs";
-import { mergeSeed, pruneTradeWindow, needsSeed } from "../lib/quickswing-backtest.mjs";
+import { mergeSeed, pruneTradeWindow, needsSeed, BT_SEED_VERSION, BT_SEED_DAYS, BT_WINDOW_DAYS } from "../lib/quickswing-backtest.mjs";
 
 const BATCH = 4; // tickers seeded per request — keeps each call well under the timeout
 
@@ -35,10 +35,24 @@ export default async () => {
     for (const sym of batch) {
       try {
         const existing = await getQuickswingTrades(sym).catch(() => null);
-        const seed = await seedQuickSwingBacktest(sym, { spyHist: regime?.hist });
-        const merged = pruneTradeWindow(mergeSeed(existing, seed));
-        merged.seeded = true; // pruneTradeWindow preserves this, but set explicitly for clarity
-        await putQuickswingTrades(sym, merged);
+        // A version bump means the scoring or exit rule changed, so any trades
+        // already in the log were booked under the OLD rule. Merging would keep
+        // those stale trades (their entries don't line up with the new rule's),
+        // so instead REPLACE: replay the whole visible window fresh under the
+        // new rule. A genuine first-time seed still merges the 15-day backfill
+        // with whatever forward-recording booked under the current rule.
+        const isReseed = existing && existing.seedVersion != null && existing.seedVersion !== BT_SEED_VERSION;
+        let next;
+        if (isReseed) {
+          const seed = await seedQuickSwingBacktest(sym, { daysBack: BT_WINDOW_DAYS, spyHist: regime?.hist });
+          next = pruneTradeWindow({ open: seed.open, closed: seed.closed, seeded: true, seedVersion: BT_SEED_VERSION });
+        } else {
+          const seed = await seedQuickSwingBacktest(sym, { daysBack: BT_SEED_DAYS, spyHist: regime?.hist });
+          next = pruneTradeWindow(mergeSeed(existing, seed));
+        }
+        next.seeded = true;
+        next.seedVersion = BT_SEED_VERSION;
+        await putQuickswingTrades(sym, next);
         seeded.push(sym);
       } catch (e) {
         // Leave this ticker unseeded so a later open retries it — don't wedge the batch.
