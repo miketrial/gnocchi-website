@@ -654,6 +654,7 @@
   #qsBtPop .qs-bt-stat{ display:flex; flex-direction:column; gap:2px }
   #qsBtPop .qs-bt-stat .k{ font-size:8.5px; letter-spacing:.4px; text-transform:uppercase; color:#8a95a8 }
   #qsBtPop .qs-bt-stat .v{ font-size:16px; font-weight:700; color:#e8eaf0 }
+  #qsBtPop .qs-bt-stat .sub{ font-size:8.5px; color:#6b7488; margin-top:1px }
   #qsBtPop .qs-bt-sec-head{ font-size:9px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
     color:#aeb6c4; margin:14px 0 4px }
   #qsBtPop table.qs-bt-table{ width:100%; border-collapse:collapse; font-size:10px }
@@ -896,43 +897,41 @@
 [data-theme="white"] .rescan-timer{color:#000}
 
 
-/* ── view switch (Long-Term | Swing | Bounce) — framed track ───────────────
-   Styled to match the .btn (Rescan) look: same #f3f4f6 tray fill, 10px
-   radius, and 11px/600 type. A bordered white chip slides between tabs.
-   Outer height is tuned (4px tray pad + 5px button pad) to line up with
-   Rescan's ~32px height. */
+/* ── view switch (Long-Term | Swing | Bounce) — sliding highlight ──────────
+   Plain tabs sitting on the page. The active tab gets a highlight styled to
+   match the .btn (Rescan) look — #f3f4f6 gray fill + 10px radius in the base
+   theme, white box + 1px black border in the white theme. The highlight
+   slides between tabs (animated in JS — see moveViewSwitchIndicator).
+   Buttons reuse .btn's 11px/600 type and 8px/15px padding so the highlight is
+   Rescan-sized and the whole switch auto-matches Rescan's height. */
 #viewSwitch{
   display:inline-flex; position:relative; align-items:center;
-  box-sizing:border-box;
-  margin-right:4px; gap:0;
-  padding:3px; border-radius:10px;
-  background:#f3f4f6; border:none;
+  margin-right:4px; gap:2px;
 }
 #viewSwitch .vs-indicator{
-  position:absolute; top:3px; left:3px; height:calc(100% - 6px);
-  border-radius:7px; background:var(--card,#fff);
-  border:1px solid #dfe3e9;
-  transition:background .2s, border-color .2s; /* left/width animated in JS — see moveViewSwitchIndicator */
+  position:absolute; top:0; left:0; height:100%;
+  box-sizing:border-box;
+  border-radius:10px; background:#f3f4f6; border:1px solid transparent;
+  transition:background .2s, border-color .2s;
   z-index:1; pointer-events:none;
 }
-/* Buttons carry the same 11px/600 type and vertical padding as .btn (Rescan),
-   minus the 3px tray pad, so the pill auto-matches Rescan's height in whichever
-   theme is active (system font ≈29px, mono ≈32px). */
 #viewSwitch button{
   font-size:11px; font-weight:600; cursor:pointer;
-  padding:5px 15px; background:transparent; color:var(--ink,#222);
-  border:none; border-radius:7px;
+  padding:8px 15px; background:transparent; color:var(--ink,#222);
+  border:none; border-radius:10px;
   transition:opacity .2s, color .2s;
-  position:relative; z-index:2; opacity:.55;
+  position:relative; z-index:2; opacity:.5;
   white-space:nowrap;
 }
 #viewSwitch button.active{ opacity:1; }
-#viewSwitch button:hover{ opacity:.85 }
+#viewSwitch button:hover{ opacity:.8 }
 #viewSwitch button.active:hover{ opacity:1 }
-[data-theme="white"] #viewSwitch{ border-radius:0; border:1px solid #000; background:#fff; padding:4px; }
-[data-theme="white"] #viewSwitch .vs-indicator{ border-radius:0; background:#000; border:none; top:4px; height:calc(100% - 8px); }
-[data-theme="white"] #viewSwitch button{ color:#000 }
-[data-theme="white"] #viewSwitch button.active{ color:#fff; font-weight:800; letter-spacing:.3px }
+[data-theme="white"] #viewSwitch .vs-indicator{ border-radius:0; background:#fff; border:1px solid #000; }
+/* Buttons don't inherit font-family; without this they'd fall back to the UA
+   sans font and sit shorter than the mono .btn. The extra 1px top/bottom pad
+   makes up for Rescan's 1px border so the highlight matches its height. */
+[data-theme="white"] #viewSwitch button{ color:#000; font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace; padding-top:9px; padding-bottom:9px }
+[data-theme="white"] #viewSwitch button.active{ font-weight:800; letter-spacing:.3px }
 
 /* ── theme swatch strip ───────────────────────────────────────────────── */
 #themeSwatch{display:flex;flex-direction:row;align-items:center;gap:5px;align-self:stretch;margin-top:-25px}
@@ -958,17 +957,15 @@
    instead of fading to the ~70% opacity every other inactive tab gets. */
 #viewSwitch button[data-v="qs"],
 [data-theme="white"] #viewSwitch button[data-v="qs"]{
-  color:var(--bad-fg); opacity:.8; font-weight:800;
+  color:var(--bad-fg); opacity:.75; font-weight:800;
 }
-#viewSwitch button[data-v="qs"].active{ color:var(--bad-fg); opacity:1; }
-/* Base theme: pink chip with red border keeps the red text readable. */
-#viewSwitch .vs-indicator.qs{
-  background:var(--bad-bg); border-color:var(--bad-fg);
+#viewSwitch button[data-v="qs"].active,
+[data-theme="white"] #viewSwitch button[data-v="qs"].active{ color:var(--bad-fg); opacity:1; }
+/* Bounce's highlight is the red window — pink fill + red border, both themes. */
+#viewSwitch .vs-indicator.qs,
+[data-theme="white"] #viewSwitch .vs-indicator.qs{
+  background:var(--bad-bg); border:1px solid var(--bad-fg);
 }
-/* White theme: solid red chip, active label flips to white to match the
-   black-chip active treatment. */
-[data-theme="white"] #viewSwitch button[data-v="qs"].active{ color:#fff; opacity:1; }
-[data-theme="white"] #viewSwitch .vs-indicator.qs{ background:var(--bad-fg); border:none; }
 /* ===== END QUICK SWING FEATURE ===== */
 </style>
 
@@ -1501,6 +1498,7 @@
         <dt>Median hold</dt><dd>Typical days a trade stayed open.</dd>
         <dt>Best / Worst</dt><dd>Biggest single winner and loser.</dd>
         <dt>Cumulative</dt><dd>Total $ if you'd put a fixed $10,000 into every trade.</dd>
+        <dt>Edge vs SPY</dt><dd>Your avg P/L minus what <em>SPY</em> returned over the same trade dates — did timing the bounce beat just being in the market? Positive = the signal added value.</dd>
         <dt>Open</dt><dd>A BUY still running. <em>Now</em> is the live price, <em>Unrealized</em> the paper gain so far.</dd>
         <dt>Closed</dt><dd>A finished BUY → SELL trade. <em>Exit on</em> is the verdict that closed it (always SELL under the current rule).</dd>
       </dl>
@@ -3884,15 +3882,24 @@ function renderQsBacktest(){
     // Cumulative $: fixed notional per trade, compounded additively (each trade
     // sized the same $ regardless of prior outcome — a clean "as-if" read).
     const cumDollars = closed.reduce((s, t) => s + QS_BT_NOTIONAL * (t.pnlPct / 100), 0);
-    const stat = (k, v, cls) => `<div class="qs-bt-stat"><span class="k">${k}</span><span class="v ${cls||''}">${v}</span></div>`;
+    // Buy-and-hold benchmark: SPY's return over each trade's exact dates. Only
+    // trades carrying a spyPct count toward it (older logs may lack it).
+    const bench = closed.filter(t => typeof t.spyPct === 'number');
+    const hasBench = bench.length > 0;
+    const avgSpy = hasBench ? bench.reduce((s, t) => s + t.spyPct, 0) / bench.length : null;
+    const edge = hasBench ? avgPnl - avgSpy : null; // per-trade outperformance vs SPY
+    const cumSpy = hasBench ? bench.reduce((s, t) => s + QS_BT_NOTIONAL * (t.spyPct / 100), 0) : null;
+    const dollars = d => (d >= 0 ? '+' : '−') + '$' + Math.abs(d).toLocaleString(undefined,{maximumFractionDigits:0});
+    const stat = (k, v, cls, sub) => `<div class="qs-bt-stat"><span class="k">${k}</span><span class="v ${cls||''}">${v}</span>${sub?`<span class="sub">${sub}</span>`:''}</div>`;
     stats.innerHTML =
       stat('Closed trades', n) +
       stat('Win rate', winRate.toFixed(0) + '%') +
-      stat('Avg P/L', qsBtPct(avgPnl), qsBtPnlClass(avgPnl)) +
+      stat('Avg P/L', qsBtPct(avgPnl), qsBtPnlClass(avgPnl), hasBench ? `SPY same days ${qsBtPct(avgSpy)}` : '') +
+      stat('Edge vs SPY', hasBench ? qsBtPct(edge) : '—', hasBench ? qsBtPnlClass(edge) : '', hasBench ? 'per trade, timing alone' : 'no benchmark yet') +
       stat('Median hold', medHold == null ? '—' : medHold + 'd') +
       stat('Best', qsBtPct(best.pnlPct) + ' ' + escHtml(best.sym), qsBtPnlClass(best.pnlPct)) +
       stat('Worst', qsBtPct(worst.pnlPct) + ' ' + escHtml(worst.sym), qsBtPnlClass(worst.pnlPct)) +
-      stat('Cumulative', (cumDollars >= 0 ? '+' : '−') + '$' + Math.abs(cumDollars).toLocaleString(undefined,{maximumFractionDigits:0}), qsBtPnlClass(cumDollars));
+      stat('Cumulative', dollars(cumDollars), qsBtPnlClass(cumDollars), hasBench ? `SPY same days ${dollars(cumSpy)}` : '');
   }
 
   // --- Open positions (unrealized against the live row price) ---
