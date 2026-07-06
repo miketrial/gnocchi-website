@@ -629,6 +629,13 @@
      summary only; agreement/stop still get their own line below since
      they're extra detail, not the headline. */
   .qs-subscore-inline{ font-size:9px; color:var(--ink-faint); font-weight:400; margin-left:6px }
+  /* Sticky-verdict marker: the raw read cooled to NEUTRAL but hysteresis is
+     holding the call. Muted amber chip so it reads as "provisional/held", not
+     a fresh signal. */
+  .qs-held{ display:inline-block; margin-left:5px; padding:0 4px; border-radius:6px;
+    font-size:8.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.3px;
+    color:#c98a1a; background:rgba(201,138,26,0.14); border:1px solid rgba(201,138,26,0.35);
+    vertical-align:middle; cursor:default }
   /* A little roomier than the tightest possible layout (still not as dense
      as Basic/Swing's single-line rows, since these cells stack 2-4 lines),
      but roughly half the height of the previous pass — that one over-
@@ -3738,7 +3745,10 @@ function qsRowHtml(r, idx){
   const symCell = r.scoring
     ? `<td class="co-cell"><span class="sym" style="opacity:0.3">${escHtml(r.sym)}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
     : `<td class="co-cell"><b>${escHtml(r.sym)}</b></td>`;
-  const verdictTip = escHtml(`${r.tier ? r.tier+' ' : ''}${r.verdict} — Buy ${r.buyScore||'—'} · Sell ${r.sellScore||'—'} (each out of 24). Liquidity, ADR, market regime, and VIX gates already applied. Click to see history.`);
+  const heldNote = r.held
+    ? ` STICKY: the live read cooled to NEUTRAL, but this ${r.verdict} is held until it fully fades (score below the hold floor) or flips to the opposite side — this keeps an in-progress call from whipsawing intraday.`
+    : '';
+  const verdictTip = escHtml(`${r.tier ? r.tier+' ' : ''}${r.verdict} — Buy ${r.buyScore||'—'} · Sell ${r.sellScore||'—'} (each out of 24). Liquidity, ADR, market regime, and VIX gates already applied.${heldNote} Click to see history.`);
   // Abbreviated on-screen only — the tooltip above still spells everything
   // out in full. NEUTRAL is by far the most common verdict, so shrinking
   // just that one word (not BUY/SELL/BLOCKED, which are already short and
@@ -3759,7 +3769,7 @@ function qsRowHtml(r, idx){
     ${symCell}
     <td class="num">${r.price!=null?'$'+r.price.toFixed(2):'—'}${priceTag}</td>
     <td class="num" data-col="verdict" style="cursor:pointer" data-tip="${verdictTip}">
-      <span class="qs-verdict qs-verdict-${r.verdict.toLowerCase()} qs-tier-${r.tier||'none'}">${verdictLabel}</span>
+      <span class="qs-verdict qs-verdict-${r.verdict.toLowerCase()} qs-tier-${r.tier||'none'}">${verdictLabel}</span>${r.held ? '<span class="qs-held" data-tip="'+escHtml('Held: the live read cooled to NEUTRAL, but the call is kept sticky until it fully fades or flips — prevents intraday whipsaw.')+'">held</span>' : ''}
       <span class="qs-subscore-inline">B ${escHtml(r.buyScore||'—')} · S ${escHtml(r.sellScore||'—')}</span>
       ${agreementLine}
       ${stopLine}

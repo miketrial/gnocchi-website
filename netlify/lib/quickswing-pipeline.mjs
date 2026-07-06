@@ -76,7 +76,7 @@
      goes away, just stop being imported by two files instead of one. */
 import {
   getQuickswingFmpCache, putQuickswingFmpCache, deleteQuickswingFmpCache,
-  getSpyHistCache, putSpyHistCache,
+  getSpyHistCache, putSpyHistCache, getQuickswingRow,
 } from "./store.mjs";
 import { round2, na, scored, trueRange, atrFrom } from "./ta-helpers.mjs";
 import { safe, delay } from "./fmp-client.mjs";
@@ -626,6 +626,33 @@ function buyConvictionOk(mirrored) {
   return rsDelta != null && rsDelta >= 0; // must be beating/matching SPY (a leader)
 }
 
+/* ---------- Sticky verdict (hysteresis) ----------
+   The live scorer runs on today's IN-PROGRESS bar (RSI(2), %B and RS all swap
+   the live price in as the "close"), so the raw score wanders all day and a name
+   sitting near the BUY/NEUTRAL line chatters BUY↔NEUTRAL on every price wiggle.
+   Hysteresis gives the verdict memory: a directional call you're already in
+   survives a shallow cool-off, and only releases to NEUTRAL once the read truly
+   fades (score below the hold floor) or the opposite side takes over. Entry
+   still needs the normal thresholds (0.55 / 0.30-weak); we just lower the bar to
+   *stay* in — a classic deadband. Only ever upgrades a fresh NEUTRAL back to the
+   held direction; never overrides a fresh BUY/SELL/BLOCKED, so genuine reversals
+   still flip instantly. Live-only: the backtest replay runs on completed daily
+   closes (no intraday noise) and is left untouched. */
+const QS_HOLD_FLOOR = 0.22; // an open BUY/SELL survives down to this (vs the 0.30 weak entry)
+function applyVerdictHysteresis({ verdict, tier, prevVerdict, buyScore, sellScore, blocked, forceBuy, forceSell }) {
+  if (blocked || verdict !== "NEUTRAL") return { verdict, tier, held: false };
+  const buyPct = buyScore / QS_MAX_SCORE, sellPct = sellScore / QS_MAX_SCORE;
+  // `held: true` marks a call the raw read had cooled to NEUTRAL but hysteresis
+  // kept alive — surfaced in the row so the UI can explain the stickiness.
+  if (prevVerdict === "BUY" && (buyPct >= QS_HOLD_FLOOR || forceBuy) && buyPct >= sellPct) {
+    return { verdict: "BUY", tier: "weak", held: true };
+  }
+  if (prevVerdict === "SELL" && (sellPct >= QS_HOLD_FLOOR || forceSell) && sellPct >= buyPct) {
+    return { verdict: "SELL", tier: "weak", held: true };
+  }
+  return { verdict, tier, held: false };
+}
+
 /* ---------- Suggested stop distance ----------
    Turns atr5 (already computed for other purposes) into an actual, actionable
    price level — 1.5x ATR is the same swing-trading convention already
@@ -745,9 +772,17 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
   const sellScore = Math.min(QS_MAX_SCORE, Math.round(rawSellScore * liqMultiplier * adrMultiplier * regimeMultiplierSell * vixMultiplier));
 
   const { forceBuy, forceSell } = extremeReads(mirrored);
+  // Last persisted verdict for this ticker — the state hysteresis needs to keep
+  // an in-progress call from whipsawing between scans. Null on first-ever scan.
+  const prevVerdict = await getQuickswingRow(sym).then(r => r?.verdict ?? null).catch(() => null);
   let { verdict, tier } = deriveVerdict({ buyScore, sellScore, blocked: eGate.blocked, forceBuy, forceSell });
-  // High-conviction gate: a BUY must be a market-leader with broad agreement.
-  if (verdict === "BUY" && !buyConvictionOk(mirrored)) { verdict = "NEUTRAL"; tier = null; }
+  // High-conviction gate: a NEW BUY must be a market leader (RS ≥ 0). A BUY we're
+  // already holding is NOT re-gated — RS ticking negative on an in-progress bar
+  // shouldn't whipsaw an open call to NEUTRAL (a top cause of the intraday flicker).
+  if (verdict === "BUY" && prevVerdict !== "BUY" && !buyConvictionOk(mirrored)) { verdict = "NEUTRAL"; tier = null; }
+  // Sticky verdict: hold an existing directional call through a shallow dip.
+  let held;
+  ({ verdict, tier, held } = applyVerdictHysteresis({ verdict, tier, prevVerdict, buyScore, sellScore, blocked: eGate.blocked, forceBuy, forceSell }));
 
   const priceIsLive = liveHist[0]?.live === true;
   const price = liveHist[0]?.close ?? hist[0]?.close ?? null;
@@ -762,6 +797,7 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
     priceIsLive,
     dataAsOf: hist[0]?.date ?? null,
     verdict, tier,
+    held: !!held, // true = raw read cooled to NEUTRAL but hysteresis held the call
     buyScore: `${buyScore}/${QS_MAX_SCORE}`,
     sellScore: `${sellScore}/${QS_MAX_SCORE}`,
     reasons, raw, buyVerdicts, sellVerdicts,
