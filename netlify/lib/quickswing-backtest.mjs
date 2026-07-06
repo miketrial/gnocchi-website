@@ -34,7 +34,12 @@ export function pruneTradeWindow(log, days = BT_WINDOW_DAYS) {
     const ts = Date.parse(t.exitScoredAt || t.exitAt);
     return !isFinite(ts) || ts >= cutoff;
   });
-  return { open: log.open ?? null, closed: closed.slice(0, MAX_CLOSED) };
+  // Preserve the `seeded` marker — it records that the one-time historical
+  // backfill has already run, so a later rescan-driven prune must not clear it
+  // (that would make the popover re-seed the ticker every time).
+  const out = { open: log.open ?? null, closed: closed.slice(0, MAX_CLOSED) };
+  if (log.seeded) out.seeded = true;
+  return out;
 }
 
 /* Whole days between two ISO timestamps, rounded to one decimal (a 1-2 day
@@ -46,6 +51,25 @@ function holdDaysBetween(startIso, endIso) {
   return Math.round(((b - a) / 86400000) * 10) / 10;
 }
 
+/* Merge a lazily-computed historical seed into whatever the forward-recording
+   loop has already booked, and mark the log as seeded so it's never re-seeded.
+   Forward trades (recent, from live scans) take precedence: the live `open`
+   position is kept over the seed's stale trailing one, and duplicate trades
+   (same ticker + entry timestamp) are de-duplicated, keeping the forward copy. */
+export function mergeSeed(existing, seed) {
+  const ex = existing && typeof existing === "object" ? existing : emptyLog();
+  const sd = seed && typeof seed === "object" ? seed : emptyLog();
+  const seen = new Set();
+  const closed = [];
+  for (const t of [...(ex.closed || []), ...(sd.closed || [])]) {
+    const key = `${t.sym}|${t.entryScoredAt || t.entryAt}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    closed.push(t);
+  }
+  return { open: ex.open ?? sd.open ?? null, closed, seeded: true };
+}
+
 /* Fold one freshly-scored row into the ticker's trade log and return the
    updated log. Pure — callers persist the result. `prevLog` may be null/absent
    (first time we've seen this ticker); `newRow` is a full pipeline row or an
@@ -54,6 +78,9 @@ export function recordQuickswingTransition(newRow, prevLog) {
   const log = prevLog && typeof prevLog === "object"
     ? { open: prevLog.open ?? null, closed: Array.isArray(prevLog.closed) ? prevLog.closed : [] }
     : emptyLog();
+  // Carry the one-time-seed marker forward — forward-recording must not clear it,
+  // or the popover would re-run the expensive historical backfill on every open.
+  if (prevLog && prevLog.seeded) log.seeded = true;
 
   // Ignore rows we can't price a trade off of — an errored scan or a missing
   // price leaves any open position untouched (we simply skip this datapoint).

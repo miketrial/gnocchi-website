@@ -1455,7 +1455,8 @@
     <span style="font-size:12px;font-weight:700;letter-spacing:.3px">Bounce backtest · as-if trade log</span>
     <span id="qsBtClose" style="cursor:pointer;color:#8a95a8;font-size:13px;padding:0 2px">✕</span>
   </div>
-  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px">Bought every BUY, sold the moment it stopped being BUY · long only · rolling 50-day window (seeded with 15 days of history when a ticker is added)</div>
+  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px">Bought every BUY, sold the moment it stopped being BUY · long only · rolling 50-day window (each ticker seeds 15 days of history the first time you open this)</div>
+  <div id="qsBtStatus" style="display:none;font-size:10px;color:#fbbf24;margin-bottom:10px">⟳ Backfilling 15-day history…</div>
   <div id="qsBtStats" class="qs-bt-stats"></div>
   <div id="qsBtOpen"></div>
   <div id="qsBtClosed"></div>
@@ -3794,7 +3795,7 @@ function renderQsBacktest(){
   // --- Summary stats over closed trades ---
   const n = closed.length;
   if (!n) {
-    stats.innerHTML = `<div class="qs-bt-empty">No closed trades in the window yet — add a ticker (it seeds 15 days of history) or rescan across a verdict flip to populate this.</div>`;
+    stats.innerHTML = `<div class="qs-bt-empty">No closed trades in the window yet. If this is your first time opening the log, history is backfilling now — otherwise none of your tickers had a BUY that later exited in the last 50 days.</div>`;
   } else {
     const wins = closed.filter(t => t.pnlPct > 0).length;
     const winRate = (wins / n) * 100;
@@ -3850,12 +3851,39 @@ function renderQsBacktest(){
   }
 }
 
+let qsBtSeedInFlight = false;
 function openQsBacktest(){
   const pop = document.getElementById('qsBtPop');
   if (!pop) return;
   pop.style.display = 'block';
   renderQsBacktest();  // paint immediately from whatever's cached
   loadQsBacktest();    // then refresh from the server
+  seedQsBacktest();    // lazily backfill 15-day history for any un-seeded tickers
+}
+
+// Lazy historical seed — only fired when the popover is open. Loops the seed
+// endpoint in small server-side batches (so no single call times out),
+// re-rendering after each batch, until nothing is left to backfill. This is the
+// only place the heavy per-ticker replay fetch happens; rescans never trigger it.
+async function seedQsBacktest(){
+  if (!API_LIVE || qsBtSeedInFlight) return;
+  qsBtSeedInFlight = true;
+  const status = document.getElementById('qsBtStatus');
+  let guard = 0;
+  try {
+    while (guard++ < 40) {
+      let res;
+      try { res = await api.send('/api/quickswing/backtest-seed', 'POST', {}); }
+      catch(e){ break; } // network/usage error — stop quietly, retry on next open
+      await loadQsBacktest(); // refresh + re-render with whatever was just seeded
+      const remaining = res && typeof res.remaining === 'number' ? res.remaining : 0;
+      if (status) status.style.display = remaining > 0 ? 'block' : 'none';
+      if (remaining <= 0) break;
+    }
+  } finally {
+    qsBtSeedInFlight = false;
+    if (status) status.style.display = 'none';
+  }
 }
 function closeQsBacktest(){
   const pop = document.getElementById('qsBtPop');

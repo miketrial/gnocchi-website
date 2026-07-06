@@ -72,6 +72,11 @@
   from = "/api/quickswing/backtest"
   to = "/.netlify/functions/quickswing-backtest"
   status = 200
+
+[[redirects]]
+  from = "/api/quickswing/backtest-seed"
+  to = "/.netlify/functions/quickswing-backtest-seed"
+  status = 200
 # ===== END QUICK SWING FEATURE =====
 
 [[redirects]]
