@@ -17,9 +17,19 @@
 const MAX_CLOSED = 200; // cap the per-ticker closed-trade history
 export const BT_WINDOW_DAYS = 50; // rolling window: trades older than this drop off
 export const BT_SEED_DAYS = 15;   // history backfilled the first time a ticker is added
+// Bump when the scoring calibration changes so already-seeded logs get a
+// one-time re-seed (they'd otherwise keep showing trades from the old rules).
+// v2: extreme-read override + 0.30 weak threshold + 0.85 BUY regime penalty.
+export const BT_SEED_VERSION = 2;
 
 export function emptyLog() {
   return { open: null, closed: [] };
+}
+
+/* A log needs (re)seeding if it's missing or was seeded under an older
+   calibration version. */
+export function needsSeed(log) {
+  return !log || log.seedVersion !== BT_SEED_VERSION;
 }
 
 /* Rolling-window prune: drop closed trades whose exit is older than `days` ago,
@@ -34,11 +44,12 @@ export function pruneTradeWindow(log, days = BT_WINDOW_DAYS) {
     const ts = Date.parse(t.exitScoredAt || t.exitAt);
     return !isFinite(ts) || ts >= cutoff;
   });
-  // Preserve the `seeded` marker — it records that the one-time historical
-  // backfill has already run, so a later rescan-driven prune must not clear it
-  // (that would make the popover re-seed the ticker every time).
+  // Preserve the seed markers — they record that the one-time historical
+  // backfill has already run (and under which calibration version), so a later
+  // rescan-driven prune must not clear them (that would force a re-seed).
   const out = { open: log.open ?? null, closed: closed.slice(0, MAX_CLOSED) };
   if (log.seeded) out.seeded = true;
+  if (log.seedVersion != null) out.seedVersion = log.seedVersion;
   return out;
 }
 
@@ -67,7 +78,7 @@ export function mergeSeed(existing, seed) {
     seen.add(key);
     closed.push(t);
   }
-  return { open: ex.open ?? sd.open ?? null, closed, seeded: true };
+  return { open: ex.open ?? sd.open ?? null, closed, seeded: true, seedVersion: BT_SEED_VERSION };
 }
 
 /* Fold one freshly-scored row into the ticker's trade log and return the
@@ -78,9 +89,10 @@ export function recordQuickswingTransition(newRow, prevLog) {
   const log = prevLog && typeof prevLog === "object"
     ? { open: prevLog.open ?? null, closed: Array.isArray(prevLog.closed) ? prevLog.closed : [] }
     : emptyLog();
-  // Carry the one-time-seed marker forward — forward-recording must not clear it,
-  // or the popover would re-run the expensive historical backfill on every open.
+  // Carry the one-time-seed markers forward — forward-recording must not clear
+  // them, or the popover would re-run the expensive historical backfill.
   if (prevLog && prevLog.seeded) log.seeded = true;
+  if (prevLog && prevLog.seedVersion != null) log.seedVersion = prevLog.seedVersion;
 
   // Ignore rows we can't price a trade off of — an errored scan or a missing
   // price leaves any open position untouched (we simply skip this datapoint).

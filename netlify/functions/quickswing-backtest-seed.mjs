@@ -12,7 +12,7 @@
    long enough to hit the function timeout. */
 import { listQuickswingRows, getQuickswingTrades, putQuickswingTrades } from "../lib/store.mjs";
 import { seedQuickSwingBacktest, getMarketRegime } from "../lib/quickswing-pipeline.mjs";
-import { mergeSeed, pruneTradeWindow } from "../lib/quickswing-backtest.mjs";
+import { mergeSeed, pruneTradeWindow, needsSeed } from "../lib/quickswing-backtest.mjs";
 
 const BATCH = 4; // tickers seeded per request — keeps each call well under the timeout
 
@@ -20,11 +20,12 @@ export default async () => {
   const rows = await listQuickswingRows().catch(() => []);
   const syms = rows.map(r => r?.sym).filter(Boolean);
 
-  // Pending = tracked tickers whose log hasn't had the one-time seed yet.
+  // Pending = tracked tickers not yet seeded, OR seeded under an older
+  // scoring-calibration version (needsSeed handles the version check).
   const pending = [];
   for (const sym of syms) {
     const log = await getQuickswingTrades(sym).catch(() => null);
-    if (!log || log.seeded !== true) pending.push(sym);
+    if (needsSeed(log)) pending.push(sym);
   }
 
   const batch = pending.slice(0, BATCH);
