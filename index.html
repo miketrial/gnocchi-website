@@ -637,26 +637,52 @@
   #qsView tbody td br{ line-height:1.2 }
   #qsView thead th{ padding-top:6px; padding-bottom:8px }
   /* --- Backtest ("as-if") paper-trade log — lives inside the dark #qsBtPop popover --- */
-  #qsBtPop .qs-bt-stats{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px;
-    margin-bottom:14px; padding:10px; background:rgba(255,255,255,.04); border-radius:8px }
+  /* Two-column layout: left key rail + right content. */
+  #qsBtPop .qs-bt-layout{ display:flex; gap:20px; align-items:flex-start }
+  #qsBtPop .qs-bt-key{ flex:0 0 168px; border-right:1px solid rgba(255,255,255,.08); padding-right:16px }
+  #qsBtPop .qs-bt-main{ flex:1 1 auto; min-width:0 }
+  #qsBtPop .qs-bt-key-title{ font-size:8.5px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+    color:#8a95a8; margin-bottom:8px }
+  #qsBtPop .qs-bt-key dl{ margin:0 }
+  #qsBtPop .qs-bt-key dt{ font-size:9.5px; font-weight:700; color:#cbd5e1; margin-top:9px }
+  #qsBtPop .qs-bt-key dt:first-child{ margin-top:0 }
+  #qsBtPop .qs-bt-key dd{ margin:1px 0 0; font-size:9px; line-height:1.45; color:#8a95a8 }
+  #qsBtPop .qs-bt-key em{ font-style:normal; color:#aeb6c4; font-weight:600 }
+  /* Stats grid — no card box, just a clean row of figures with a divider under it. */
+  #qsBtPop .qs-bt-stats{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px 8px;
+    padding-bottom:12px; margin-bottom:4px; border-bottom:1px solid rgba(255,255,255,.08) }
   #qsBtPop .qs-bt-stat{ display:flex; flex-direction:column; gap:2px }
   #qsBtPop .qs-bt-stat .k{ font-size:8.5px; letter-spacing:.4px; text-transform:uppercase; color:#8a95a8 }
   #qsBtPop .qs-bt-stat .v{ font-size:16px; font-weight:700; color:#e8eaf0 }
-  #qsBtPop .qs-bt-sec-head{ font-size:9px; font-weight:600; letter-spacing:.5px; text-transform:uppercase;
-    color:#8a95a8; margin:12px 0 4px }
+  #qsBtPop .qs-bt-stat .sub{ font-size:8.5px; color:#6b7488; margin-top:1px }
+  #qsBtPop .qs-bt-sec-head{ font-size:9px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+    color:#aeb6c4; margin:14px 0 4px }
   #qsBtPop table.qs-bt-table{ width:100%; border-collapse:collapse; font-size:10px }
-  #qsBtPop table.qs-bt-table th{ text-align:right; padding:2px 6px; color:#8a95a8; font-weight:600;
-    font-size:8.5px; text-transform:uppercase; letter-spacing:.4px; white-space:nowrap }
-  #qsBtPop table.qs-bt-table th:first-child{ text-align:left }
-  #qsBtPop table.qs-bt-table td{ text-align:right; padding:4px 6px; white-space:nowrap; color:#cbd5e1 }
-  #qsBtPop table.qs-bt-table td:first-child{ text-align:left; font-weight:600; color:#e8eaf0 }
-  #qsBtPop table.qs-bt-table tr:hover td{ background:rgba(255,255,255,.03) }
+  #qsBtPop table.qs-bt-table th{ text-align:right; padding:3px 8px; color:#8a95a8; font-weight:600;
+    font-size:8.5px; text-transform:uppercase; letter-spacing:.4px; white-space:nowrap;
+    border-bottom:1px solid rgba(255,255,255,.1) }
+  #qsBtPop table.qs-bt-table th:first-child{ text-align:left; padding-left:2px }
+  #qsBtPop table.qs-bt-table td{ text-align:right; padding:4px 8px; white-space:nowrap; color:#cbd5e1;
+    border-bottom:1px solid rgba(255,255,255,.05) }
+  #qsBtPop table.qs-bt-table td:first-child{ text-align:left; padding-left:2px; font-weight:700; color:#e8eaf0 }
+  #qsBtPop table.qs-bt-table tr:last-child td{ border-bottom:none }
+  #qsBtPop table.qs-bt-table tbody tr:hover td{ background:rgba(255,255,255,.04) }
+  /* Kill the global sticky-first-column rule (lines ~140-141) that paints
+     these cells with the light --card colour — inside this dark popover the
+     columns must stay static and transparent. */
+  #qsBtPop table.qs-bt-table th:nth-child(1), #qsBtPop table.qs-bt-table td:nth-child(1),
+  #qsBtPop table.qs-bt-table th:nth-child(2), #qsBtPop table.qs-bt-table td:nth-child(2){
+    position:static; left:auto; z-index:auto; background:transparent; box-shadow:none }
   #qsBtPop table.qs-bt-table td.qs-bt-pos, #qsBtPop .qs-bt-stat .v.qs-bt-pos{ color:#34d399; font-weight:700 }
   #qsBtPop table.qs-bt-table td.qs-bt-neg, #qsBtPop .qs-bt-stat .v.qs-bt-neg{ color:#f87171; font-weight:700 }
-  #qsBtPop .qs-bt-reason{ font-size:8.5px; color:#8a95a8 }
-  #qsBtPop .qs-bt-empty{ font-size:11px; color:#8a95a8; padding:14px 4px }
-  #qsBtPop .qs-bt-note{ font-size:9px; color:#6b7488; margin-top:12px; line-height:1.5 }
+  #qsBtPop .qs-bt-reason{ font-size:8.5px; color:#8a95a8; text-transform:uppercase; letter-spacing:.3px }
+  #qsBtPop .qs-bt-empty{ font-size:11px; color:#8a95a8; padding:14px 4px; line-height:1.5 }
+  #qsBtPop .qs-bt-note{ font-size:9px; color:#6b7488; margin-top:14px; padding-top:10px;
+    border-top:1px solid rgba(255,255,255,.06); line-height:1.5 }
   #qsBtBtn:hover{ color:var(--ink) }
+  @media (max-width:620px){ #qsBtPop .qs-bt-layout{ flex-direction:column }
+    #qsBtPop .qs-bt-key{ flex-basis:auto; border-right:none; border-bottom:1px solid rgba(255,255,255,.08);
+      padding-right:0; padding-bottom:10px } }
   /* ===== END QUICK SWING FEATURE ===== */
   /* Ready sub-tier divider headings (Premium / Standard) */
   .wp-tier-head{ width:100%;display:flex;align-items:center;gap:6px;
@@ -871,37 +897,42 @@
 [data-theme="white"] .rescan-timer{color:#000}
 
 
-/* ── view switch (Basic | Short Term) — 70s overlapping-tab pill ──────── */
+/* ── view switch (Long-Term | Swing | Bounce) — framed track ───────────────
+   An outer container box holds the three tabs; the active tab gets an inner
+   highlight box styled like the .btn (Rescan) look — #f3f4f6 gray fill in the
+   base theme, white box + 1px black border in the white theme — and it slides
+   between tabs (animated in JS — see moveViewSwitchIndicator). */
 #viewSwitch{
   display:inline-flex; position:relative; align-items:center;
-  margin-right:4px;
+  box-sizing:border-box;
+  margin-right:4px; gap:2px;
+  padding:4px; border-radius:12px;
+  background:var(--card,#fff); border:1px solid var(--ink-faint,#cfd4dc);
+}
+#viewSwitch .vs-indicator{
+  position:absolute; top:4px; left:4px; height:calc(100% - 8px);
+  box-sizing:border-box;
+  border-radius:8px; background:#f3f4f6; border:1px solid transparent;
+  transition:background .2s, border-color .2s;
+  z-index:1; pointer-events:none;
 }
 #viewSwitch button{
   font-size:11px; font-weight:600; cursor:pointer;
-  padding:8px 14px; background:var(--card,#fff); color:var(--ink,#222);
-  border:1.5px solid var(--ink-faint,#b0b8c4); border-radius:10px;
-  transition:transform .15s, box-shadow .15s, opacity .15s, z-index 0s;
-  position:relative; z-index:1; opacity:.7;
+  padding:4px 14px; background:transparent; color:var(--ink,#222);
+  border:none; border-radius:8px;
+  transition:opacity .2s, color .2s;
+  position:relative; z-index:2; opacity:.5;
   white-space:nowrap;
 }
-#viewSwitch button + button{ margin-left:-6px } /* slight overlap */
-#viewSwitch button.active{
-  z-index:2; opacity:1;
-  transform:scale(1.05) translateY(-1px);
-  box-shadow:2px 2px 0 0 var(--ink-faint,#b0b8c4);
-  border-color:var(--ink,#222);
-}
-/* Active button shouldn't steal clicks from the inactive one's exposed area.
-   The inactive button raises z-index on hover so the cursor can always reach it. */
-#viewSwitch button:not(.active):hover{ z-index:3 }
-#viewSwitch button:hover{ opacity:1 }
-[data-theme="white"] #viewSwitch button{ border-radius:0; border:1px solid #000; background:#fff; color:#000 }
-[data-theme="white"] #viewSwitch button.active{
-  background:#fff; color:#000;
-  border:2px solid #000;
-  font-weight:800; letter-spacing:.3px;
-  box-shadow:3px 3px 0 0 #000;
-}
+#viewSwitch button.active{ opacity:1; }
+#viewSwitch button:hover{ opacity:.8 }
+#viewSwitch button.active:hover{ opacity:1 }
+[data-theme="white"] #viewSwitch{ border-radius:0; border:1px solid #000; background:#fff; }
+[data-theme="white"] #viewSwitch .vs-indicator{ border-radius:0; background:#fff; border:1px solid #000; }
+/* Buttons don't inherit font-family; without this they'd fall back to the UA
+   sans font and sit shorter than the mono chrome. */
+[data-theme="white"] #viewSwitch button{ color:#000; font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace }
+[data-theme="white"] #viewSwitch button.active{ font-weight:800; letter-spacing:.3px }
 
 /* ── theme swatch strip ───────────────────────────────────────────────── */
 #themeSwatch{display:flex;flex-direction:row;align-items:center;gap:5px;align-self:stretch;margin-top:-25px}
@@ -927,13 +958,14 @@
    instead of fading to the ~70% opacity every other inactive tab gets. */
 #viewSwitch button[data-v="qs"],
 [data-theme="white"] #viewSwitch button[data-v="qs"]{
-  background:var(--bad-bg); border-color:var(--bad-fg); color:var(--bad-fg);
-  opacity:1; font-weight:800;
+  color:var(--bad-fg); opacity:.75; font-weight:800;
 }
 #viewSwitch button[data-v="qs"].active,
-[data-theme="white"] #viewSwitch button[data-v="qs"].active{
-  background:var(--bad-bg); border-color:var(--bad-fg); color:var(--bad-fg);
-  box-shadow:2px 2px 0 0 var(--bad-fg);
+[data-theme="white"] #viewSwitch button[data-v="qs"].active{ color:var(--bad-fg); opacity:1; }
+/* Bounce's highlight is the red window — pink fill + red border, both themes. */
+#viewSwitch .vs-indicator.qs,
+[data-theme="white"] #viewSwitch .vs-indicator.qs{
+  background:var(--bad-bg); border:1px solid var(--bad-fg);
 }
 /* ===== END QUICK SWING FEATURE ===== */
 </style>
@@ -942,6 +974,7 @@
 <div id="app">
   <header class="bar" id="bar">
     <div id="viewSwitch" title="Switch between Long-Term (full screener) and Swing (1wk-3mo swing setups)">
+      <div class="vs-indicator" id="vsIndicator"></div>
       <button data-v="basic">Long-Term</button>
       <button data-v="short">Swing</button>
       <!-- ===== QUICK SWING FEATURE ===== -->
@@ -1243,7 +1276,7 @@
     <span class="wp-title" style="border-bottom:1px dashed currentColor">Bounce</span>
     <span class="wp-sub">1-2 day mean-reversion setups · its own independent list, separate from Long-Term/Swing · click a column header to sort · click any data cell for its scan history · right-click a row for Rescan / Delete · shift-click to select a range</span>
     <!-- ===== QUICK SWING FEATURE ===== Backtest log opener (top-right, mirrors the Watchlist Backtest button) -->
-    <span id="qsBtBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="As-if you bought every BUY and sold when it stopped being BUY — long only, rolling 50-day window">▢ Backtest log</span>
+    <span id="qsBtBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="As-if you bought every BUY and sold when it flipped to SELL — long only, rolling 50-day window">▢ Backtest log</span>
     <!-- ===== END QUICK SWING FEATURE ===== -->
   </div>
   <!-- ===== QUICK SWING FEATURE ===== -->
@@ -1260,7 +1293,7 @@
           <th></th>
           <th class="sortable" data-qssort="sym">Ticker</th>
           <th class="num sortable" data-qssort="price">Price</th>
-          <th class="num sortable" data-qssort="verdict" data-tip="BUY/SELL/NEUTRAL verdict, reduced from independent Buy and Sell scores (each 0-24, summed across 6 bidirectional factors + 2 volatility-context factors, then scaled by the Liquidity, ADR, market-regime, and VIX gates). 75%+ = strong, 55%+ = moderate, 40%+ = weak. BLOCKED overrides everything inside the earnings blackout window. Also shows how many of the 6 directional factors agree with the call, and a suggested stop (1.5x ATR(5)) when a BUY or SELL fires.">Verdict</th>
+          <th class="num sortable" data-qssort="verdict" data-tip="BUY/SELL/NEUTRAL verdict, reduced from independent Buy and Sell scores (each 0-24, summed across 6 bidirectional factors + 2 volatility-context factors, then scaled by the Liquidity, ADR, market-regime, and VIX gates). 75%+ = strong, 55%+ = moderate, 30%+ = weak. A deeply oversold RSI(2)≤5 or %B below the band also forces at least a weak BUY even when the weighted score is muted (mirror for overbought → SELL), so a textbook extreme on a wild name isn't missed. LEADER GATE: a BUY only stands if the stock is beating or matching the market (RS vs SPY ≥ 0) — otherwise it's shown NEUTRAL. This fades dips only in relative-strength leaders, not laggards/falling knives; backtested it lifts the win rate ~69%→75%. SELL isn't gated (exits stay responsive). BLOCKED overrides everything inside the earnings blackout window. Also shows how many of the 6 directional factors agree with the call, and a suggested stop (1.5x ATR(5)) when a BUY or SELL fires.">Verdict</th>
           <th class="num sortable" data-qssort="rsi" data-tip="2-day RSI — a much more reactive oversold/overbought read than the standard 14-day RSI, tuned to catch 1-2 day extremes rather than multi-week trend. Lower = more oversold (BUY): ≤5 deeply oversold, ≤10 oversold, ≤20 stretched down. Higher = more overbought (SELL): ≥95 deeply overbought, ≥90 overbought, ≥80 stretched up. Live during market hours — uses the current quote as today's in-progress bar, not just yesterday's close.">RSI(2)</th>
           <th class="num sortable" data-qssort="pctB" data-tip="Bollinger %B(20,2σ) — where price sits inside its own 20-day volatility band. Below 0 (BUY): below the lower band, the more negative the more stretched down. Above 1 (SELL): above the upper band, the more it exceeds 1 the more stretched up. Live during market hours.">%B</th>
           <th class="num sortable" data-qssort="volclimax" data-tip="Last session's volume vs its own 20-day average, read against direction. A huge spike on a down day often marks capitulation (BUY — the sellers who were going to sell, already have); a huge spike on an up day can mark a blow-off top (SELL — the buyers who were going to buy, already have). Updates once daily after close — mid-session volume-so-far isn't comparable to a full day's average, so this can't be shown live without being misleading.">Vol Climax</th>
@@ -1450,15 +1483,33 @@
 </div>
 
 <!-- ===== QUICK SWING FEATURE ===== Bounce backtest ("as-if") paper-trade log popover -->
-<div id="qsBtPop" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10.5px;line-height:1.45;padding:14px 16px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:460px;max-width:640px;max-height:78vh;overflow-y:auto;pointer-events:auto;border:0.5px solid rgba(255,255,255,.08);top:70px;left:50%;transform:translateX(-50%)">
+<div id="qsBtPop" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10.5px;line-height:1.45;padding:16px 18px;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.45);width:min(880px,94vw);max-height:82vh;overflow-y:auto;pointer-events:auto;border:0.5px solid rgba(255,255,255,.08);top:64px;left:50%;transform:translateX(-50%)">
   <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
     <span style="font-size:12px;font-weight:700;letter-spacing:.3px">Bounce backtest · as-if trade log</span>
     <span id="qsBtClose" style="cursor:pointer;color:#8a95a8;font-size:13px;padding:0 2px">✕</span>
   </div>
-  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px">Bought every BUY, sold the moment it stopped being BUY · long only · rolling 50-day window (seeded with 15 days of history when a ticker is added)</div>
-  <div id="qsBtStats" class="qs-bt-stats"></div>
-  <div id="qsBtOpen"></div>
-  <div id="qsBtClosed"></div>
+  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px">Bought every BUY, sold when it flipped to SELL · long only · rolling 50-day window (each ticker seeds 15 days of history the first time you open this)</div>
+  <div id="qsBtStatus" style="display:none;font-size:10px;color:#fbbf24;margin-bottom:10px">⟳ Backfilling 15-day history…</div>
+  <div class="qs-bt-layout">
+    <aside class="qs-bt-key">
+      <div class="qs-bt-key-title">What the numbers mean</div>
+      <dl>
+        <dt>Win rate</dt><dd>Share of closed trades that made money.</dd>
+        <dt>Avg P/L</dt><dd>Average % gain/loss per closed trade.</dd>
+        <dt>Median hold</dt><dd>Typical days a trade stayed open.</dd>
+        <dt>Best / Worst</dt><dd>Biggest single winner and loser.</dd>
+        <dt>Cumulative</dt><dd>Total $ if you'd put a fixed $10,000 into every trade.</dd>
+        <dt>Edge vs SPY</dt><dd>Your avg P/L minus what <em>SPY</em> returned over the same trade dates — did timing the bounce beat just being in the market? Positive = the signal added value.</dd>
+        <dt>Open</dt><dd>A BUY still running. <em>Now</em> is the live price, <em>Unrealized</em> the paper gain so far.</dd>
+        <dt>Closed</dt><dd>A finished BUY → SELL trade. <em>Exit on</em> is the verdict that closed it (always SELL under the current rule).</dd>
+      </dl>
+    </aside>
+    <div class="qs-bt-main">
+      <div id="qsBtStats" class="qs-bt-stats"></div>
+      <div id="qsBtOpen"></div>
+      <div id="qsBtClosed"></div>
+    </div>
+  </div>
   <div class="qs-bt-note">The 15-day seed is a historical replay of the EOD factors (after-hours and VIX legs can't be reconstructed, so those days may differ slightly from what the live tool showed). Forward datapoints are recorded each time you open the app or rescan, at the price that scan saw. No slippage or commissions. Cumulative $ assumes a fixed $10,000 per trade.</div>
 </div>
 <!-- ===== END QUICK SWING FEATURE ===== -->
@@ -2401,6 +2452,31 @@ function pollJob(jobId){
 }
 
 /* ---------------- view toggle ---------------- */
+function moveViewSwitchIndicator(btn){
+  const ind=document.getElementById('vsIndicator');
+  if(!ind||!btn) return;
+  ind.classList.toggle('qs',btn.dataset.v==='qs');
+  const endLeft=btn.offsetLeft, endWidth=btn.offsetWidth;
+
+  // First paint (no prior position) — place it instantly, no slide.
+  if(!ind.dataset.inited){
+    ind.dataset.inited='1';
+    ind.style.transition='none';
+    ind.style.left=endLeft+'px';
+    ind.style.width=endWidth+'px';
+    requestAnimationFrame(()=>{ ind.style.transition=''; });
+    return;
+  }
+
+  // Smooth single-motion slide between tabs.
+  ind.style.transition='left .28s cubic-bezier(.4,0,.2,1), width .28s cubic-bezier(.4,0,.2,1), background .2s, border-color .2s';
+  ind.style.left=endLeft+'px';
+  ind.style.width=endWidth+'px';
+}
+window.addEventListener('resize',()=>{
+  const active=document.querySelector('#viewSwitch button.active');
+  if(active) moveViewSwitchIndicator(active);
+});
 let currentView='watchlist';
 function setView(v){
   currentView=v;
@@ -2438,6 +2514,7 @@ function setView(v){
     const target=b.dataset.v;
     const active=(target==='short'&&isShort)||(target==='qs'&&isQs)||(target==='basic'&&!isShort&&!isQs&&v!=='tw');
     b.classList.toggle('active',active);
+    if(active) moveViewSwitchIndicator(b);
   });
   // Per-view rescan timer & render
   updateRescanTimer();
@@ -3794,7 +3871,7 @@ function renderQsBacktest(){
   // --- Summary stats over closed trades ---
   const n = closed.length;
   if (!n) {
-    stats.innerHTML = `<div class="qs-bt-empty">No closed trades in the window yet — add a ticker (it seeds 15 days of history) or rescan across a verdict flip to populate this.</div>`;
+    stats.innerHTML = `<div class="qs-bt-empty">No closed trades in the window yet. If this is your first time opening the log, history is backfilling now — otherwise none of your tickers had a BUY that later exited in the last 50 days.</div>`;
   } else {
     const wins = closed.filter(t => t.pnlPct > 0).length;
     const winRate = (wins / n) * 100;
@@ -3806,15 +3883,24 @@ function renderQsBacktest(){
     // Cumulative $: fixed notional per trade, compounded additively (each trade
     // sized the same $ regardless of prior outcome — a clean "as-if" read).
     const cumDollars = closed.reduce((s, t) => s + QS_BT_NOTIONAL * (t.pnlPct / 100), 0);
-    const stat = (k, v, cls) => `<div class="qs-bt-stat"><span class="k">${k}</span><span class="v ${cls||''}">${v}</span></div>`;
+    // Buy-and-hold benchmark: SPY's return over each trade's exact dates. Only
+    // trades carrying a spyPct count toward it (older logs may lack it).
+    const bench = closed.filter(t => typeof t.spyPct === 'number');
+    const hasBench = bench.length > 0;
+    const avgSpy = hasBench ? bench.reduce((s, t) => s + t.spyPct, 0) / bench.length : null;
+    const edge = hasBench ? avgPnl - avgSpy : null; // per-trade outperformance vs SPY
+    const cumSpy = hasBench ? bench.reduce((s, t) => s + QS_BT_NOTIONAL * (t.spyPct / 100), 0) : null;
+    const dollars = d => (d >= 0 ? '+' : '−') + '$' + Math.abs(d).toLocaleString(undefined,{maximumFractionDigits:0});
+    const stat = (k, v, cls, sub) => `<div class="qs-bt-stat"><span class="k">${k}</span><span class="v ${cls||''}">${v}</span>${sub?`<span class="sub">${sub}</span>`:''}</div>`;
     stats.innerHTML =
       stat('Closed trades', n) +
       stat('Win rate', winRate.toFixed(0) + '%') +
-      stat('Avg P/L', qsBtPct(avgPnl), qsBtPnlClass(avgPnl)) +
+      stat('Avg P/L', qsBtPct(avgPnl), qsBtPnlClass(avgPnl), hasBench ? `SPY same days ${qsBtPct(avgSpy)}` : '') +
+      stat('Edge vs SPY', hasBench ? qsBtPct(edge) : '—', hasBench ? qsBtPnlClass(edge) : '', hasBench ? 'per trade, timing alone' : 'no benchmark yet') +
       stat('Median hold', medHold == null ? '—' : medHold + 'd') +
       stat('Best', qsBtPct(best.pnlPct) + ' ' + escHtml(best.sym), qsBtPnlClass(best.pnlPct)) +
       stat('Worst', qsBtPct(worst.pnlPct) + ' ' + escHtml(worst.sym), qsBtPnlClass(worst.pnlPct)) +
-      stat('Cumulative', (cumDollars >= 0 ? '+' : '−') + '$' + Math.abs(cumDollars).toLocaleString(undefined,{maximumFractionDigits:0}), qsBtPnlClass(cumDollars));
+      stat('Cumulative', dollars(cumDollars), qsBtPnlClass(cumDollars), hasBench ? `SPY same days ${dollars(cumSpy)}` : '');
   }
 
   // --- Open positions (unrealized against the live row price) ---
@@ -3828,7 +3914,7 @@ function renderQsBacktest(){
         `<td>${qsBtPrice(o.entryPrice)}</td><td>${qsBtPrice(live)}</td>` +
         `<td class="${unreal==null?'':qsBtPnlClass(unreal)}">${unreal==null?'—':qsBtPct(unreal)}</td></tr>`;
     }).join('');
-    openEl.innerHTML = `<div class="qs-bt-sec-head">Open positions (${openTrades.length})</div>` +
+    openEl.innerHTML = `<div class="qs-bt-sec-head">Open as-if positions (${openTrades.length})</div>` +
       `<table class="qs-bt-table"><thead><tr><th>Ticker</th><th>Entry</th><th>Entry $</th><th>Now $</th><th>Unrealized</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
 
@@ -3845,17 +3931,44 @@ function renderQsBacktest(){
         `<td class="${qsBtPnlClass(t.pnlPct)}">${qsBtPct(t.pnlPct)}</td>` +
         `<td>${reason}</td></tr>`;
     }).join('');
-    closedEl.innerHTML = `<div class="qs-bt-sec-head">Closed trades (${n})</div>` +
+    closedEl.innerHTML = `<div class="qs-bt-sec-head">Closed as-if trades (${n})</div>` +
       `<table class="qs-bt-table"><thead><tr><th>Ticker</th><th>Entry</th><th>Entry $</th><th>Exit</th><th>Exit $</th><th>Hold</th><th>P/L</th><th>Exit on</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
 }
 
+let qsBtSeedInFlight = false;
 function openQsBacktest(){
   const pop = document.getElementById('qsBtPop');
   if (!pop) return;
   pop.style.display = 'block';
   renderQsBacktest();  // paint immediately from whatever's cached
   loadQsBacktest();    // then refresh from the server
+  seedQsBacktest();    // lazily backfill 15-day history for any un-seeded tickers
+}
+
+// Lazy historical seed — only fired when the popover is open. Loops the seed
+// endpoint in small server-side batches (so no single call times out),
+// re-rendering after each batch, until nothing is left to backfill. This is the
+// only place the heavy per-ticker replay fetch happens; rescans never trigger it.
+async function seedQsBacktest(){
+  if (!API_LIVE || qsBtSeedInFlight) return;
+  qsBtSeedInFlight = true;
+  const status = document.getElementById('qsBtStatus');
+  let guard = 0;
+  try {
+    while (guard++ < 40) {
+      let res;
+      try { res = await api.send('/api/quickswing/backtest-seed', 'POST', {}); }
+      catch(e){ break; } // network/usage error — stop quietly, retry on next open
+      await loadQsBacktest(); // refresh + re-render with whatever was just seeded
+      const remaining = res && typeof res.remaining === 'number' ? res.remaining : 0;
+      if (status) status.style.display = remaining > 0 ? 'block' : 'none';
+      if (remaining <= 0) break;
+    }
+  } finally {
+    qsBtSeedInFlight = false;
+    if (status) status.style.display = 'none';
+  }
 }
 function closeQsBacktest(){
   const pop = document.getElementById('qsBtPop');

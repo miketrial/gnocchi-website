@@ -1,8 +1,8 @@
 /* ===== QUICK SWING FEATURE =====
    1-2 day mean-reversion view. Self-contained and independently removable —
    see the removal checklist in netlify/lib/quickswing-pipeline.mjs. */
-import { scoreTickerQuickSwing, getMarketRegime, seedQuickSwingBacktest } from "../lib/quickswing-pipeline.mjs";
-import { recordQuickswingTransition, pruneTradeWindow } from "../lib/quickswing-backtest.mjs";
+import { scoreTickerQuickSwing, getMarketRegime } from "../lib/quickswing-pipeline.mjs";
+import { recordQuickswingTransition, pruneTradeWindow, annotateBenchmarks } from "../lib/quickswing-backtest.mjs";
 import { listQuickswingRows, putQuickswingRow, getQuickswingTrades, putQuickswingTrades, putJob, acquireRescanLock, releaseRescanLock } from "../lib/store.mjs";
 
 export default async (req) => {
@@ -59,14 +59,16 @@ async function runQuickSwingScan({ jobId, force, onlyTickers, clientTickers }) {
       await putQuickswingRow(sym, row).catch(() => {});
       // Fold this scan into the ticker's "as-if" paper-trade log — opens a
       // paper long on a BUY verdict, closes it the moment the verdict stops
-      // being BUY. First time we've ever seen this ticker, seed the log with a
-      // 15-day historical replay so it isn't empty on day one; then keep it a
-      // rolling 50-day window. Best-effort: a store hiccup must not fail the scan.
+      // being BUY. This uses the row we JUST scored, so it costs no extra FMP
+      // calls. The heavier 15-day historical backfill is NOT done here — it's
+      // seeded lazily the first time the user opens the Backtest popover (see
+      // quickswing-backtest-seed.mjs), to keep rescans cheap. Best-effort: a
+      // store hiccup must not fail the scan.
       try {
         let log = await getQuickswingTrades(sym);
-        if (!log) log = await seedQuickSwingBacktest(sym, { spyHist: regime?.hist }).catch(() => null);
         log = recordQuickswingTransition(row, log);
         log = pruneTradeWindow(log);
+        annotateBenchmarks(log, regime?.hist); // tag any newly-closed trade with its SPY-same-days return
         await putQuickswingTrades(sym, log);
       } catch (e) { /* backtest log is non-critical — ignore */ }
       rows.push(row);
