@@ -1302,7 +1302,7 @@
     <span class="wp-title" style="border-bottom:1px dashed currentColor">Bounce</span>
     <span class="wp-sub">1-2 day mean-reversion setups · its own independent list, separate from Long-Term/Swing · click a column header to sort · click any data cell for its scan history · right-click a row for Rescan / Delete · shift-click to select a range</span>
     <!-- ===== QUICK SWING FEATURE ===== Backtest log opener (top-right, mirrors the Watchlist Backtest button) -->
-    <span id="qsBtBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="As-if you bought every BUY and sold when it flipped to SELL — long only, rolling 15-day window">▢ Backtest log</span>
+    <span id="qsBtBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="As-if you bought every BUY and sold on a SELL flip or a 2.5×ATR stop-loss — long only, rolling 15-day window">▢ Backtest log</span>
     <!-- ===== END QUICK SWING FEATURE ===== -->
   </div>
   <!-- ===== QUICK SWING FEATURE ===== -->
@@ -1514,7 +1514,7 @@
     <span style="font-size:12px;font-weight:700;letter-spacing:.3px">Bounce backtest · as-if trade log</span>
     <span id="qsBtClose" style="cursor:pointer;color:#8a95a8;font-size:13px;padding:0 2px">✕</span>
   </div>
-  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px">Bought every BUY, sold when it flipped to SELL · long only · rolling 15-day window (backfilled the first time you open this)</div>
+  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px">Bought every BUY, sold on a SELL flip or a 2.5×ATR stop · long only · rolling 15-day window (backfilled the first time you open this)</div>
   <div id="qsBtStatus" style="display:none;font-size:10px;color:#fbbf24;margin-bottom:10px">⟳ Backfilling 15-day history…</div>
   <div class="qs-bt-layout">
     <aside class="qs-bt-key">
@@ -1527,8 +1527,8 @@
         <dt>Cumulative</dt><dd>Total $ if you'd put a fixed $10,000 into every trade.</dd>
         <dt>Edge vs SPY</dt><dd>Your avg P/L minus what <em>SPY</em> returned over the same trade dates — did timing the bounce beat just being in the market? Positive = the signal added value.</dd>
         <dt>Equity curve</dt><dd>Running cumulative $ after each closed trade, in exit order, with <em>SPY</em> buy-and-hold overlaid. Rising above the dashed SPY line = the machine is adding value.</dd>
-        <dt>Open</dt><dd>A BUY still running. <em>Now</em> is the live price, <em>Unrealized</em> the paper gain so far.</dd>
-        <dt>Closed</dt><dd>Finished BUY → SELL trades, grouped by ticker (best cumulative first). Click a ticker to expand its trades. <em>Exit on</em> is the verdict that closed each (always SELL under the current rule).</dd>
+        <dt>Open</dt><dd>A BUY still running. <em>Now</em> is the live price, <em>Stop</em> the auto-exit line (entry − 2.5×ATR), <em>Unrealized</em> the paper gain so far. A red <em>● STOP</em> means price is at/through the stop.</dd>
+        <dt>Closed</dt><dd>Finished trades, grouped by ticker (best cumulative first). Click a ticker to expand. <em>Exit on</em> is why it closed — <em>SELL</em> (overbought flip) or <em>STOP</em> (broke its 2.5×ATR stop).</dd>
       </dl>
     </aside>
     <div class="qs-bt-main">
@@ -1538,7 +1538,7 @@
       <div id="qsBtClosed"></div>
     </div>
   </div>
-  <div class="qs-bt-note">The 15-day seed is a historical replay of the EOD factors (after-hours and VIX legs can't be reconstructed, so those days may differ slightly from what the live tool showed). Forward datapoints are recorded each time you open the app or rescan, at the price that scan saw. No slippage or commissions. Cumulative $ assumes a fixed $10,000 per trade.</div>
+  <div class="qs-bt-note">The 15-day seed is a historical replay of the EOD factors (after-hours and VIX legs can't be reconstructed, so those days may differ slightly from what the live tool showed). Forward datapoints are recorded each time you open the app or rescan, at the price that scan saw. The 2.5×ATR stop assumes a fill at the stop price (or the day's open on a gap-down). No slippage or commissions. Cumulative $ assumes a fixed $10,000 per trade.</div>
 </div>
 <!-- ===== END QUICK SWING FEATURE ===== -->
 
@@ -4019,12 +4019,18 @@ function renderQsBacktest(){
     const rows = openTrades.map(o => {
       const live = qsRowsBySym[o.sym?.toUpperCase()]?.price;
       const unreal = (live > 0 && o.entryPrice > 0) ? ((live - o.entryPrice) / o.entryPrice) * 100 : null;
-      return `<tr><td>${escHtml(o.sym)}</td><td>${qsBtDate(o.entryScoredAt || o.entryAt)}</td>` +
-        `<td>${qsBtPrice(o.entryPrice)}</td><td>${qsBtPrice(live)}</td>` +
-        `<td class="${unreal==null?'':qsBtPnlClass(unreal)}">${unreal==null?'—':qsBtPct(unreal)}</td></tr>`;
+      const stop = o.stopPrice;
+      const breached = (stop > 0 && live > 0 && live <= stop);
+      const stopCell = stop > 0
+        ? `<td data-tip="${escHtml('Stop = entry − 2.5×ATR(5), pinned at entry. The as-if trade auto-exits if price breaks this line.')}">${qsBtPrice(stop)}</td>`
+        : `<td>—</td>`;
+      const flag = breached ? ` <span style="color:#f87171;font-weight:700">● STOP</span>` : '';
+      return `<tr${breached?' style="background:rgba(248,113,113,.08)"':''}><td>${escHtml(o.sym)}</td><td>${qsBtDate(o.entryScoredAt || o.entryAt)}</td>` +
+        `<td>${qsBtPrice(o.entryPrice)}</td><td>${qsBtPrice(live)}</td>${stopCell}` +
+        `<td class="${unreal==null?'':qsBtPnlClass(unreal)}">${unreal==null?'—':qsBtPct(unreal)}${flag}</td></tr>`;
     }).join('');
     openEl.innerHTML = `<div class="qs-bt-sec-head">Open as-if positions (${openTrades.length})</div>` +
-      `<table class="qs-bt-table"><thead><tr><th>Ticker</th><th>Entry</th><th>Entry $</th><th>Now $</th><th>Unrealized</th></tr></thead><tbody>${rows}</tbody></table>`;
+      `<table class="qs-bt-table"><thead><tr><th>Ticker</th><th>Entry</th><th>Entry $</th><th>Now $</th><th>Stop $</th><th>Unrealized</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
 
   // --- Equity curve (strategy vs SPY) ---

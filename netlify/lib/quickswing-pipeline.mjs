@@ -80,7 +80,7 @@ import {
 } from "./store.mjs";
 import { round2, na, scored, trueRange, atrFrom } from "./ta-helpers.mjs";
 import { safe, delay } from "./fmp-client.mjs";
-import { recordQuickswingTransition, emptyLog, annotateBenchmarks, BT_SEED_DAYS } from "./quickswing-backtest.mjs";
+import { recordQuickswingTransition, emptyLog, annotateBenchmarks, BT_SEED_DAYS, QS_STOP_ATR_MULT } from "./quickswing-backtest.mjs";
 
 /* ---------- Sanity gates (reject implausible values before they reach a chip) ---------- */
 function sane(value, min, max) {
@@ -718,22 +718,25 @@ function applyVerdictHysteresis({ verdict, tier, prevVerdict, buyScore, sellScor
 
 /* ---------- Suggested stop distance ----------
    Turns atr5 (already computed for other purposes) into an actual, actionable
-   price level — 1.5x ATR is the same swing-trading convention already
-   referenced elsewhere in this file (see checkAdr's "Qullamaggie-style"
-   comment). BUY reads as a long entry (stop below price); SELL is ambiguous
-   on its own — it could mean "exit an existing long" or "short entry
-   candidate" — so it's computed as the short-entry case (stop above price)
-   and the UI must label it "if shorting" rather than imply the tool is
-   telling you to short. No stop for NEUTRAL/BLOCKED — nothing to protect. */
+   price level. The multiple is QS_STOP_ATR_MULT (2.5×ATR) so the line SHOWN here
+   is the same line the backtest actually EXITS on — one coherent stop, not a
+   tighter cosmetic suggestion alongside a wider enforced rule. 2.5× is the
+   calibrated level (see the stop-loss study in quickswing-backtest.mjs); the old
+   1.5× was too tight and stopped out winners. BUY reads as a long entry (stop
+   below price); SELL is ambiguous on its own — it could mean "exit an existing
+   long" or "short entry candidate" — so it's computed as the short-entry case
+   (stop above price) and the UI must label it "if shorting" rather than imply the
+   tool is telling you to short. No stop for NEUTRAL/BLOCKED — nothing to protect. */
 function computeStop(verdict, price, atr5) {
   if (!(price > 0) || !(atr5 > 0)) return null;
+  const basis = `${QS_STOP_ATR_MULT}x ATR(5)`;
   if (verdict === "BUY") {
-    const stopPrice = round2(price - 1.5 * atr5);
-    return { price: stopPrice, pctFromEntry: round2(((stopPrice - price) / price) * 100), basis: "1.5x ATR(5)", side: "long" };
+    const stopPrice = round2(price - QS_STOP_ATR_MULT * atr5);
+    return { price: stopPrice, pctFromEntry: round2(((stopPrice - price) / price) * 100), basis, side: "long" };
   }
   if (verdict === "SELL") {
-    const stopPrice = round2(price + 1.5 * atr5);
-    return { price: stopPrice, pctFromEntry: round2(((stopPrice - price) / price) * 100), basis: "1.5x ATR(5)", side: "short" };
+    const stopPrice = round2(price + QS_STOP_ATR_MULT * atr5);
+    return { price: stopPrice, pctFromEntry: round2(((stopPrice - price) / price) * 100), basis, side: "short" };
   }
   return null;
 }
@@ -991,9 +994,13 @@ export function replayQuickSwingTrades(sym, hist, spyHist, earningsHist, { daysB
     // gapTiers === undefined → production default (damper on); pass null to disable.
     const verdict = historicalVerdict(hAsOf, spyAsOf, earningsHist, date,
       gapTiers === undefined ? GAP_DAMPER_TIERS : gapTiers);
+    const b0 = hAsOf[0];
     const syntheticRow = {
       sym,
-      price: hAsOf[0].close,
+      price: b0.close,
+      open: b0.open,    // for the stop-loss gap-vs-touch fill in recordQuickswingTransition
+      low: b0.low,      // a stop breach on a daily bar is the LOW piercing the stop
+      atr5: atrFrom(hAsOf, 0, 5), // pins the entry-time stop at entry − 2.5×ATR
       priceIsLive: false,
       verdict,
       scored_at: `${date}T21:00:00.000Z`, // ~US market close
