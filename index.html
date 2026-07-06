@@ -897,28 +897,29 @@
 [data-theme="white"] .rescan-timer{color:#000}
 
 
-/* ── view switch (Long-Term | Swing | Bounce) — sliding highlight ──────────
-   Plain tabs sitting on the page. The active tab gets a highlight styled to
-   match the .btn (Rescan) look — #f3f4f6 gray fill + 10px radius in the base
-   theme, white box + 1px black border in the white theme. The highlight
-   slides between tabs (animated in JS — see moveViewSwitchIndicator).
-   Buttons reuse .btn's 11px/600 type and 8px/15px padding so the highlight is
-   Rescan-sized and the whole switch auto-matches Rescan's height. */
+/* ── view switch (Long-Term | Swing | Bounce) — framed track ───────────────
+   An outer container box holds the three tabs; the active tab gets an inner
+   highlight box styled like the .btn (Rescan) look — #f3f4f6 gray fill in the
+   base theme, white box + 1px black border in the white theme — and it slides
+   between tabs (animated in JS — see moveViewSwitchIndicator). */
 #viewSwitch{
   display:inline-flex; position:relative; align-items:center;
+  box-sizing:border-box;
   margin-right:4px; gap:2px;
+  padding:4px; border-radius:12px;
+  background:var(--card,#fff); border:1px solid var(--ink-faint,#cfd4dc);
 }
 #viewSwitch .vs-indicator{
-  position:absolute; top:0; left:0; height:100%;
+  position:absolute; top:4px; left:4px; height:calc(100% - 8px);
   box-sizing:border-box;
-  border-radius:10px; background:#f3f4f6; border:1px solid transparent;
+  border-radius:8px; background:#f3f4f6; border:1px solid transparent;
   transition:background .2s, border-color .2s;
   z-index:1; pointer-events:none;
 }
 #viewSwitch button{
   font-size:11px; font-weight:600; cursor:pointer;
-  padding:8px 15px; background:transparent; color:var(--ink,#222);
-  border:none; border-radius:10px;
+  padding:4px 14px; background:transparent; color:var(--ink,#222);
+  border:none; border-radius:8px;
   transition:opacity .2s, color .2s;
   position:relative; z-index:2; opacity:.5;
   white-space:nowrap;
@@ -926,11 +927,11 @@
 #viewSwitch button.active{ opacity:1; }
 #viewSwitch button:hover{ opacity:.8 }
 #viewSwitch button.active:hover{ opacity:1 }
+[data-theme="white"] #viewSwitch{ border-radius:0; border:1px solid #000; background:#fff; }
 [data-theme="white"] #viewSwitch .vs-indicator{ border-radius:0; background:#fff; border:1px solid #000; }
 /* Buttons don't inherit font-family; without this they'd fall back to the UA
-   sans font and sit shorter than the mono .btn. The extra 1px top/bottom pad
-   makes up for Rescan's 1px border so the highlight matches its height. */
-[data-theme="white"] #viewSwitch button{ color:#000; font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace; padding-top:9px; padding-bottom:9px }
+   sans font and sit shorter than the mono chrome. */
+[data-theme="white"] #viewSwitch button{ color:#000; font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace }
 [data-theme="white"] #viewSwitch button.active{ font-weight:800; letter-spacing:.3px }
 
 /* ── theme swatch strip ───────────────────────────────────────────────── */
