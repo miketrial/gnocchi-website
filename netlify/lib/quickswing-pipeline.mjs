@@ -638,7 +638,13 @@ function buyConvictionOk(mirrored) {
    held direction; never overrides a fresh BUY/SELL/BLOCKED, so genuine reversals
    still flip instantly. Live-only: the backtest replay runs on completed daily
    closes (no intraday noise) and is left untouched. */
-const QS_HOLD_FLOOR = 0.22; // an open BUY/SELL survives down to this (vs the 0.30 weak entry)
+// Tuned on 30 tickers × 250 daily bars (legacy component cache). A held BUY's
+// forward 2-day return holds at +1.3–1.6% while its score stays ≥0.20, then
+// falls off a cliff to +0.2–0.5% below it — so 0.20 is where "BUY" stops meaning
+// much. It also flickers LESS than the old 0.22 (holds down to 5/24 vs 6/24), and
+// the extra days it holds are the high-expectancy ones (+1.34%). Going lower only
+// buys marginal flicker cuts by holding near-dead setups, eroding the signal.
+const QS_HOLD_FLOOR = 0.20; // an open BUY/SELL survives down to this (vs the 0.30 weak entry)
 function applyVerdictHysteresis({ verdict, tier, prevVerdict, buyScore, sellScore, blocked, forceBuy, forceSell }) {
   if (blocked || verdict !== "NEUTRAL") return { verdict, tier, held: false };
   const buyPct = buyScore / QS_MAX_SCORE, sellPct = sellScore / QS_MAX_SCORE;
