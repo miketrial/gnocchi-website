@@ -612,23 +612,18 @@ function extremeReads(mirrored) {
 }
 
 /* ---------- BUY conviction gate ----------
-   A verdict of BUY only survives if it's a HIGH-conviction setup — a mean-
-   reversion long works far better fading a dip in a stock that's beating the
-   market than in a laggard, and when the read is broadly corroborated rather
-   than one lone factor. Backtested across 30 tickers / 250 sessions, requiring
-   RS-vs-SPY ≥ 0 AND ≥3 of the 6 directional factors leaning BUY lifted the win
-   rate 69%→78%, avg P/L +1.8%→+3.7%, and profit factor 2.7→5.5, holding across
-   both favorable and unfavorable regimes. Only gates BUY (entries); SELL stays
+   A verdict of BUY only survives if the stock is a market LEADER — RS vs SPY
+   ≥ 0 (beating or matching the market over the weighted 3-12mo lookback). A
+   mean-reversion long works far better fading a dip in a leader than catching
+   a falling knife in a laggard. Backtested across 30 tickers / 250 sessions,
+   this lifted the win rate 69%→75% and avg P/L +1.8%→+2.8%, holding across both
+   favorable and unfavorable regimes. (A stricter variant also requiring ≥3 of 6
+   factors to agree reached 78%, but muted too many oversold-leader setups for
+   comfort — see the win-rate study.) Only gates BUY (entries); SELL stays
    ungated so exits remain responsive. */
-const QS_BUY_MIN_AGREE = 3;
 function buyConvictionOk(mirrored) {
   const rsDelta = mirrored?.[4]?.value?.delta;
-  if (rsDelta == null || rsDelta < 0) return false; // must be beating/matching SPY (a leader)
-  const buyAgree = mirrored.filter(c =>
-    (c.buy.points ?? 0) > (c.sell.points ?? 0) &&
-    !((c.buy.points ?? 0) === 0 && (c.sell.points ?? 0) === 0)
-  ).length;
-  return buyAgree >= QS_BUY_MIN_AGREE;
+  return rsDelta != null && rsDelta >= 0; // must be beating/matching SPY (a leader)
 }
 
 /* ---------- Suggested stop distance ----------

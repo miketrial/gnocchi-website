@@ -23,7 +23,8 @@ export const BT_SEED_DAYS = 15;   // history backfilled the first time a ticker 
 // v3: exit on SELL (not on the first non-BUY read).
 // v4: per-trade SPY buy-and-hold benchmark (spyPct).
 // v5: high-conviction BUY gate (RS ≥ 0 AND ≥3/6 factors agree).
-export const BT_SEED_VERSION = 5;
+// v6: BUY gate loosened to RS ≥ 0 only (dropped the agreement requirement).
+export const BT_SEED_VERSION = 6;
 
 export function emptyLog() {
   return { open: null, closed: [] };
