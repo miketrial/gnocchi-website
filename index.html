@@ -896,35 +896,43 @@
 [data-theme="white"] .rescan-timer{color:#000}
 
 
-/* ── view switch (Long-Term | Swing | Bounce) — sliding-indicator pill ─── */
+/* ── view switch (Long-Term | Swing | Bounce) — framed track ───────────────
+   Styled to match the .btn (Rescan) look: same #f3f4f6 tray fill, 10px
+   radius, and 11px/600 type. A bordered white chip slides between tabs.
+   Outer height is tuned (4px tray pad + 5px button pad) to line up with
+   Rescan's ~32px height. */
 #viewSwitch{
   display:inline-flex; position:relative; align-items:center;
-  margin-right:4px; gap:2px;
-  padding:3px; border-radius:12px;
-  background:var(--page,#eef0f3); border:1px solid var(--ink-faint,#b0b8c4);
+  box-sizing:border-box;
+  margin-right:4px; gap:0;
+  padding:3px; border-radius:10px;
+  background:#f3f4f6; border:none;
 }
 #viewSwitch .vs-indicator{
   position:absolute; top:3px; left:3px; height:calc(100% - 6px);
-  border-radius:9px; background:var(--card,#fff);
-  box-shadow:0 1px 3px rgba(0,0,0,.18);
-  transition:left .25s cubic-bezier(.4,0,.2,1), width .25s cubic-bezier(.4,0,.2,1),
-             background .2s, box-shadow .2s;
+  border-radius:7px; background:var(--card,#fff);
+  border:1px solid #dfe3e9;
+  transition:background .2s, border-color .2s; /* left/width animated in JS — see moveViewSwitchIndicator */
   z-index:1; pointer-events:none;
 }
+/* Buttons carry the same 11px/600 type and vertical padding as .btn (Rescan),
+   minus the 3px tray pad, so the pill auto-matches Rescan's height in whichever
+   theme is active (system font ≈29px, mono ≈32px). */
 #viewSwitch button{
   font-size:11px; font-weight:600; cursor:pointer;
-  padding:8px 14px; background:transparent; color:var(--ink,#222);
-  border:none; border-radius:9px;
+  padding:5px 15px; background:transparent; color:var(--ink,#222);
+  border:none; border-radius:7px;
   transition:opacity .2s, color .2s;
-  position:relative; z-index:2; opacity:.62;
+  position:relative; z-index:2; opacity:.55;
   white-space:nowrap;
 }
 #viewSwitch button.active{ opacity:1; }
-#viewSwitch button:hover{ opacity:1 }
-[data-theme="white"] #viewSwitch{ border-radius:0; border:1px solid #000; background:#f4f4f4; }
-[data-theme="white"] .vs-indicator{ border-radius:0; background:#fff; box-shadow:2px 2px 0 0 #000; }
+#viewSwitch button:hover{ opacity:.85 }
+#viewSwitch button.active:hover{ opacity:1 }
+[data-theme="white"] #viewSwitch{ border-radius:0; border:1px solid #000; background:#fff; padding:4px; }
+[data-theme="white"] #viewSwitch .vs-indicator{ border-radius:0; background:#000; border:none; top:4px; height:calc(100% - 8px); }
 [data-theme="white"] #viewSwitch button{ color:#000 }
-[data-theme="white"] #viewSwitch button.active{ font-weight:800; letter-spacing:.3px }
+[data-theme="white"] #viewSwitch button.active{ color:#fff; font-weight:800; letter-spacing:.3px }
 
 /* ── theme swatch strip ───────────────────────────────────────────────── */
 #themeSwatch{display:flex;flex-direction:row;align-items:center;gap:5px;align-self:stretch;margin-top:-25px}
@@ -950,16 +958,17 @@
    instead of fading to the ~70% opacity every other inactive tab gets. */
 #viewSwitch button[data-v="qs"],
 [data-theme="white"] #viewSwitch button[data-v="qs"]{
-  color:var(--bad-fg); opacity:.85; font-weight:800;
+  color:var(--bad-fg); opacity:.8; font-weight:800;
 }
-#viewSwitch button[data-v="qs"].active,
-[data-theme="white"] #viewSwitch button[data-v="qs"].active{
-  color:var(--bad-fg); opacity:1;
+#viewSwitch button[data-v="qs"].active{ color:var(--bad-fg); opacity:1; }
+/* Base theme: pink chip with red border keeps the red text readable. */
+#viewSwitch .vs-indicator.qs{
+  background:var(--bad-bg); border-color:var(--bad-fg);
 }
-#viewSwitch .vs-indicator.qs,
-[data-theme="white"] .vs-indicator.qs{
-  background:var(--bad-bg); box-shadow:0 0 0 1.5px var(--bad-fg), 0 1px 3px rgba(0,0,0,.18);
-}
+/* White theme: solid red chip, active label flips to white to match the
+   black-chip active treatment. */
+[data-theme="white"] #viewSwitch button[data-v="qs"].active{ color:#fff; opacity:1; }
+[data-theme="white"] #viewSwitch .vs-indicator.qs{ background:var(--bad-fg); border:none; }
 /* ===== END QUICK SWING FEATURE ===== */
 </style>
 
@@ -2447,9 +2456,23 @@ function pollJob(jobId){
 function moveViewSwitchIndicator(btn){
   const ind=document.getElementById('vsIndicator');
   if(!ind||!btn) return;
-  ind.style.left=btn.offsetLeft+'px';
-  ind.style.width=btn.offsetWidth+'px';
   ind.classList.toggle('qs',btn.dataset.v==='qs');
+  const endLeft=btn.offsetLeft, endWidth=btn.offsetWidth;
+
+  // First paint (no prior position) — place it instantly, no slide.
+  if(!ind.dataset.inited){
+    ind.dataset.inited='1';
+    ind.style.transition='none';
+    ind.style.left=endLeft+'px';
+    ind.style.width=endWidth+'px';
+    requestAnimationFrame(()=>{ ind.style.transition=''; });
+    return;
+  }
+
+  // Smooth single-motion slide between tabs.
+  ind.style.transition='left .28s cubic-bezier(.4,0,.2,1), width .28s cubic-bezier(.4,0,.2,1), background .2s, border-color .2s';
+  ind.style.left=endLeft+'px';
+  ind.style.width=endWidth+'px';
 }
 window.addEventListener('resize',()=>{
   const active=document.querySelector('#viewSwitch button.active');
