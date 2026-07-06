@@ -22,7 +22,8 @@ export const BT_SEED_DAYS = 15;   // history backfilled the first time a ticker 
 // v2: extreme-read override + 0.30 weak threshold + 0.85 BUY regime penalty.
 // v3: exit on SELL (not on the first non-BUY read).
 // v4: per-trade SPY buy-and-hold benchmark (spyPct).
-export const BT_SEED_VERSION = 4;
+// v5: high-conviction BUY gate (RS ≥ 0 AND ≥3/6 factors agree).
+export const BT_SEED_VERSION = 5;
 
 export function emptyLog() {
   return { open: null, closed: [] };
