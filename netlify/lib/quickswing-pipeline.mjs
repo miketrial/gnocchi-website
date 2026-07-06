@@ -109,7 +109,9 @@ function cleanHist(hist) {
     if (!validPricePoint(date, close)) continue;
     if (seen.has(date)) continue;
     seen.add(date);
-    out.push({ date, close, high: d?.high ?? close, low: d?.low ?? close, volume: d?.volume ?? null });
+    // `open` carried through for the overnight-gap profile (prior close → open);
+    // falls back to close so a feed missing it just reads as a zero gap, never NaN.
+    out.push({ date, open: d?.open ?? close, close, high: d?.high ?? close, low: d?.low ?? close, volume: d?.volume ?? null });
   }
   out.sort((a, b) => b.date.localeCompare(a.date)); // newest first
   return out;
@@ -143,6 +145,7 @@ function injectLiveBar(hist, quote) {
   if (dow === 0 || dow === 6) return hist;
   const livePoint = {
     date: quoteDate,
+    open: quote.open ?? price,
     close: price,
     high: quote.dayHigh ?? price,
     low: quote.dayLow ?? price,
@@ -409,6 +412,60 @@ function checkAtrExpansion(hist) {
   else if (ratio >= 1.0) { points = 1; label = "volatility steady to slightly up"; }
   else                   { points = 0; label = "volatility contracting — signals less reliable right now"; }
   return scored(points, `5d ATR ${ratio.toFixed(2)}x the 20d ATR — ${label}`, ratio);
+}
+
+/* ---------- Overnight-gap profile — how much of the risk lands where you can't act ----------
+   Decomposes recent daily bars into the OVERNIGHT leg (prior close → today's
+   open) — the part of a name's move that prints while the regular session is
+   shut, i.e. that you cannot trade around. A stock that routinely gaps ±3%
+   overnight carries far more uncatchable risk on a 1-2 day hold than one that
+   opens roughly flat: for the same oversold setup, the gappy name is the worse
+   bet because the move that erases (or overshoots) your edge is more likely to
+   land before you can act on it. avgAbsOvn is the mean absolute overnight gap
+   over the trailing window; nights3 is how often that gap topped 3%.
+
+   Confirmed on the live watchlist that this discriminates hard (avg |gap| ran
+   0.8% for AMZN to 2.8% for SNDK; >3% nights ran 3% to 39%), while the DIRECTION
+   of the next session vs the gap was a ~50/50 coin flip across every name — so
+   this is used only for MAGNITUDE (a non-directional risk read), never to guess
+   which way tomorrow opens. Pure arithmetic on the OHLCV already fetched (needs
+   the `open` cleanHist now carries) — no new endpoint. */
+const GAP_LOOKBACK = 60; // sessions of close→open history behind the profile
+export function overnightGapProfile(hist, lookback = GAP_LOOKBACK) {
+  if (!hist || hist.length < 21) return null;
+  const bars = hist.slice(0, lookback + 1); // newest-first; bars[i+1] is the prior close
+  const gaps = [];
+  for (let i = 0; i < bars.length - 1; i++) {
+    const open = bars[i].open, prevClose = bars[i + 1].close;
+    if (!(open > 0) || !(prevClose > 0)) continue;
+    const g = sane(open / prevClose - 1, -0.9, 9); // reject splits/bad ticks
+    if (g != null) gaps.push(Math.abs(g));
+  }
+  if (gaps.length < 15) return null; // too sparse to characterize
+  const avgAbsOvn = gaps.reduce((s, v) => s + v, 0) / gaps.length;
+  const nights3 = gaps.filter(g => g >= 0.03).length / gaps.length;
+  return { avgAbsOvn, nights3, n: gaps.length };
+}
+
+/* ---------- Overnight-gap conviction damper (BUY-side only) ----------
+   Turns avgAbsOvn into a multiplier on the BUY score: the gappier the name, the
+   stronger the raw oversold read has to be to still clear the BUY threshold.
+   Mirrors the shape of the other non-directional multipliers (VIX, ADR, regime)
+   and, like the earnings gate and the RS-leader gate, only blunts fresh ENTRIES
+   — SELL is left ungated so a genuine overbought reversal still flips instantly
+   (holding an exit hostage to a name's gappiness would be backwards). Tiers and
+   penalties are calibrated on an 8-ticker / 250-session backtest replay — see
+   the gap-damper study in the commit that added this. */
+export const GAP_DAMPER_TIERS = [
+  { maxAvg: 0.015, mult: 1.00 }, // calm overnight (~AMZN/TSM) — no penalty
+  { maxAvg: 0.022, mult: 0.90 }, // moderate (~AVGO/NOW/GEV/DELL)
+  { maxAvg: 0.030, mult: 0.78 }, // gappy (~MU)
+  { maxAvg: Infinity, mult: 0.65 }, // very gappy (~SNDK)
+];
+function gapMultiplierBuy(profile, tiers = GAP_DAMPER_TIERS) {
+  if (!tiers || !profile || profile.avgAbsOvn == null) return 1.0; // unknown/disabled — don't penalize
+  for (const t of tiers) if (profile.avgAbsOvn <= t.maxAvg) return t.mult;
+  return 1.0;
 }
 
 /* ---------- GATE: ADR% — Average Daily Range, a volatility-suitability gate ----------
@@ -773,8 +830,13 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
   // VIX — non-directional, so the SAME multiplier applies to both sides
   // (unlike the regime multiplier above, which favors one direction).
   const vixMultiplier = regime?.vix?.multiplier ?? 1.0;
+  // Overnight-gap damper — BUY-only: a gappy name needs a stronger oversold read
+  // to earn an entry, since more of its move lands where you can't act. SELL is
+  // deliberately left ungated (exits stay responsive), same as the RS-leader gate.
+  const gapProfile = overnightGapProfile(hist);
+  const gapMultiplierBuy_ = gapMultiplierBuy(gapProfile);
 
-  const buyScore = Math.min(QS_MAX_SCORE, Math.round(rawBuyScore * liqMultiplier * adrMultiplier * regimeMultiplierBuy * vixMultiplier));
+  const buyScore = Math.min(QS_MAX_SCORE, Math.round(rawBuyScore * liqMultiplier * adrMultiplier * regimeMultiplierBuy * vixMultiplier * gapMultiplierBuy_));
   const sellScore = Math.min(QS_MAX_SCORE, Math.round(rawSellScore * liqMultiplier * adrMultiplier * regimeMultiplierSell * vixMultiplier));
 
   const { forceBuy, forceSell } = extremeReads(mirrored);
@@ -814,7 +876,10 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
     liquidity: { value: liq.value, points: liq.points, label: liq.summary },
     volatility: { adrPct: adr.value, points: adr.points, label: adr.summary },
     vix: regime?.vix ? { level: regime.vix.level, label: regime.vix.label } : null,
-    liqMultiplier, adrMultiplier, regimeMultiplierBuy, regimeMultiplierSell, vixMultiplier,
+    overnightGap: gapProfile
+      ? { avgAbsOvn: round2(gapProfile.avgAbsOvn * 100), nights3Pct: Math.round(gapProfile.nights3 * 100), mult: gapMultiplierBuy_ }
+      : null,
+    liqMultiplier, adrMultiplier, regimeMultiplierBuy, regimeMultiplierSell, vixMultiplier, gapMultiplierBuy: gapMultiplierBuy_,
     blocked: eGate.blocked,
     blockedReason: eGate.blocked ? eGate.reason : null,
     earnings: { daysUntil: eGate.daysUntil ?? null, date: eGate.date ?? null },
@@ -873,7 +938,7 @@ function historicalEarningsBlocked(earningsHist, asOfDate) {
 
 /* Compute just the headline verdict for one historical close — the EOD subset
    of scoreTickerQuickSwing, reusing the same factor functions and multipliers. */
-function historicalVerdict(hAsOf, spyAsOf, earningsHist, asOfDate) {
+function historicalVerdict(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers = GAP_DAMPER_TIERS) {
   const mirrored = [
     checkRsi2(hAsOf),
     checkBollinger(hAsOf),
@@ -895,8 +960,13 @@ function historicalVerdict(hAsOf, spyAsOf, earningsHist, asOfDate) {
   const regimeMultiplierBuy = regimeFavorable === false ? 0.85 : 1.0;
   const regimeMultiplierSell = regimeFavorable === false ? 1.15 : 1.0;
   // VIX history unavailable → neutral (1.0), matching the header note.
+  // Overnight-gap damper reconstructs cleanly from EOD bars (prior close → open),
+  // so — unlike the AH/VIX legs — the replay honors it exactly as the live scorer
+  // does. `gapTiers` is threaded through so the calibration harness can A/B it
+  // (pass null to disable for the baseline arm).
+  const gapMult = gapMultiplierBuy(overnightGapProfile(hAsOf), gapTiers);
 
-  const buyScore = Math.min(QS_MAX_SCORE, Math.round(rawBuyScore * liqMultiplier * adrMultiplier * regimeMultiplierBuy));
+  const buyScore = Math.min(QS_MAX_SCORE, Math.round(rawBuyScore * liqMultiplier * adrMultiplier * regimeMultiplierBuy * gapMult));
   const sellScore = Math.min(QS_MAX_SCORE, Math.round(rawSellScore * liqMultiplier * adrMultiplier * regimeMultiplierSell));
   const blocked = historicalEarningsBlocked(earningsHist, asOfDate);
   const { forceBuy, forceSell } = extremeReads(mirrored);
@@ -909,7 +979,7 @@ function historicalVerdict(hAsOf, spyAsOf, earningsHist, asOfDate) {
 
 /* Replay the last `daysBack` sessions and fold each day's verdict through the
    same transition logic the live loop uses, producing a seeded trade log. */
-export function replayQuickSwingTrades(sym, hist, spyHist, earningsHist, { daysBack = BT_SEED_DAYS } = {}) {
+export function replayQuickSwingTrades(sym, hist, spyHist, earningsHist, { daysBack = BT_SEED_DAYS, gapTiers } = {}) {
   let log = emptyLog();
   if (!hist || hist.length < 21) return log; // not enough bars to score anything
   // Oldest → newest over the trailing window, so trades open/close in order.
@@ -918,7 +988,9 @@ export function replayQuickSwingTrades(sym, hist, spyHist, earningsHist, { daysB
     const hAsOf = histAsOf(hist, date);
     if (hAsOf.length < 21) continue;
     const spyAsOf = spyHist ? histAsOf(spyHist, date) : null;
-    const verdict = historicalVerdict(hAsOf, spyAsOf, earningsHist, date);
+    // gapTiers === undefined → production default (damper on); pass null to disable.
+    const verdict = historicalVerdict(hAsOf, spyAsOf, earningsHist, date,
+      gapTiers === undefined ? GAP_DAMPER_TIERS : gapTiers);
     const syntheticRow = {
       sym,
       price: hAsOf[0].close,

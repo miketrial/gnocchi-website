@@ -3748,7 +3748,11 @@ function qsRowHtml(r, idx){
   const heldNote = r.held
     ? ` STICKY: the live read cooled to NEUTRAL, but this ${r.verdict} is held until it fully fades (score below the hold floor) or flips to the opposite side — this keeps an in-progress call from whipsawing intraday.`
     : '';
-  const verdictTip = escHtml(`${r.tier ? r.tier+' ' : ''}${r.verdict} — Buy ${r.buyScore||'—'} · Sell ${r.sellScore||'—'} (each out of 24). Liquidity, ADR, market regime, and VIX gates already applied.${heldNote} Click to see history.`);
+  const gapMult = r.gapMultiplierBuy;
+  const gapDamperNote = (gapMult != null && gapMult < 1 && r.overnightGap)
+    ? ` OVERNIGHT-GAP DAMPER: this name averages a ${r.overnightGap.avgAbsOvn}% overnight gap (${r.overnightGap.nights3Pct}% of nights >3%), so the Buy score is cut ${Math.round((1-gapMult)*100)}% (x${gapMult.toFixed(2)}) — a gappier name needs a stronger oversold read to earn a BUY, since more of its move lands where you can't act. SELL is left untouched so exits stay responsive.`
+    : '';
+  const verdictTip = escHtml(`${r.tier ? r.tier+' ' : ''}${r.verdict} — Buy ${r.buyScore||'—'} · Sell ${r.sellScore||'—'} (each out of 24). Liquidity, ADR, market regime, and VIX gates already applied.${gapDamperNote}${heldNote} Click to see history.`);
   // Abbreviated on-screen only — the tooltip above still spells everything
   // out in full. NEUTRAL is by far the most common verdict, so shrinking
   // just that one word (not BUY/SELL/BLOCKED, which are already short and
@@ -3764,6 +3768,11 @@ function qsRowHtml(r, idx){
   const stopLine = r.stop
     ? `<span class="qs-subscore" data-tip="${escHtml('Suggested stop ('+r.stop.basis+'), '+(r.stop.side==='short'?'if shorting this SELL signal':'if long on this BUY signal')+' — not a guarantee, just a mechanical risk line based on recent volatility.')}">Stop ${r.stop.side==='short'?'above':'below'} $${r.stop.price.toFixed(2)} (${r.stop.pctFromEntry>=0?'+':''}${r.stop.pctFromEntry.toFixed(1)}%)</span>`
     : '';
+  // Flag gappy names at a glance — surfaced whenever the overnight profile exists,
+  // so you can size for the overnight risk even when the damper isn't biting yet.
+  const gapLine = (isActionable && r.overnightGap)
+    ? `<span class="qs-subscore" data-tip="${escHtml('Averages a ±'+r.overnightGap.avgAbsOvn+'% move overnight (close→open), and gapped >3% on '+r.overnightGap.nights3Pct+'% of nights over the last ~60 sessions. That is risk that lands while the market is shut — you cannot trade around it, so size accordingly.'+(gapMult!=null&&gapMult<1?' The Buy score is damped x'+gapMult.toFixed(2)+' because of it.':''))}">±${r.overnightGap.avgAbsOvn}% overnight${gapMult!=null&&gapMult<1?' · Buy ×'+gapMult.toFixed(2):''}</span>`
+    : '';
   return `<tr class="${r.scoring?'scoring':(r.blocked?'qs-row-blocked':'')}" data-sym="${r.sym}">
     <td class="idx">${idx}.</td>
     ${symCell}
@@ -3773,6 +3782,7 @@ function qsRowHtml(r, idx){
       <span class="qs-subscore-inline">B ${escHtml(r.buyScore||'—')} · S ${escHtml(r.sellScore||'—')}</span>
       ${agreementLine}
       ${stopLine}
+      ${gapLine}
     </td>
     <td class="num ${qsVCls(r,0)}" data-col="rsi" style="cursor:pointer" data-tip="${tipFor(0)}">${typeof rsiVal==='number'?rsiVal.toFixed(1):'—'}</td>
     <td class="num ${qsVCls(r,1)}" data-col="pctB" style="cursor:pointer" data-tip="${tipFor(1)}">${bb?.pctB!=null?bb.pctB.toFixed(2):'—'}</td>
