@@ -15,7 +15,11 @@
    FEATURE block (see the checklist in quickswing-pipeline.mjs). */
 
 const MAX_CLOSED = 200; // cap the per-ticker closed-trade history
-export const BT_WINDOW_DAYS = 50; // rolling window: trades older than this drop off
+// Rolling window: a trade drops off once its ENTRY is older than this. Pruning
+// by entry (not exit) guarantees nothing older than the cap ever shows — a
+// trade's exit is always later than its entry, so entry-within-15d ⇒ the whole
+// trade is within 15d. 15 is the hard "furthest back, ever" for this log.
+export const BT_WINDOW_DAYS = 15;
 export const BT_SEED_DAYS = 15;   // history backfilled the first time a ticker is added
 // Bump when the scoring calibration OR exit rule changes so already-seeded logs
 // get a one-time re-seed (they'd otherwise keep showing trades from the old rules).
@@ -25,7 +29,8 @@ export const BT_SEED_DAYS = 15;   // history backfilled the first time a ticker 
 // v5: high-conviction BUY gate (RS ≥ 0 AND ≥3/6 factors agree).
 // v6: BUY gate loosened to RS ≥ 0 only (dropped the agreement requirement).
 // v7: overnight-gap BUY-conviction damper (gappier names need a stronger read).
-export const BT_SEED_VERSION = 7;
+// v8: 15-day window, pruned by ENTRY date (was 50-day, pruned by exit).
+export const BT_SEED_VERSION = 8;
 
 export function emptyLog() {
   return { open: null, closed: [] };
@@ -37,16 +42,18 @@ export function needsSeed(log) {
   return !log || log.seedVersion !== BT_SEED_VERSION;
 }
 
-/* Rolling-window prune: drop closed trades whose exit is older than `days` ago,
-   measured from now. A freshly-seeded ticker carries ~15 days of history (all
-   inside the window, so nothing drops); as forward days accumulate the window
-   fills toward 50, then rolls — the oldest day falling off as each new one is
-   added. The open position is never pruned. */
+/* Rolling-window prune: drop closed trades whose ENTRY is older than `days` ago,
+   measured from now. Pruning on entry (not exit) is what enforces the hard
+   "furthest back, ever" guarantee — a trade entered inside the window is wholly
+   inside it, so no entry date older than the cap can ever leak into the log via
+   a long hold. A freshly-seeded ticker carries ~15 days of history; as forward
+   days accumulate the window rolls, the oldest entry falling off as each new day
+   is added. The open position is never pruned. */
 export function pruneTradeWindow(log, days = BT_WINDOW_DAYS) {
   if (!log || typeof log !== "object") return emptyLog();
   const cutoff = Date.now() - days * 86400000;
   const closed = (Array.isArray(log.closed) ? log.closed : []).filter(t => {
-    const ts = Date.parse(t.exitScoredAt || t.exitAt);
+    const ts = Date.parse(t.entryScoredAt || t.entryAt);
     return !isFinite(ts) || ts >= cutoff;
   });
   // Preserve the seed markers — they record that the one-time historical
