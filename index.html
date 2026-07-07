@@ -575,8 +575,9 @@
   /* ===== QUICK SWING FEATURE ===== */
   /* Terminal restyle — this is the tab that decides real money, so it reads
      like an instrument: monospace tabular figures, a hairline grid, square
-     corners, and precise (not decorative) colour. Screener palette borrowed
-     from Finviz (tinted cells) and TradingView (green #16b06a / red #ec4034). */
+     corners, and precise (not decorative) colour. Palette matched to Finviz:
+     pure green #17a44a / warm red #df3030 / gold #eaa60a, and #2a6db5 blue for
+     the non-directional context factors. */
   #qsView table{ font-family:ui-monospace,"SF Mono","SFMono-Regular",Menlo,Consolas,monospace;
     font-variant-numeric:tabular-nums; border-collapse:collapse; width:100% }
   #qsView thead th{ font-size:9.5px; letter-spacing:.4px; text-transform:uppercase;
@@ -595,8 +596,8 @@
   #qsView tbody td.co-cell b{ font-weight:600; letter-spacing:.3px }
   /* directional row edge (desktop) */
   #qsView tbody tr td.co-cell{ box-shadow:inset 3px 0 0 rgba(20,25,30,.14) }
-  #qsView tbody tr.qs-row-buy  td.co-cell{ box-shadow:inset 3px 0 0 #16b06a }
-  #qsView tbody tr.qs-row-sell td.co-cell{ box-shadow:inset 3px 0 0 #ec4034 }
+  #qsView tbody tr.qs-row-buy  td.co-cell{ box-shadow:inset 3px 0 0 #17a44a }
+  #qsView tbody tr.qs-row-sell td.co-cell{ box-shadow:inset 3px 0 0 #df3030 }
 
   /* status bar (was the soft regime banner) */
   .qs-regime{ display:flex;align-items:center;gap:12px;flex-wrap:wrap;
@@ -605,14 +606,14 @@
     border:0.5px solid rgba(20,25,30,.16); background:rgba(20,25,30,.02); color:var(--ink,#16191c) }
   .qs-regime:empty{ display:none }
   .qs-regime .qs-regime-dot{ width:7px;height:7px;border-radius:1px;background:var(--ink-faint);flex:none }
-  .qs-regime.fav{ color:#0c8a52 } .qs-regime.fav .qs-regime-dot{ background:#16b06a }
-  .qs-regime.unfav{ color:#c0483a } .qs-regime.unfav .qs-regime-dot{ background:#e5403a }
+  .qs-regime.fav{ color:#0b7a34 } .qs-regime.fav .qs-regime-dot{ background:#17a44a }
+  .qs-regime.unfav{ color:#c02727 } .qs-regime.unfav .qs-regime-dot{ background:#d62b2b }
   .qs-regime-sub{ font-weight:400; color:var(--ink-soft,#6a706e) }
   .qs-regime-scan{ margin-left:auto; font-weight:400; color:var(--ink-faint) }
 
   .qs-blocked-badge{ font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;
     padding:2px 7px;border-radius:2px;border:0.5px solid #dcb04e;
-    background:rgba(234,160,17,.16);color:#96690a;white-space:nowrap }
+    background:rgba(234,166,10,.16);color:#96690a;white-space:nowrap }
   .qs-empty{ padding:32px;text-align:center;color:var(--ink-faint);font-size:12px }
   .qs-row-blocked{ opacity:.6 }
 
@@ -620,28 +621,28 @@
      each. Buy lean = green, sell lean = red, weak = amber, no signal = quiet.
      Context factors (Vol Dry-Up / Expansion) are non-directional, so they get
      their OWN blue — never mistaken for a buy/sell signal. */
-  #qsView tbody td.st-good{ background:rgba(22,176,106,.15); color:#0b7d51; font-weight:600; box-shadow:inset 0 -2px 0 #16b06a }
-  #qsView tbody td.st-ok  { background:rgba(22,176,106,.08); color:#0b7d51; font-weight:500; box-shadow:inset 0 -2px 0 rgba(22,176,106,.55) }
-  #qsView tbody td.st-weak{ background:rgba(234,160,17,.14); color:#9a6a06; font-weight:500; box-shadow:inset 0 -2px 0 #eaa011 }
-  #qsView tbody td.st-sell-bad{ background:rgba(236,64,52,.13); color:#c0342a; font-weight:600; box-shadow:inset 0 -2px 0 #ec4034 }
-  #qsView tbody td.st-sell-ok { background:rgba(236,64,52,.07); color:#c0342a; font-weight:500; box-shadow:inset 0 -2px 0 rgba(236,64,52,.55) }
-  #qsView tbody td.st-ctx    { background:rgba(47,131,230,.11); color:#245fb0; font-weight:500; box-shadow:inset 0 -2px 0 #2f83e6 }
-  #qsView tbody td.st-ctx-lo { background:rgba(47,131,230,.055); color:#245fb0; box-shadow:inset 0 -2px 0 rgba(47,131,230,.5) }
+  #qsView tbody td.st-good{ background:rgba(23,164,74,.15); color:#0b7a34; font-weight:600; box-shadow:inset 0 -2px 0 #17a44a }
+  #qsView tbody td.st-ok  { background:rgba(23,164,74,.08); color:#0b7a34; font-weight:500; box-shadow:inset 0 -2px 0 rgba(23,164,74,.55) }
+  #qsView tbody td.st-weak{ background:rgba(234,166,10,.14); color:#a87400; font-weight:500; box-shadow:inset 0 -2px 0 #eaa60a }
+  #qsView tbody td.st-sell-bad{ background:rgba(223,48,48,.13); color:#c02727; font-weight:600; box-shadow:inset 0 -2px 0 #df3030 }
+  #qsView tbody td.st-sell-ok { background:rgba(223,48,48,.07); color:#c02727; font-weight:500; box-shadow:inset 0 -2px 0 rgba(223,48,48,.55) }
+  #qsView tbody td.st-ctx    { background:rgba(42,109,181,.11); color:#22579c; font-weight:500; box-shadow:inset 0 -2px 0 #2a6db5 }
+  #qsView tbody td.st-ctx-lo { background:rgba(42,109,181,.055); color:#22579c; box-shadow:inset 0 -2px 0 rgba(42,109,181,.5) }
   #qsView tbody td.st-neutral{ color:#5c636d }
   #qsView tbody td.st-bad    { color:#5c636d }
   #qsView tbody td.st-na     { color:#7a808a }
-  #qsView tbody tr:hover td.st-good{ background:rgba(22,176,106,.22) }
-  #qsView tbody tr:hover td.st-sell-bad{ background:rgba(236,64,52,.2) }
-  #qsView tbody tr:hover td.st-weak{ background:rgba(234,160,17,.2) }
-  #qsView tbody tr:hover td.st-ctx{ background:rgba(47,131,230,.17) }
+  #qsView tbody tr:hover td.st-good{ background:rgba(23,164,74,.22) }
+  #qsView tbody tr:hover td.st-sell-bad{ background:rgba(223,48,48,.2) }
+  #qsView tbody tr:hover td.st-weak{ background:rgba(234,166,10,.2) }
+  #qsView tbody tr:hover td.st-ctx{ background:rgba(42,109,181,.17) }
 
   /* verdict — a solid buy/sell tag like an order ticket */
   .qs-verdict{ font-weight:600; padding:2px 8px; border-radius:2px; font-size:10.5px; letter-spacing:.5px;
     white-space:nowrap; display:inline-block; line-height:1.5; border:0.5px solid }
-  .qs-verdict-buy     { color:#fff; background:#16a35c; border-color:#0f8a4b }
-  .qs-verdict-sell    { color:#fff; background:#e5403a; border-color:#cc352f }
+  .qs-verdict-buy     { color:#fff; background:#128a3c; border-color:#0e7330 }
+  .qs-verdict-sell    { color:#fff; background:#d62b2b; border-color:#bf2626 }
   .qs-verdict-neutral { color:var(--ink-soft,#6a706e); background:var(--card,#fff); border-color:rgba(20,25,30,.22) }
-  .qs-verdict-blocked { color:#96690a; background:rgba(234,160,17,.16); border-color:#dcb04e }
+  .qs-verdict-blocked { color:#96690a; background:rgba(234,166,10,.16); border-color:#dcb04e }
   .qs-tier-lbl{ font-size:8.5px; color:var(--ink-faint); letter-spacing:.5px; margin-left:5px; text-transform:uppercase }
   .qs-tier-weak .qs-verdict, .qs-verdict.qs-tier-weak{ opacity:.9 }
 
@@ -649,7 +650,7 @@
   .qs-meter{ margin-top:4px; height:5px; width:132px; max-width:100%; display:flex; gap:2px;
     background:rgba(20,25,30,.08); border-radius:1px; overflow:hidden }
   .qs-meter span{ display:block }
-  .qs-meter .b{ background:#16b06a } .qs-meter .s{ background:#ec4034 }
+  .qs-meter .b{ background:#17a44a } .qs-meter .s{ background:#df3030 }
   /* Option B: verdict header on one row (badge · meter · B/S), detail on one line */
   .qs-meter-inline{ display:inline-flex; width:66px; height:5px; margin:0; vertical-align:middle }
   .qs-vhead{ display:flex; align-items:center; gap:6px; flex-wrap:nowrap; white-space:nowrap }
@@ -661,7 +662,7 @@
   .qs-subscore-inline{ font-size:9.5px; color:var(--ink-soft,#5c636d); font-weight:500; margin-left:6px; letter-spacing:.2px }
   .qs-held{ display:inline-block; margin-left:5px; padding:0 4px; border-radius:2px;
     font-size:8.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.3px;
-    color:#96690a; background:rgba(234,160,17,.16); border:0.5px solid #dcb04e;
+    color:#96690a; background:rgba(234,166,10,.16); border:0.5px solid #dcb04e;
     vertical-align:middle; cursor:default }
 
   /* Colour key — swatches mirror the exact cell tint + lean bar of the table. */
@@ -669,15 +670,15 @@
     font-family:ui-monospace,Menlo,monospace }
   .qs-key span{ display:inline-flex; align-items:center; gap:6px; font-size:9.5px; color:var(--ink-soft,#5c636d) }
   .qs-key i{ width:15px; height:12px; border-radius:2px; flex:none }
-  .qs-key i.k-good{ background:rgba(22,176,106,.15); box-shadow:inset 0 -2px 0 #16b06a }
-  .qs-key i.k-sell{ background:rgba(236,64,52,.13); box-shadow:inset 0 -2px 0 #ec4034 }
-  .qs-key i.k-weak{ background:rgba(234,160,17,.14); box-shadow:inset 0 -2px 0 #eaa011 }
-  .qs-key i.k-ctx { background:rgba(47,131,230,.11); box-shadow:inset 0 -2px 0 #2f83e6 }
+  .qs-key i.k-good{ background:rgba(23,164,74,.15); box-shadow:inset 0 -2px 0 #17a44a }
+  .qs-key i.k-sell{ background:rgba(223,48,48,.13); box-shadow:inset 0 -2px 0 #df3030 }
+  .qs-key i.k-weak{ background:rgba(234,166,10,.14); box-shadow:inset 0 -2px 0 #eaa60a }
+  .qs-key i.k-ctx { background:rgba(42,109,181,.11); box-shadow:inset 0 -2px 0 #2a6db5 }
   .qs-key i.k-none{ background:transparent; box-shadow:inset 0 -2px 0 rgba(20,25,30,.14) }
   .qs-key b.k-buy{ display:inline-block; font-size:8px; font-weight:600; letter-spacing:.4px;
-    color:#fff; background:#16a35c; border-radius:2px; padding:1px 5px }
+    color:#fff; background:#128a3c; border-radius:2px; padding:1px 5px }
   .qs-key b.k-sellt{ display:inline-block; font-size:8px; font-weight:600; letter-spacing:.4px;
-    color:#fff; background:#e5403a; border-radius:2px; padding:1px 5px }
+    color:#fff; background:#d62b2b; border-radius:2px; padding:1px 5px }
 
   /* ---- mobile: reflow the grid into one card per ticker (no h-scroll) ---- */
   @media (max-width:760px){
@@ -688,8 +689,8 @@
     #qsView tbody tr{ box-sizing:border-box; width:100%; max-width:100%; display:flex; flex-wrap:wrap; align-items:baseline;
       border:0.5px solid rgba(20,25,30,.16); border-left:3px solid var(--ink-faint);
       border-radius:3px; padding:10px 12px; margin-bottom:10px }
-    #qsView tbody tr.qs-row-buy{ border-left-color:#16b06a }
-    #qsView tbody tr.qs-row-sell{ border-left-color:#ec4034 }
+    #qsView tbody tr.qs-row-buy{ border-left-color:#17a44a }
+    #qsView tbody tr.qs-row-sell{ border-left-color:#df3030 }
     #qsView tbody td{ box-sizing:border-box; border:none; box-shadow:none !important; padding:2px 0; white-space:normal; text-align:left }
     #qsView tbody td.idx{ display:none }
     #qsView tbody td.co-cell{ flex:1 1 55%; font-size:14px }
