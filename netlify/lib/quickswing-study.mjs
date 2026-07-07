@@ -53,10 +53,11 @@ export function profitFactor(rets) {
 /* ---------- 1. Labeling: entries + forward bars for one ticker ----------
    `hist`/`spyHist` are newest-first (index 0 = most recent). For a signal at
    index i, forward bars are the more-recent indices i-1, i-2, … i-maxHorizon. */
-export function labelTicker(sym, hist, spyHist, earningsHist, { minBars = 200, maxHorizon = 10, vixHist = null } = {}) {
+export function labelTicker(sym, hist, spyHist, earningsHist, { minBars = 200, maxHorizon = 10, vixHist = null, maskFactors = null } = {}) {
   const out = [];
   if (!Array.isArray(hist) || hist.length < minBars + 2) return out;
   const len = hist.length;
+  const opts = maskFactors ? { maskFactors: maskFactors instanceof Set ? maskFactors : new Set(maskFactors) } : {};
 
   // Detail (verdict + factors) and 5-SMA at every index with enough history.
   const detailAt = new Array(len).fill(null);
@@ -67,7 +68,7 @@ export function labelTicker(sym, hist, spyHist, earningsHist, { minBars = 200, m
     const date = hist[i].date;
     const spyAsOf = spyHist ? histAsOf(spyHist, date) : null;
     if (spyAsOf && spyAsOf.length < minBars) continue; // keep the SPY regime well-defined
-    detailAt[i] = historicalScoreDetail(hAsOf, spyAsOf, earningsHist, date, undefined, vixHist);
+    detailAt[i] = historicalScoreDetail(hAsOf, spyAsOf, earningsHist, date, undefined, vixHist, opts);
     sma5At[i] = sma(hAsOf.map(b => b.close), 5);
   }
 

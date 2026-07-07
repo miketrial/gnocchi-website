@@ -44,7 +44,11 @@ export const BT_SEED_DAYS = 15;   // history backfilled the first time a ticker 
 //      2.5×ATR stop and the flip. From a 90-name / 2-year study, exiting into
 //      strength ~doubled win rate (55%→76–85%) and cut hold time ~5× vs holding
 //      to the flip, robust across the broad universe AND the volatile watchlist.
-export const BT_SEED_VERSION = 11;
+// v12: REV (reversal candle) descored — computed/shown but no longer votes on the
+//      buy/sell score. It rewarded strong closes, which fade next day on a mean-
+//      reversion horizon; removing it modestly beat keeping it and never hurt
+//      across the same study (scripts/investigate-rev.mjs, scripts/ab-rev.mjs).
+export const BT_SEED_VERSION = 12;
 
 // Stop-loss: a long is cut once price falls 2.5×ATR(5)-at-entry below the entry;
 // a short is cut once price rises 2.5×ATR(5)-at-entry above the entry (symmetric).

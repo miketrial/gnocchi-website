@@ -662,6 +662,19 @@ export async function getMarketRegime() {
    scale both totals down/up via multipliers rather than hard-blocking —
    only the earnings gate is a hard block, applied to the final verdict. */
 const QS_MAX_SCORE = 24;
+
+// Factor order for the mirrored array (used to descore by key).
+const MIRRORED_KEYS = ["RSI", "%B", "CLX", "REV", "RS", "AH"];
+// Factors that are still computed and shown in the grid but DO NOT vote on the
+// BUY/SELL score. REV (reversal candle) was found inverted for a next-day
+// mean-reversion horizon — it credits a strong close, but weak closes bounce
+// more next day; removing it modestly beat keeping it across a 90-name / 2-year
+// A/B and never hurt (scripts/investigate-rev.mjs, scripts/ab-rev.mjs). Kept in
+// the grid as context. QS_MAX_SCORE stays 24 on purpose: descoring a factor
+// lowers reachable scores, which also raises the entry bar — part of the
+// measured improvement.
+const QS_DESCORED = new Set(["REV"]);
+
 function liqMultiplierFor(points) {
   if (points == null) return 1.0; // unknown — don't penalize
   return points === 3 ? 1.0 : points === 2 ? 0.85 : points === 1 ? 0.6 : 0.35;
@@ -867,8 +880,10 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
   const buyVerdicts = [...mirrored.map(c => c.buy.verdict), ...shared.map(c => c.verdict)];
   const sellVerdicts = [...mirrored.map(c => c.sell.verdict), ...shared.map(c => c.verdict)];
 
-  const rawBuyScore = mirrored.reduce((s, c) => s + (c.buy.points ?? 0), 0) + shared.reduce((s, c) => s + (c.points ?? 0), 0);
-  const rawSellScore = mirrored.reduce((s, c) => s + (c.sell.points ?? 0), 0) + shared.reduce((s, c) => s + (c.points ?? 0), 0);
+  // REV (and anything in QS_DESCORED) is computed for the grid but excluded from
+  // the score sums — see the QS_DESCORED note. Shared factors are never descored.
+  const rawBuyScore = mirrored.reduce((s, c, i) => s + (QS_DESCORED.has(MIRRORED_KEYS[i]) ? 0 : (c.buy.points ?? 0)), 0) + shared.reduce((s, c) => s + (c.points ?? 0), 0);
+  const rawSellScore = mirrored.reduce((s, c, i) => s + (QS_DESCORED.has(MIRRORED_KEYS[i]) ? 0 : (c.sell.points ?? 0)), 0) + shared.reduce((s, c) => s + (c.points ?? 0), 0);
 
   const liqMultiplier = liqMultiplierFor(liq.points);
   const adrMultiplier = adrMultiplierFor(adr.points);
@@ -1004,7 +1019,7 @@ function vixCloseAsOf(vixHist, dateStr) {
    study). historicalVerdict() below delegates here and returns just .verdict, so
    the seed replay's behavior is unchanged. The AH leg is n/a historically (no
    after-hours series), so it is excluded from the returned `factors`. */
-export function historicalScoreDetail(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers = GAP_DAMPER_TIERS, vixHist = null) {
+export function historicalScoreDetail(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers = GAP_DAMPER_TIERS, vixHist = null, opts = {}) {
   const mRsi = checkRsi2(hAsOf);
   const mBoll = checkBollinger(hAsOf);
   const mClx = checkVolumeClimax(hAsOf);
@@ -1018,8 +1033,16 @@ export function historicalScoreDetail(hAsOf, spyAsOf, earningsHist, asOfDate, ga
   const adr = checkAdr(hAsOf);
   const liq = checkLiquidity(hAsOf);
 
-  const rawBuyScore = mirrored.reduce((s, c) => s + (c.buy.points ?? 0), 0) + shared.reduce((s, c) => s + (c.points ?? 0), 0);
-  const rawSellScore = mirrored.reduce((s, c) => s + (c.sell.points ?? 0), 0) + shared.reduce((s, c) => s + (c.points ?? 0), 0);
+  // Factor-attribution A/B hook: opts.maskFactors is a Set of factor keys whose
+  // points are zeroed before scoring, so a study can measure "what if we dropped
+  // factor X". No mask (the production path) = exact original behavior.
+  const mask = opts.maskFactors instanceof Set ? opts.maskFactors : null;
+  const keyed = [["RSI", mRsi], ["%B", mBoll], ["CLX", mClx], ["REV", mRev], ["RS", mRs], ["AH", mAh]];
+  const keyedShared = [["DRY", dry], ["EXP", exp]];
+  const rawBuyScore = keyed.reduce((s, [k, c]) => s + (mask?.has(k) ? 0 : (c.buy.points ?? 0)), 0)
+    + keyedShared.reduce((s, [k, c]) => s + (mask?.has(k) ? 0 : (c.points ?? 0)), 0);
+  const rawSellScore = keyed.reduce((s, [k, c]) => s + (mask?.has(k) ? 0 : (c.sell.points ?? 0)), 0)
+    + keyedShared.reduce((s, [k, c]) => s + (mask?.has(k) ? 0 : (c.points ?? 0)), 0);
 
   const liqMultiplier = liqMultiplierFor(liq.points);
   const adrMultiplier = adrMultiplierFor(adr.points);
@@ -1071,9 +1094,12 @@ export function historicalScoreDetail(hAsOf, spyAsOf, earningsHist, asOfDate, ga
 }
 
 /* Compute just the headline verdict for one historical close. Thin wrapper over
-   historicalScoreDetail so the seed replay keeps its original signature. */
+   historicalScoreDetail — passes QS_DESCORED so the seed replay scores the same
+   factors the live scorer does (REV excluded), keeping the Backtest Log and the
+   live table consistent. (historicalScoreDetail itself stays neutral — scores
+   whatever it's told — so the attribution/A-B tooling can still toggle REV.) */
 function historicalVerdict(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers = GAP_DAMPER_TIERS, vixHist = null) {
-  return historicalScoreDetail(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers, vixHist).verdict;
+  return historicalScoreDetail(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers, vixHist, { maskFactors: QS_DESCORED }).verdict;
 }
 
 /* Replay the last `daysBack` sessions and fold each day's verdict through the

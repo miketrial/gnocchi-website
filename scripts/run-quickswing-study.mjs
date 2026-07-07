@@ -16,28 +16,8 @@ import { cleanHist } from "../netlify/lib/quickswing-pipeline.mjs";
 import {
   labelTicker, attributionReport, exitGridReport, FACTOR_KEYS,
 } from "../netlify/lib/quickswing-study.mjs";
+import { UNIVERSE } from "./universe.mjs";
 import { writeFileSync } from "node:fs";
-
-/* ~90 liquid US large/mid-caps across sectors. Static list = deterministic and
-   avoids a survivorship-prone "current constituents" fetch — but note it IS
-   today's survivors, so read the universe numbers as indicative, and lean on the
-   watchlist cross-check for what actually applies to your names. */
-const UNIVERSE = [
-  // Mega tech / software
-  "AAPL","MSFT","GOOGL","AMZN","META","NVDA","TSLA","AVGO","ORCL","CRM","ADBE","NOW","SNOW","PLTR","PANW","CRWD","DDOG","NET","SHOP","UBER","NFLX",
-  // Semis
-  "AMD","INTC","MU","QCOM","TXN","AMAT","LRCX","KLAC","NXPI","ON","MRVL","ADI","MCHP","ASYS",
-  // Financials
-  "JPM","BAC","WFC","GS","MS","C","SCHW","AXP","V","MA","BLK","COF",
-  // Health
-  "UNH","JNJ","LLY","PFE","MRK","ABBV","TMO","ISRG","AMGN","GILD","BMY",
-  // Consumer / retail
-  "WMT","COST","HD","LOW","NKE","SBUX","MCD","TGT","DIS","BKNG","CMG",
-  // Energy / industrials / materials
-  "XOM","CVX","COP","SLB","OXY","BA","CAT","DE","GE","HON","UPS","LMT","FCX",
-  // Comms / other liquid movers
-  "CMCSA","T","VZ","PYPL","COIN","MRNA","SMCI","DELL","MRVL",
-];
 
 const MIN_BARS = 200;      // history warmup so the SPY-200DMA regime is defined
 const HORIZON_DEFAULT = 3; // forward-return horizon (trading days) for attribution
