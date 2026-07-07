@@ -306,8 +306,11 @@ export async function deleteQuickswingTrades(ticker) {
 export async function getQsAlertState(ticker) {
   return qsAlertStore().get(ticker.toUpperCase(), { type: "json" }).catch(() => null);
 }
-export async function putQsAlertState(ticker, verdict) {
-  await qsAlertStore().setJSON(ticker.toUpperCase(), { verdict, at: new Date().toISOString() });
+export async function putQsAlertState(ticker, verdict, pos = null) {
+  // `verdict` = last verdict we alerted on (entry dedup). `pos` = the open
+  // "alert position" (entry price/side/stop/sessions-held) the take-profit /
+  // time-stop exit alert tracks; null when flat. Older blobs have no `pos`.
+  await qsAlertStore().setJSON(ticker.toUpperCase(), { verdict, pos, at: new Date().toISOString() });
 }
 export async function deleteQsAlertState(ticker) {
   await qsAlertStore().delete(ticker.toUpperCase()).catch(() => {});

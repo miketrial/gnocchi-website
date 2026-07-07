@@ -82,6 +82,59 @@ function fmtPrice(p) {
   return p == null ? "n/a" : `$${Number(p).toFixed(2)}`;
 }
 
+/* ---------- Live position exit (take-profit / stop / time) ----------
+   The alert worker tracks the entry it told you to take (an "alert position" on
+   the qs-alert-state blob) and pings you to EXIT using the SAME rule the paper-
+   trade backtest books (quickswing-backtest.mjs v11): priority STOP → TARGET →
+   FLIP → TIME. The threshold constants are imported from the backtest module by
+   the worker so the two can't drift.
+
+   One deliberate difference from the backtest: TARGET here fires on the live
+   INTRADAY price crossing back above entry (a long), not the daily close — so the
+   ping is timely ("you're green, book it") rather than end-of-day. FLIP is
+   surfaced by the worker as the opposite-side entry alert, so it's not messaged
+   here as a separate exit. */
+export function makeAlertPosition(row, side, sessionDate) {
+  return {
+    side,                                   // "long" | "short"
+    entryPrice: row?.price ?? null,
+    entryDate: sessionDate ?? null,
+    entrySessionDate: sessionDate ?? null,
+    lastSessionDate: sessionDate ?? null,
+    barsHeld: 0,
+    stopPrice: row?.stop?.price ?? null,    // the 2.5×ATR stop the scorer already computed
+  };
+}
+
+export function positionExitDecision(pos, row, timeStopDays = 3) {
+  if (!pos) return { reason: null };
+  const price = row?.price;
+  if (!(price > 0)) return { reason: null };
+  const long = pos.side === "long";
+  if (pos.stopPrice != null && (long ? price <= pos.stopPrice : price >= pos.stopPrice)) return { reason: "STOP" };
+  if (pos.entryPrice != null && (long ? price > pos.entryPrice : price < pos.entryPrice)) return { reason: "TARGET" };
+  if (long ? row?.verdict === "SELL" : row?.verdict === "BUY") return { reason: "FLIP" };
+  if ((pos.barsHeld ?? 0) >= timeStopDays) return { reason: "TIME" };
+  return { reason: null };
+}
+
+export function formatExitAlert(row, reason, pos, session = "regular") {
+  const prefix = session === "afterhours" ? "🌙 AH " : "";
+  const sym = esc(row?.sym ?? "?");
+  const long = pos?.side === "long";
+  const label = reason === "TARGET" ? "took profit" : reason === "STOP" ? "stopped out" : reason === "TIME" ? "timed out" : "exit";
+  const emoji = reason === "TARGET" ? "✅" : reason === "STOP" ? "🛑" : "⚪️";
+  const price = fmtPrice(row?.price);
+  const lines = [`${prefix}${emoji} <b>${sym} — EXIT</b> (${label})`];
+  if (pos?.entryPrice != null && row?.price != null) {
+    const pl = ((row.price - pos.entryPrice) / pos.entryPrice) * 100 * (long ? 1 : -1);
+    lines.push(`${long ? "Long" : "Short"} ${fmtPrice(pos.entryPrice)} → ${price}${row?.priceIsLive ? " (live)" : ""} (${pl >= 0 ? "+" : ""}${pl.toFixed(2)}%)`);
+  } else {
+    lines.push(`Price ${price}${row?.priceIsLive ? " (live)" : ""}`);
+  }
+  return lines.join("\n");
+}
+
 export function formatAlert(row, kind, session = "regular") {
   const prefix = session === "afterhours" ? "🌙 AH " : "";
   const sym = esc(row?.sym ?? "?");

@@ -110,7 +110,7 @@ function validPricePoint(date, close) {
 
 /* Build a clean, deduped, newest-first OHLCV array from FMP's raw hist feed.
    Every downstream check reads from this, never from the raw fetch. */
-function cleanHist(hist) {
+export function cleanHist(hist) {
   const seen = new Set();
   const out = [];
   for (const d of hist || []) {
@@ -962,7 +962,7 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
    recording. */
 
 /* Newest-first slice of `hist` as of (and including) `asOfDate`. */
-function histAsOf(hist, asOfDate) {
+export function histAsOf(hist, asOfDate) {
   return hist.filter(d => d.date <= asOfDate);
 }
 
@@ -997,18 +997,24 @@ function vixCloseAsOf(vixHist, dateStr) {
   return null;
 }
 
-/* Compute just the headline verdict for one historical close — the EOD subset
-   of scoreTickerQuickSwing, reusing the same factor functions and multipliers. */
-function historicalVerdict(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers = GAP_DAMPER_TIERS, vixHist = null) {
-  const mirrored = [
-    checkRsi2(hAsOf),
-    checkBollinger(hAsOf),
-    checkVolumeClimax(hAsOf),
-    checkReversalCandle(hAsOf),
-    checkRelativeStrength(hAsOf, spyAsOf),
-    naMirror("No historical after-hours data"), // AH leg — not reconstructable
-  ];
-  const shared = [checkVolumeDryUp(hAsOf), checkAtrExpansion(hAsOf)];
+/* Full EOD-subset score detail for one historical close — the reconstructable
+   part of scoreTickerQuickSwing, reusing the same factor functions and
+   multipliers. Returns the verdict PLUS the per-factor buy/sell points and value
+   (for the factor-attribution study) and the entry bar / atr5 (for the exit
+   study). historicalVerdict() below delegates here and returns just .verdict, so
+   the seed replay's behavior is unchanged. The AH leg is n/a historically (no
+   after-hours series), so it is excluded from the returned `factors`. */
+export function historicalScoreDetail(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers = GAP_DAMPER_TIERS, vixHist = null) {
+  const mRsi = checkRsi2(hAsOf);
+  const mBoll = checkBollinger(hAsOf);
+  const mClx = checkVolumeClimax(hAsOf);
+  const mRev = checkReversalCandle(hAsOf);
+  const mRs = checkRelativeStrength(hAsOf, spyAsOf);
+  const mAh = naMirror("No historical after-hours data"); // AH leg — not reconstructable
+  const mirrored = [mRsi, mBoll, mClx, mRev, mRs, mAh];
+  const dry = checkVolumeDryUp(hAsOf);
+  const exp = checkAtrExpansion(hAsOf);
+  const shared = [dry, exp];
   const adr = checkAdr(hAsOf);
   const liq = checkLiquidity(hAsOf);
 
@@ -1035,14 +1041,39 @@ function historicalVerdict(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers = GA
   const sellScore = Math.min(QS_MAX_SCORE, Math.round(rawSellScore * liqMultiplier * adrMultiplier * regimeMultiplierSell * vixMult * gapMult));
   const blocked = historicalEarningsBlocked(earningsHist, asOfDate);
   const { forceBuy, forceSell } = extremeReads(mirrored);
-  const { verdict } = deriveVerdict({ buyScore, sellScore, blocked, forceBuy, forceSell });
+  let { verdict } = deriveVerdict({ buyScore, sellScore, blocked, forceBuy, forceSell });
   // Same high-conviction gates as the live scorer — a BUY must be a market leader
   // (RS ≥ 0), a SELL must be a laggard (RS ≤ 0). (The replay gates every entry;
   // the live scorer only gates fresh ones, but a re-gate that returns NEUTRAL is
   // never itself an exit in the trade log, so the two converge on closed trades.)
-  if (verdict === "BUY" && !buyConvictionOk(mirrored)) return "NEUTRAL";
-  if (verdict === "SELL" && !sellConvictionOk(mirrored)) return "NEUTRAL";
-  return verdict;
+  if (verdict === "BUY" && !buyConvictionOk(mirrored)) verdict = "NEUTRAL";
+  if (verdict === "SELL" && !sellConvictionOk(mirrored)) verdict = "NEUTRAL";
+
+  const b0 = hAsOf[0];
+  return {
+    verdict, buyScore, sellScore, forceBuy, forceSell, blocked,
+    regimeFavorable,
+    bar: { date: b0.date, open: b0.open, high: b0.high, low: b0.low, close: b0.close },
+    atr5: atrFrom(hAsOf, 0, 5),
+    // Per-factor points on each side + raw value. Shared factors (DRY/EXP) feed
+    // both sides equally, so buy === sell for those.
+    factors: [
+      { key: "RSI", buy: mRsi.buy.points, sell: mRsi.sell.points, value: mRsi.value },
+      { key: "%B",  buy: mBoll.buy.points, sell: mBoll.sell.points, value: mBoll.value },
+      { key: "CLX", buy: mClx.buy.points, sell: mClx.sell.points, value: mClx.value },
+      { key: "REV", buy: mRev.buy.points, sell: mRev.sell.points, value: mRev.value },
+      { key: "RS",  buy: mRs.buy.points, sell: mRs.sell.points, value: mRs.value },
+      { key: "DRY", buy: dry.points, sell: dry.points, value: dry.value },
+      { key: "EXP", buy: exp.points, sell: exp.points, value: exp.value },
+    ],
+    gates: { adr: adr.points, liq: liq.points },
+  };
+}
+
+/* Compute just the headline verdict for one historical close. Thin wrapper over
+   historicalScoreDetail so the seed replay keeps its original signature. */
+function historicalVerdict(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers = GAP_DAMPER_TIERS, vixHist = null) {
+  return historicalScoreDetail(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers, vixHist).verdict;
 }
 
 /* Replay the last `daysBack` sessions and fold each day's verdict through the
