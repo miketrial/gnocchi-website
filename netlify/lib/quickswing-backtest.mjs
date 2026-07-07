@@ -2,17 +2,21 @@
    "As-if" paper-trade backtest for the Bounce (Quick Swing) view.
 
    The screener already emits a BUY / SELL / NEUTRAL / BLOCKED verdict on every
-   scan. This module turns that stream of verdicts into a running trade log:
+   scan. This module turns that stream of verdicts into a running trade log —
+   bidirectional, mirroring the two-sided model:
 
-     - Enter (long) the first time the verdict reads BUY.
-     - Hold while it stays BUY.
-     - Exit the moment it stops being BUY (flips to NEUTRAL / SELL / BLOCKED),
-       booking a closed trade with P/L.
+     - Flat: a BUY opens a paper LONG; a SELL opens a paper SHORT.
+     - Hold through NEUTRAL / BLOCKED (they are not exits, same as the live model).
+     - Exit a long on its 2.5×ATR stop or a SELL flip; exit a short on its stop or
+       a BUY flip. A signal flip closes the open trade and, at the same price,
+       opens the opposite side (a SELL flips a long into a short and vice-versa);
+       a stop-out closes to flat with no same-bar reversal.
+     - Book each closed trade with side-aware P/L ((exit−entry) long, (entry−exit)
+       short).
 
-   Long-only, forward-accumulating — no historical replay, no short side. The
-   log is the source of truth for the endpoint + UI; nothing here hits the
-   network. Self-contained and removable with the rest of the QUICK SWING
-   FEATURE block (see the checklist in quickswing-pipeline.mjs). */
+   Forward-accumulating; the log is the source of truth for the endpoint + UI;
+   nothing here hits the network. Self-contained and removable with the rest of
+   the QUICK SWING FEATURE block (see the checklist in quickswing-pipeline.mjs). */
 
 const MAX_CLOSED = 200; // cap the per-ticker closed-trade history
 // Rolling window: a trade drops off once its ENTRY is older than this. Pruning
@@ -31,9 +35,13 @@ export const BT_SEED_DAYS = 15;   // history backfilled the first time a ticker 
 // v7: overnight-gap BUY-conviction damper (gappier names need a stronger read).
 // v8: 15-day window, pruned by ENTRY date (was 50-day, pruned by exit).
 // v9: 2.5×ATR(5) stop-loss exit (in addition to the SELL flip).
-export const BT_SEED_VERSION = 9;
+// v10: bidirectional — a SELL opens a paper SHORT (was long-only, SELL = exit
+//      only); SELL side gains the RS-laggard gate + overnight-gap damper; the
+//      replay's VIX leg is reconstructed from ^VIX EOD instead of neutralized.
+export const BT_SEED_VERSION = 10;
 
-// Stop-loss: a long is cut once price falls 2.5×ATR(5)-at-entry below the entry.
+// Stop-loss: a long is cut once price falls 2.5×ATR(5)-at-entry below the entry;
+// a short is cut once price rises 2.5×ATR(5)-at-entry above the entry (symmetric).
 // Calibrated on an 8-ticker/250-session replay: vs the SELL-only rule it trims
 // the worst trade from −26% to −14% while keeping ~98% of cumulative P&L and the
 // full win rate — wide, volatility-scaled so normal wiggles breathe but a real
@@ -152,74 +160,114 @@ export function recordQuickswingTransition(newRow, prevLog) {
   // price leaves any open position untouched (we simply skip this datapoint).
   if (!newRow || newRow.error || !(newRow.price > 0)) return log;
 
+  // Open a fresh paper position on `side`, pinning the stop at entry: entry −
+  // 2.5×ATR(5) for a long, entry + 2.5×ATR(5) for a short. atr5 rides on the row
+  // (live scorer and the historical replay both supply it); if it's missing the
+  // position simply carries no stop rather than a bogus one.
+  const openPosition = (side) => {
+    const atr5 = newRow.atr5 > 0 ? newRow.atr5 : null;
+    const stopPrice = atr5
+      ? round2(side === "short" ? newRow.price + QS_STOP_ATR_MULT * atr5
+                                : newRow.price - QS_STOP_ATR_MULT * atr5)
+      : null;
+    return {
+      sym: newRow.sym,
+      side,
+      entryAt: new Date().toISOString(),
+      entryScoredAt: newRow.scored_at || null,
+      entryPrice: newRow.price,
+      entryPriceIsLive: !!newRow.priceIsLive,
+      atr5,
+      stopPrice,
+    };
+  };
+
+  // Book the open position `o` as a closed trade. P/L is side-aware: a long earns
+  // (exit−entry)/entry, a short earns (entry−exit)/entry.
+  const closePosition = (o, exitPrice, exitReason) => {
+    const gross = o.side === "short" ? (o.entryPrice - exitPrice) : (exitPrice - o.entryPrice);
+    const pnlPct = Math.round((gross / o.entryPrice) * 100 * 100) / 100;
+    log.closed = [{
+      sym: o.sym,
+      side: o.side,
+      entryAt: o.entryAt,
+      entryScoredAt: o.entryScoredAt,
+      entryPrice: o.entryPrice,
+      entryPriceIsLive: o.entryPriceIsLive,
+      stopPrice: o.stopPrice ?? null,
+      exitAt: new Date().toISOString(),
+      exitScoredAt: newRow.scored_at || null,
+      exitPrice,
+      exitPriceIsLive: !!newRow.priceIsLive,
+      exitReason, // "STOP" | "SELL" (long flip) | "BUY" (short cover)
+      pnlPct,
+      holdDays: holdDaysBetween(o.entryScoredAt || o.entryAt, newRow.scored_at || new Date().toISOString()),
+    }, ...log.closed].slice(0, MAX_CLOSED);
+  };
+
   if (!log.open) {
-    // Flat: a BUY opens a paper long. Anything else is a no-op.
-    if (newRow.verdict === "BUY") {
-      // Pin the stop at entry: entry − 2.5×ATR(5)-at-entry. atr5 rides on the row
-      // (live scorer and the historical replay both supply it); if it's missing
-      // the position simply carries no stop rather than a bogus one.
-      const atr5 = newRow.atr5 > 0 ? newRow.atr5 : null;
-      log.open = {
-        sym: newRow.sym,
-        entryAt: new Date().toISOString(),
-        entryScoredAt: newRow.scored_at || null,
-        entryPrice: newRow.price,
-        entryPriceIsLive: !!newRow.priceIsLive,
-        atr5,
-        stopPrice: atr5 ? round2(newRow.price - QS_STOP_ATR_MULT * atr5) : null,
-      };
-    }
+    // Flat: a BUY opens a paper long, a SELL opens a paper short. NEUTRAL/BLOCKED
+    // are no-ops.
+    if (newRow.verdict === "BUY") log.open = openPosition("long");
+    else if (newRow.verdict === "SELL") log.open = openPosition("short");
     return log;
   }
 
   const o = log.open;
 
-  // Exit rule, in priority order:
+  // Exit priority:
   //  1. STOP — price broke the entry-time 2.5×ATR stop. Cut regardless of verdict
-  //     (a mean-reversion read may scream BUY into a crash; the stop overrides).
-  //  2. SELL — the verdict flipped to an actual overbought reversal. NEUTRAL alone
-  //     is NOT an exit: backtested across 250 sessions, holding until SELL rather
-  //     than bailing on the first non-BUY read roughly DOUBLED avg P/L per trade
-  //     (+3.2% vs +1.6%) at equal win rate. Trade-off: longer holds. See the study.
-  // A stop breach on a completed daily bar (replay) is the day's LOW piercing the
-  // stop; on a live snapshot it's the current price. Fill: a gap through the stop
-  // at the open fills at the open; an intraday touch is assumed filled at the stop.
-  let exitPrice = null, exitReason = null;
+  //     (a mean-reversion read may scream BUY into a crash; the stop overrides)
+  //     and go flat — a stop-out is a risk event, never a same-bar reversal.
+  //  2. FLIP — the verdict crossed to the opposite side (long → SELL, short → BUY):
+  //     the actual reversal signal. NEUTRAL / BLOCKED / same-side is NOT an exit —
+  //     backtested across 250 sessions, holding until the flip rather than bailing
+  //     on the first non-directional read roughly DOUBLED avg P/L per trade
+  //     (+3.2% vs +1.6%) at equal win rate. A flip closes the trade and, at the
+  //     same price, opens the opposite side (the flip signal is itself an entry).
+  // A stop breach on a completed daily bar (replay) is the day's LOW piercing a
+  // long stop / the day's HIGH piercing a short stop; on a live snapshot it's the
+  // current price. Fill: a gap through the stop at the open fills at the open; an
+  // intraday touch is assumed filled at the stop.
   if (o.stopPrice != null) {
-    const low = newRow.low > 0 ? newRow.low : null;
-    const breachRef = low != null ? low : newRow.price;
-    if (breachRef > 0 && breachRef <= o.stopPrice) {
-      if (newRow.open > 0 && newRow.open <= o.stopPrice) exitPrice = newRow.open; // gapped below at the open
-      else if (low != null) exitPrice = o.stopPrice;                              // intraday touch
-      else exitPrice = Math.min(newRow.price, o.stopPrice);                       // live snapshot
-      exitReason = "STOP";
+    if (o.side === "long") {
+      const low = newRow.low > 0 ? newRow.low : null;
+      const breachRef = low != null ? low : newRow.price;
+      if (breachRef > 0 && breachRef <= o.stopPrice) {
+        let exitPrice;
+        if (newRow.open > 0 && newRow.open <= o.stopPrice) exitPrice = newRow.open; // gapped below at the open
+        else if (low != null) exitPrice = o.stopPrice;                              // intraday touch
+        else exitPrice = Math.min(newRow.price, o.stopPrice);                       // live snapshot
+        closePosition(o, exitPrice, "STOP");
+        log.open = null;
+        return log;
+      }
+    } else { // short: the stop sits ABOVE entry, breached by the day's HIGH
+      const high = newRow.high > 0 ? newRow.high : null;
+      const breachRef = high != null ? high : newRow.price;
+      if (breachRef > 0 && breachRef >= o.stopPrice) {
+        let exitPrice;
+        if (newRow.open > 0 && newRow.open >= o.stopPrice) exitPrice = newRow.open; // gapped above at the open
+        else if (high != null) exitPrice = o.stopPrice;                             // intraday touch
+        else exitPrice = Math.max(newRow.price, o.stopPrice);                       // live snapshot
+        closePosition(o, exitPrice, "STOP");
+        log.open = null;
+        return log;
+      }
     }
   }
-  if (exitReason == null) {
-    if (newRow.verdict !== "SELL") return log;
-    exitPrice = newRow.price;
-    exitReason = "SELL";
+
+  // No stop. A flip to the opposite side closes the trade and reverses into it at
+  // the same price; NEUTRAL / BLOCKED / same-side holds the position open.
+  if (o.side === "long") {
+    if (newRow.verdict !== "SELL") return log;   // hold the long
+    closePosition(o, newRow.price, "SELL");
+    log.open = openPosition("short");            // flip long → short
+  } else {
+    if (newRow.verdict !== "BUY") return log;    // hold the short
+    closePosition(o, newRow.price, "BUY");
+    log.open = openPosition("long");             // flip short → long
   }
-
-  const pnlPct = Math.round(((exitPrice - o.entryPrice) / o.entryPrice) * 100 * 100) / 100;
-  const closed = {
-    sym: o.sym,
-    entryAt: o.entryAt,
-    entryScoredAt: o.entryScoredAt,
-    entryPrice: o.entryPrice,
-    entryPriceIsLive: o.entryPriceIsLive,
-    stopPrice: o.stopPrice ?? null,
-    exitAt: new Date().toISOString(),
-    exitScoredAt: newRow.scored_at || null,
-    exitPrice,
-    exitPriceIsLive: !!newRow.priceIsLive,
-    exitReason, // "STOP" or "SELL"
-    pnlPct,
-    holdDays: holdDaysBetween(o.entryScoredAt || o.entryAt, newRow.scored_at || new Date().toISOString()),
-  };
-
-  log.closed = [closed, ...log.closed].slice(0, MAX_CLOSED);
-  log.open = null;
   return log;
 }
 /* ===== END QUICK SWING FEATURE ===== */

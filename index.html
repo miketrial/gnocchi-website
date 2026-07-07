@@ -573,76 +573,143 @@
   .wp-trade-card-compact .wp-tc-rr{ border-top-color:rgba(255,255,255,.12) }
   .wp-trade-card-compact .wp-tc-lbl{ color:#6b7280 }
   /* ===== QUICK SWING FEATURE ===== */
-  /* Softer overall palette than the rest of the app's harder-edged tables —
-     Bounce is the tab a beginner is most likely to find intimidating (both
-     directions, gates, multipliers), so it leans on lighter fills, rounder
-     corners, and outlines instead of solid alarm-colored blocks. */
-  .qs-regime{ display:flex;align-items:center;gap:10px;padding:12px 16px;
-    border-radius:10px;margin-bottom:16px;font-size:11.5px;font-weight:600;
-    border:1px solid transparent }
-  .qs-regime.fav{ background:rgba(213,245,227,.4); color:var(--good-fg); border-color:rgba(76,175,135,.3) }
-  .qs-regime.unfav{ background:rgba(250,219,216,.35); color:#9e5548; border-color:rgba(158,46,34,.2) }
-  .qs-regime .qs-regime-dot{ width:8px;height:8px;border-radius:50%;background:currentColor;flex:none }
-  .qs-regime-sub{ font-weight:500;opacity:.8 }
-  .qs-blocked-badge{ font-size:8.5px;font-weight:700;text-transform:uppercase;
-    letter-spacing:.03em;padding:3px 8px;border-radius:8px;
-    background:rgba(250,219,216,.6);color:#9e2e22;white-space:nowrap }
+  /* Terminal restyle — this is the tab that decides real money, so it reads
+     like an instrument: monospace tabular figures, a hairline grid, square
+     corners, and precise (not decorative) colour. Palette matched to Finviz:
+     pure green #17a44a / warm red #df3030 / gold #eaa60a, and #2a6db5 blue for
+     the non-directional context factors. */
+  #qsView table{ font-family:ui-monospace,"SF Mono","SFMono-Regular",Menlo,Consolas,monospace;
+    font-variant-numeric:tabular-nums; border-collapse:collapse; width:100% }
+  #qsView thead th{ font-size:9.5px; letter-spacing:.4px; text-transform:uppercase;
+    color:var(--ink-soft,#6a706e); background:rgba(20,25,30,.035);
+    border-bottom:1px solid rgba(20,25,30,.16); border-right:0.5px solid rgba(20,25,30,.05);
+    padding:5px 7px; white-space:nowrap; vertical-align:middle }
+  #qsView thead th.sortable{ cursor:pointer }
+  #qsView thead th.sortable:hover{ background:rgba(20,25,30,.075) }
+  #qsView thead th.qs-sorted{ color:var(--ink,#16191c); background:rgba(20,25,30,.09) }
+  #qsView thead th.qs-sorted::after{ content:attr(data-arrow); margin-left:3px; opacity:.7; font-size:8px }
+  #qsView tbody td{ padding:3px 8px; line-height:1.25; font-size:11px;
+    border-bottom:0.5px solid rgba(20,25,30,.07); border-right:0.5px solid rgba(20,25,30,.04) }
+  #qsView tbody td br{ line-height:1.25 }
+  #qsView tbody tr:hover td{ background:rgba(20,25,30,.022) }
+  #qsView tbody td.idx{ color:var(--ink-faint); font-size:10px }
+  #qsView tbody td.co-cell b{ font-weight:600; letter-spacing:.3px }
+  /* directional row edge (desktop) */
+  #qsView tbody tr td.co-cell{ box-shadow:inset 3px 0 0 rgba(20,25,30,.14) }
+  #qsView tbody tr.qs-row-buy  td.co-cell{ box-shadow:inset 3px 0 0 #17a44a }
+  #qsView tbody tr.qs-row-sell td.co-cell{ box-shadow:inset 3px 0 0 #df3030 }
+
+  /* status bar (was the soft regime banner) */
+  .qs-regime{ display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:500; letter-spacing:.3px;
+    padding:7px 12px; margin-bottom:12px; border-radius:3px;
+    border:0.5px solid rgba(20,25,30,.16); background:rgba(20,25,30,.02); color:var(--ink,#16191c) }
+  .qs-regime:empty{ display:none }
+  .qs-regime .qs-regime-dot{ width:7px;height:7px;border-radius:1px;background:var(--ink-faint);flex:none }
+  .qs-regime.fav{ color:#0b7a34 } .qs-regime.fav .qs-regime-dot{ background:#17a44a }
+  .qs-regime.unfav{ color:#c02727 } .qs-regime.unfav .qs-regime-dot{ background:#d62b2b }
+  .qs-regime-sub{ font-weight:400; color:var(--ink-soft,#6a706e) }
+  .qs-regime-scan{ margin-left:auto; font-weight:400; color:var(--ink-faint) }
+
+  .qs-blocked-badge{ font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;
+    padding:2px 7px;border-radius:2px;border:0.5px solid #dcb04e;
+    background:rgba(234,166,10,.16);color:#96690a;white-space:nowrap }
   .qs-empty{ padding:32px;text-align:center;color:var(--ink-faint);font-size:12px }
   .qs-row-blocked{ opacity:.6 }
-  /* Per-factor cell coloring — softer/lighter than Short Term's palette,
-     scoped here instead of shared, so this stays independently removable. */
-  #qsView tbody td.st-good{ background:rgba(213,245,227,.35); color:#2e7d54; font-weight:600 }
-  #qsView tbody td.st-ok  { background:rgba(200,238,216,.25); color:#2e7d54; font-weight:500 }
-  #qsView tbody td.st-weak{ background:rgba(253,232,184,.35); color:#9a6f00; font-weight:500 }
-  #qsView tbody td.st-bad { background:rgba(250,219,216,.3);  color:#9e4a3e; font-weight:600 }
-  #qsView tbody td.st-na  { background:rgba(237,231,246,.3);  color:var(--pur-fg); font-weight:500 }
-  #qsView tbody tr:hover td.st-good{ background:rgba(213,245,227,.55) }
-  #qsView tbody tr:hover td.st-ok  { background:rgba(200,238,216,.45) }
-  #qsView tbody tr:hover td.st-weak{ background:rgba(253,232,184,.55) }
-  #qsView tbody tr:hover td.st-bad { background:rgba(250,219,216,.5) }
-  #qsView tbody tr:hover td.st-na  { background:rgba(237,231,246,.5) }
-  /* Bidirectional additions: a mirrored factor (RSI/%B/VolClimax/Reversal/
-     RS/AHMove) picks st-good/st-ok/st-weak when its BUY side is the
-     stronger read, st-sell-bad/st-sell-ok/st-weak when its SELL side is —
-     "bad"/"ok" naming kept parallel to the buy-side classes above (a
-     strong sell read is exactly as notable as a strong buy read, so it
-     gets the same visual weight, just red instead of green). st-neutral is
-     for a mirrored factor where NEITHER side is signaling (0 points both
-     ways) — deliberately unstyled/muted rather than reusing st-bad, since
-     "no signal" isn't the same as "bad" in a two-sided model. */
-  #qsView tbody td.st-sell-bad{ background:rgba(250,219,216,.3); color:#9e4a3e; font-weight:600 }
-  #qsView tbody td.st-sell-ok { background:rgba(253,232,184,.35); color:#9a6f00; font-weight:500 }
-  #qsView tbody td.st-neutral { color:var(--ink-faint); font-weight:400 }
-  #qsView tbody tr:hover td.st-sell-bad{ background:rgba(250,219,216,.5) }
-  #qsView tbody tr:hover td.st-sell-ok { background:rgba(253,232,184,.55) }
-  .qs-verdict{ font-weight:700; padding:1px 7px; border-radius:8px; font-size:9.5px; white-space:nowrap; display:inline-block; line-height:1.5 }
-  .qs-verdict-buy     { background:rgba(213,245,227,.6); color:#2e7d54 }
-  .qs-verdict-sell    { background:rgba(250,219,216,.55); color:#9e4a3e }
-  .qs-verdict-neutral { background:rgba(237,231,246,.3); color:var(--ink-faint) }
-  .qs-verdict-blocked { background:rgba(150,150,150,.15); color:var(--ink-faint) }
-  .qs-tier-strong  { font-weight:800 }
-  .qs-tier-moderate{ font-weight:700 }
-  .qs-tier-weak    { font-weight:500; opacity:.8 }
-  .qs-subscore{ display:block; font-size:9px; color:var(--ink-faint); font-weight:400; margin-top:1px; line-height:1.15 }
-  /* Same look as .qs-subscore but sits inline next to the verdict badge
-     instead of wrapping to its own line — used for the main Buy/Sell
-     summary only; agreement/stop still get their own line below since
-     they're extra detail, not the headline. */
-  .qs-subscore-inline{ font-size:9px; color:var(--ink-faint); font-weight:400; margin-left:6px }
-  /* Sticky-verdict marker: the raw read cooled to NEUTRAL but hysteresis is
-     holding the call. Muted amber chip so it reads as "provisional/held", not
-     a fresh signal. */
-  .qs-held{ display:inline-block; margin-left:5px; padding:0 4px; border-radius:6px;
-    font-size:8.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.3px;
-    color:#c98a1a; background:rgba(201,138,26,0.14); border:1px solid rgba(201,138,26,0.35);
+
+  /* factor cells — brighter screener tints + a 2px colour-coded lean bar under
+     each. Buy lean = green, sell lean = red, weak = amber, no signal = quiet.
+     Context factors (Vol Dry-Up / Expansion) are non-directional, so they get
+     their OWN blue — never mistaken for a buy/sell signal. */
+  #qsView tbody td.st-good{ background:rgba(23,164,74,.15); color:#0b7a34; font-weight:600; box-shadow:inset 0 -2px 0 #17a44a }
+  #qsView tbody td.st-ok  { background:rgba(23,164,74,.08); color:#0b7a34; font-weight:500; box-shadow:inset 0 -2px 0 rgba(23,164,74,.55) }
+  #qsView tbody td.st-weak{ background:rgba(234,166,10,.14); color:#a87400; font-weight:500; box-shadow:inset 0 -2px 0 #eaa60a }
+  #qsView tbody td.st-sell-bad{ background:rgba(223,48,48,.13); color:#c02727; font-weight:600; box-shadow:inset 0 -2px 0 #df3030 }
+  #qsView tbody td.st-sell-ok { background:rgba(223,48,48,.07); color:#c02727; font-weight:500; box-shadow:inset 0 -2px 0 rgba(223,48,48,.55) }
+  #qsView tbody td.st-ctx    { background:rgba(42,109,181,.11); color:#22579c; font-weight:500; box-shadow:inset 0 -2px 0 #2a6db5 }
+  #qsView tbody td.st-ctx-lo { background:rgba(42,109,181,.055); color:#22579c; box-shadow:inset 0 -2px 0 rgba(42,109,181,.5) }
+  #qsView tbody td.st-neutral{ color:#5c636d }
+  #qsView tbody td.st-bad    { color:#5c636d }
+  #qsView tbody td.st-na     { color:#7a808a }
+  #qsView tbody tr:hover td.st-good{ background:rgba(23,164,74,.22) }
+  #qsView tbody tr:hover td.st-sell-bad{ background:rgba(223,48,48,.2) }
+  #qsView tbody tr:hover td.st-weak{ background:rgba(234,166,10,.2) }
+  #qsView tbody tr:hover td.st-ctx{ background:rgba(42,109,181,.17) }
+
+  /* verdict — a solid buy/sell tag like an order ticket */
+  .qs-verdict{ font-weight:600; padding:2px 8px; border-radius:2px; font-size:10.5px; letter-spacing:.5px;
+    white-space:nowrap; display:inline-block; line-height:1.5; border:0.5px solid }
+  .qs-verdict-buy     { color:#fff; background:#128a3c; border-color:#0e7330 }
+  .qs-verdict-sell    { color:#fff; background:#d62b2b; border-color:#bf2626 }
+  .qs-verdict-neutral { color:var(--ink-soft,#6a706e); background:var(--card,#fff); border-color:rgba(20,25,30,.22) }
+  .qs-verdict-blocked { color:#96690a; background:rgba(234,166,10,.16); border-color:#dcb04e }
+  .qs-tier-lbl{ font-size:8.5px; color:var(--ink-faint); letter-spacing:.5px; margin-left:5px; text-transform:uppercase }
+  .qs-tier-weak .qs-verdict, .qs-verdict.qs-tier-weak{ opacity:.9 }
+
+  /* B/S strength meter */
+  .qs-meter{ margin-top:4px; height:5px; width:132px; max-width:100%; display:flex; gap:2px;
+    background:rgba(20,25,30,.08); border-radius:1px; overflow:hidden }
+  .qs-meter span{ display:block }
+  .qs-meter .b{ background:#17a44a } .qs-meter .s{ background:#df3030 }
+  /* Option B: verdict header on one row (badge · meter · B/S), detail on one line */
+  .qs-meter-inline{ display:inline-flex; width:66px; height:5px; margin:0; vertical-align:middle }
+  .qs-vhead{ display:flex; align-items:center; gap:6px; flex-wrap:nowrap; white-space:nowrap }
+  .qs-vdetail{ white-space:nowrap; font-size:9.5px; color:#7a808a; margin-top:3px; letter-spacing:.1px }
+  .qs-vdetail [data-tip]{ cursor:help }
+  .qs-vsep{ color:#c2c7ce; margin:0 3px }
+
+  .qs-subscore{ display:block; font-size:9.5px; color:var(--ink-faint); font-weight:400; margin-top:3px; line-height:1.25 }
+  .qs-subscore-inline{ font-size:9.5px; color:var(--ink-soft,#5c636d); font-weight:500; margin-left:6px; letter-spacing:.2px }
+  .qs-held{ display:inline-block; margin-left:5px; padding:0 4px; border-radius:2px;
+    font-size:8.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.3px;
+    color:#96690a; background:rgba(234,166,10,.16); border:0.5px solid #dcb04e;
     vertical-align:middle; cursor:default }
-  /* A little roomier than the tightest possible layout (still not as dense
-     as Basic/Swing's single-line rows, since these cells stack 2-4 lines),
-     but roughly half the height of the previous pass — that one over-
-     corrected too far toward spacious. */
-  #qsView tbody td{ padding:3px 8px; line-height:1.15 }
-  #qsView tbody td br{ line-height:1.2 }
-  #qsView thead th{ padding-top:6px; padding-bottom:8px }
+
+  /* Colour key — swatches mirror the exact cell tint + lean bar of the table. */
+  .qs-key{ display:flex; flex-wrap:wrap; gap:7px 18px; width:100%; margin:2px 0 8px;
+    font-family:ui-monospace,Menlo,monospace }
+  .qs-key span{ display:inline-flex; align-items:center; gap:6px; font-size:9.5px; color:var(--ink-soft,#5c636d) }
+  .qs-key i{ width:15px; height:12px; border-radius:2px; flex:none }
+  .qs-key i.k-good{ background:rgba(23,164,74,.15); box-shadow:inset 0 -2px 0 #17a44a }
+  .qs-key i.k-sell{ background:rgba(223,48,48,.13); box-shadow:inset 0 -2px 0 #df3030 }
+  .qs-key i.k-weak{ background:rgba(234,166,10,.14); box-shadow:inset 0 -2px 0 #eaa60a }
+  .qs-key i.k-ctx { background:rgba(42,109,181,.11); box-shadow:inset 0 -2px 0 #2a6db5 }
+  .qs-key i.k-none{ background:transparent; box-shadow:inset 0 -2px 0 rgba(20,25,30,.14) }
+  .qs-key b.k-buy{ display:inline-block; font-size:8px; font-weight:600; letter-spacing:.4px;
+    color:#fff; background:#128a3c; border-radius:2px; padding:1px 5px }
+  .qs-key b.k-sellt{ display:inline-block; font-size:8px; font-weight:600; letter-spacing:.4px;
+    color:#fff; background:#d62b2b; border-radius:2px; padding:1px 5px }
+
+  /* ---- mobile: reflow the grid into one card per ticker (no h-scroll) ---- */
+  @media (max-width:760px){
+    #qsView .card{ border:none; background:none; padding:0; overflow:visible; box-shadow:none }
+    #qsView table, #qsView thead, #qsView tbody, #qsView tr, #qsView td{ display:block }
+    #qsView table{ width:100% }
+    #qsView thead{ display:none }
+    #qsView tbody tr{ box-sizing:border-box; width:100%; max-width:100%; display:flex; flex-wrap:wrap; align-items:baseline;
+      border:0.5px solid rgba(20,25,30,.16); border-left:3px solid var(--ink-faint);
+      border-radius:3px; padding:10px 12px; margin-bottom:10px }
+    #qsView tbody tr.qs-row-buy{ border-left-color:#17a44a }
+    #qsView tbody tr.qs-row-sell{ border-left-color:#df3030 }
+    #qsView tbody td{ box-sizing:border-box; border:none; box-shadow:none !important; padding:2px 0; white-space:normal; text-align:left }
+    #qsView tbody td.idx{ display:none }
+    #qsView tbody td.co-cell{ flex:1 1 55%; font-size:14px }
+    #qsView tbody td[data-label="Price"]{ flex:0 0 44%; text-align:right; color:var(--ink-soft) }
+    #qsView tbody td[data-col="verdict"]{ flex:1 1 100%; margin:6px 0 8px }
+    #qsView tbody td[data-col]:not([data-col="verdict"]){ flex:0 0 25%; text-align:center; padding:5px 2px; margin:1px 0;
+      border:0.5px solid rgba(20,25,30,.06) }
+    #qsView tbody td[data-col]:not([data-col="verdict"])::before{ content:attr(data-label);
+      display:block; font-size:8.5px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.3px; margin-bottom:1px }
+    #qsView tbody td[data-label="ADR"], #qsView tbody td[data-label="Liq"], #qsView tbody td[data-label="Earn"]{
+      flex:1 1 auto; margin:8px 12px 0 0; font-size:10.5px; color:var(--ink-soft) }
+    #qsView tbody td[data-label="ADR"]::before{ content:"ADR "; color:var(--ink-faint) }
+    #qsView tbody td[data-label="Liq"]::before{ content:"LIQ "; color:var(--ink-faint) }
+    #qsView tbody td[data-label="Earn"]::before{ content:"EARN "; color:var(--ink-faint) }
+    .qs-meter{ width:100% }
+    #qsView tbody td .qs-vhead{ flex-wrap:wrap; white-space:normal }
+    #qsView tbody td .qs-vdetail{ white-space:normal }
+    .qs-meter-inline{ width:80px }
+  }
   /* --- Backtest ("as-if") paper-trade log — lives inside the dark #qsBtPop popover --- */
   /* Two-column layout: left key rail + right content. */
   #qsBtPop .qs-bt-layout{ display:flex; gap:20px; align-items:flex-start }
@@ -683,6 +750,10 @@
   #qsBtPop table.qs-bt-table td.qs-bt-pos, #qsBtPop .qs-bt-stat .v.qs-bt-pos{ color:#34d399; font-weight:700 }
   #qsBtPop table.qs-bt-table td.qs-bt-neg, #qsBtPop .qs-bt-stat .v.qs-bt-neg{ color:#f87171; font-weight:700 }
   #qsBtPop .qs-bt-reason{ font-size:8.5px; color:#8a95a8; text-transform:uppercase; letter-spacing:.3px }
+  /* Long/short side badges on open + closed trades (bidirectional log) */
+  #qsBtPop .qs-bt-side{ font-size:8px; font-weight:700; letter-spacing:.4px; padding:1px 4px; border-radius:3px; vertical-align:middle }
+  #qsBtPop .qs-bt-side-long{ background:rgba(52,211,153,.16); color:#34d399 }
+  #qsBtPop .qs-bt-side-short{ background:rgba(248,113,113,.16); color:#f87171 }
   #qsBtPop .qs-bt-empty{ font-size:11px; color:#8a95a8; padding:14px 4px; line-height:1.5 }
   #qsBtPop .qs-bt-note{ font-size:9px; color:#6b7488; margin-top:14px; padding-top:10px;
     border-top:1px solid rgba(255,255,255,.06); line-height:1.5 }
@@ -1302,7 +1373,7 @@
     <span class="wp-title" style="border-bottom:1px dashed currentColor">Bounce</span>
     <span class="wp-sub">1-2 day mean-reversion setups · its own independent list, separate from Long-Term/Swing · click a column header to sort · click any data cell for its scan history · right-click a row for Rescan / Delete · shift-click to select a range</span>
     <!-- ===== QUICK SWING FEATURE ===== Backtest log opener (top-right, mirrors the Watchlist Backtest button) -->
-    <span id="qsBtBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="As-if you bought every BUY and sold on a SELL flip or a 2.5×ATR stop-loss — long only, rolling 15-day window">▢ Backtest log</span>
+    <span id="qsBtBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="As-if you went long every BUY and short every SELL, each exiting on the opposite flip or a 2.5×ATR stop — rolling 15-day window. An EOD reconstruction of recent activity, not a live tick-by-tick track record.">▢ Backtest log</span>
     <!-- ===== END QUICK SWING FEATURE ===== -->
   </div>
   <!-- ===== QUICK SWING FEATURE ===== -->
@@ -1319,7 +1390,7 @@
           <th></th>
           <th class="sortable" data-qssort="sym">Ticker</th>
           <th class="num sortable" data-qssort="price">Price</th>
-          <th class="num sortable" data-qssort="verdict" data-tip="BUY/SELL/NEUTRAL verdict, reduced from independent Buy and Sell scores (each 0-24, summed across 6 bidirectional factors + 2 volatility-context factors, then scaled by the Liquidity, ADR, market-regime, and VIX gates). 75%+ = strong, 55%+ = moderate, 30%+ = weak. A deeply oversold RSI(2)≤5 or %B below the band also forces at least a weak BUY even when the weighted score is muted (mirror for overbought → SELL), so a textbook extreme on a wild name isn't missed. LEADER GATE: a BUY only stands if the stock is beating or matching the market (RS vs SPY ≥ 0) — otherwise it's shown NEUTRAL. This fades dips only in relative-strength leaders, not laggards/falling knives; backtested it lifts the win rate ~69%→75%. SELL isn't gated (exits stay responsive). BLOCKED overrides everything inside the earnings blackout window. Also shows how many of the 6 directional factors agree with the call, and a suggested stop (1.5x ATR(5)) when a BUY or SELL fires.">Verdict</th>
+          <th class="num sortable" data-qssort="verdict" data-tip="BUY/SELL/NEUTRAL verdict, reduced from independent Buy and Sell scores (each 0-24, summed across 6 bidirectional factors + 2 volatility-context factors, then scaled by the Liquidity, ADR, market-regime, and VIX gates). 75%+ = strong, 55%+ = moderate, 30%+ = weak. A deeply oversold RSI(2)≤5 or %B below the band also forces at least a weak BUY even when the weighted score is muted (mirror for overbought → SELL), so a textbook extreme on a wild name isn't missed. LEADER / LAGGARD GATE: a fresh BUY only stands if the stock is beating or matching the market (RS vs SPY ≥ 0); a fresh SELL only stands if it's lagging or matching (RS ≤ 0) — otherwise it's shown NEUTRAL. This fades dips in relative-strength leaders and rips in laggards, not falling knives or runaway rockets; backtested the BUY gate lifts the win rate ~69%→75%. A call already open isn't re-gated (exits and covers stay responsive). BLOCKED overrides everything inside the earnings blackout window. Also shows how many of the 6 directional factors agree with the call, and a suggested stop (2.5× ATR(5)) when a BUY or SELL fires.">Verdict</th>
           <th class="num sortable" data-qssort="rsi" data-tip="2-day RSI — a much more reactive oversold/overbought read than the standard 14-day RSI, tuned to catch 1-2 day extremes rather than multi-week trend. Lower = more oversold (BUY): ≤5 deeply oversold, ≤10 oversold, ≤20 stretched down. Higher = more overbought (SELL): ≥95 deeply overbought, ≥90 overbought, ≥80 stretched up. Live during market hours — uses the current quote as today's in-progress bar, not just yesterday's close.">RSI(2)</th>
           <th class="num sortable" data-qssort="pctB" data-tip="Bollinger %B(20,2σ) — where price sits inside its own 20-day volatility band. Below 0 (BUY): below the lower band, the more negative the more stretched down. Above 1 (SELL): above the upper band, the more it exceeds 1 the more stretched up. Live during market hours.">%B</th>
           <th class="num sortable" data-qssort="volclimax" data-tip="Last session's volume vs its own 20-day average, read against direction. A huge spike on a down day often marks capitulation (BUY — the sellers who were going to sell, already have); a huge spike on an up day can mark a blow-off top (SELL — the buyers who were going to buy, already have). Updates once daily after close — mid-session volume-so-far isn't comparable to a full day's average, so this can't be shown live without being misleading.">Vol Climax</th>
@@ -1338,6 +1409,14 @@
   </div>
   <div class="legend">
     <div class="ttl">Bounce scoring &nbsp;·&nbsp; bidirectional BUY/SELL, tuned for a 1-2 day mean-reversion hold</div>
+    <div class="qs-key">
+      <span><i class="k-good"></i>Buy lean</span>
+      <span><i class="k-sell"></i>Sell lean</span>
+      <span><i class="k-weak"></i>Weak / stretched</span>
+      <span><i class="k-ctx"></i>Context — non-directional (Vol Dry-Up, Vol Expansion)</span>
+      <span><i class="k-none"></i>No signal</span>
+      <span><b class="k-buy">BUY</b><b class="k-sellt">SELL</b>solid tag = the actionable call</span>
+    </div>
     <span style="color:var(--ink-soft)">This is a genuinely different trade philosophy from Swing — that view is trend-following (buy strength, ride weeks); this one bets on a snap-back after price gets stretched, in either direction (oversold dip = BUY, overbought top = SELL). Lower hit-rate by design, so earnings is a hard gate, and Liquidity/ADR dampen both Buy and Sell scores rather than just docking points on one side.</span>
   </div>
 </div>
@@ -1514,7 +1593,7 @@
     <span style="font-size:12px;font-weight:700;letter-spacing:.3px">Bounce backtest · as-if trade log</span>
     <span id="qsBtClose" style="cursor:pointer;color:#8a95a8;font-size:13px;padding:0 2px">✕</span>
   </div>
-  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px">Bought every BUY, sold on a SELL flip or a 2.5×ATR stop · long only · rolling 15-day window (backfilled the first time you open this)</div>
+  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px">Long every BUY, short every SELL — each exits on the opposite flip or a 2.5×ATR stop · rolling 15-day window of recent activity (an EOD reconstruction, not a live track record) · backfilled the first time you open this</div>
   <div id="qsBtStatus" style="display:none;font-size:10px;color:#fbbf24;margin-bottom:10px">⟳ Backfilling 15-day history…</div>
   <div class="qs-bt-layout">
     <aside class="qs-bt-key">
@@ -1527,8 +1606,8 @@
         <dt>Cumulative</dt><dd>Total $ if you'd put a fixed $10,000 into every trade.</dd>
         <dt>Edge vs SPY</dt><dd>Your avg P/L minus what <em>SPY</em> returned over the same trade dates — did timing the bounce beat just being in the market? Positive = the signal added value.</dd>
         <dt>Equity curve</dt><dd>Running cumulative $ after each closed trade, in exit order, with <em>SPY</em> buy-and-hold overlaid. Rising above the dashed SPY line = the machine is adding value.</dd>
-        <dt>Open</dt><dd>A BUY still running. <em>Now</em> is the live price, <em>Stop</em> the auto-exit line (entry − 2.5×ATR), <em>Unrealized</em> the paper gain so far. A red <em>● STOP</em> means price is at/through the stop.</dd>
-        <dt>Closed</dt><dd>Finished trades, grouped by ticker (best cumulative first). Click a ticker to expand. <em>Exit on</em> is why it closed — <em>SELL</em> (overbought flip) or <em>STOP</em> (broke its 2.5×ATR stop).</dd>
+        <dt>Open</dt><dd>A <em>LONG</em> (from a BUY) or <em>SHORT</em> (from a SELL) still running. <em>Now</em> is the live price, <em>Stop</em> the auto-exit line (entry −2.5×ATR for a long, +2.5×ATR for a short), <em>Unrealized</em> the paper gain so far. A red <em>● STOP</em> means price is at/through the stop.</dd>
+        <dt>Closed</dt><dd>Finished trades, grouped by ticker (best cumulative first). <em>L/S</em> marks each as long or short. Click a ticker to expand. <em>Exit on</em> is why it closed — <em>SELL</em> (a long's overbought flip), <em>BUY</em> (a short's cover), or <em>STOP</em> (broke its 2.5×ATR stop).</dd>
       </dl>
     </aside>
     <div class="qs-bt-main">
@@ -1538,7 +1617,7 @@
       <div id="qsBtClosed"></div>
     </div>
   </div>
-  <div class="qs-bt-note">The 15-day seed is a historical replay of the EOD factors (after-hours and VIX legs can't be reconstructed, so those days may differ slightly from what the live tool showed). Forward datapoints are recorded each time you open the app or rescan, at the price that scan saw. The 2.5×ATR stop assumes a fill at the stop price (or the day's open on a gap-down). No slippage or commissions. Cumulative $ assumes a fixed $10,000 per trade.</div>
+  <div class="qs-bt-note">This is a rolling 15-day window of <em>recent activity</em>, not a full track record — too few trades to judge the strategy, and deliberately capped at 15 days. The seed is a historical replay of the EOD factors decided at each daily close (the after-hours leg can't be reconstructed — there's no historical after-hours data — so those days may differ slightly from what the live tool showed intraday; the VIX leg <em>is</em> now reconstructed from ^VIX EOD history). Forward datapoints are recorded each time you open the app or rescan, at the price that scan saw. The 2.5×ATR stop assumes a fill at the stop price (or the day's open on a gap-through). SPY buy-and-hold is the benchmark for both longs and shorts (opportunity cost of just holding the market those days). No slippage or commissions. Cumulative $ assumes a fixed $10,000 per trade.</div>
 </div>
 <!-- ===== END QUICK SWING FEATURE ===== -->
 
@@ -3724,8 +3803,14 @@ const QS_MIRRORED_COUNT = 6;
 function qsVCls(r, k){
   const bv = r.buyVerdicts?.[k], sv = r.sellVerdicts?.[k];
   if (!bv || !sv || bv === 'na') return 'st-na';
-  if (k >= QS_MIRRORED_COUNT || bv === sv) {
-    return bv === 'good' ? 'st-good' : bv === 'ok' ? 'st-ok' : bv === 'weak' ? 'st-weak' : 'st-bad';
+  // Context factors (Vol Dry-Up / Expansion) are non-directional — colour them
+  // their own blue by strength, never green/red, so they're never mistaken for a
+  // buy or sell signal.
+  if (k >= QS_MIRRORED_COUNT) {
+    return (bv === 'good' || bv === 'ok') ? 'st-ctx' : bv === 'weak' ? 'st-ctx-lo' : 'st-neutral';
+  }
+  if (bv === sv) {
+    return bv === 'good' ? 'st-good' : bv === 'ok' ? 'st-ok' : bv === 'weak' ? 'st-weak' : 'st-neutral';
   }
   const rank = v => v==='good'?3:v==='ok'?2:v==='weak'?1:0;
   const b = rank(bv), s = rank(sv);
@@ -3759,19 +3844,25 @@ function qsRowHtml(r, idx){
   const tipFor = k => escHtml(qsTipForChip(k, r.reasons?.[k]));
   const blockedBadge = r.blocked
     ? `<span class="qs-blocked-badge" data-tip="${escHtml(r.blockedReason||'')}">Blocked</span>`
-    : (r.earnings?.daysUntil != null ? `<span style="color:var(--ink-faint);font-size:10px">${r.earnings.daysUntil}d</span>` : '—');
+    : (r.earnings?.daysUntil != null
+        ? `<span style="color:var(--ink-faint);font-size:10px">${r.earnings.daysUntil}d</span>`
+        : (r.earnings?.dataMissing
+            ? `<span style="color:var(--warn-fg,#b8860b);font-size:10px;cursor:help" data-tip="${escHtml('Earnings calendar data unavailable for this name — the 5-day earnings blackout could NOT be evaluated. Treat with caution: a print could be near without the gate catching it.')}">n/a</span>`
+            : '—'));
+  // Inline (not stacked under the price) — the Price column has horizontal room,
+  // so keep it to one line rather than forcing a second row.
   const priceTag = r.priceIsLive
-    ? `<br><span data-tip="${escHtml('Live intraday price from FMP. RSI(2), %B, and RS vs SPY are computed using this live price too. Vol Climax, Reversal, Vol Dry-Up, Vol Expansion, ADR%, and Liquidity still use the completed session as of '+fmtQsAsOf(r.dataAsOf)+' — those need a finished day to mean anything.')}" style="color:var(--good-fg,#2f7d4f);font-size:9px;font-weight:600;cursor:default">● live</span>`
-    : (r.dataAsOf ? `<br><span style="color:var(--ink-faint);font-size:9px;font-weight:400">as of ${fmtQsAsOf(r.dataAsOf)}</span>` : '');
+    ? ` <span data-tip="${escHtml('Live intraday price from FMP. RSI(2), %B, and RS vs SPY are computed using this live price too. Vol Climax, Reversal, Vol Dry-Up, Vol Expansion, ADR%, and Liquidity still use the completed session as of '+fmtQsAsOf(r.dataAsOf)+' — those need a finished day to mean anything.')}" style="color:var(--good-fg,#2f7d4f);font-size:9px;font-weight:600;cursor:default;white-space:nowrap">● live</span>`
+    : (r.dataAsOf ? ` <span style="color:var(--ink-faint);font-size:9px;font-weight:400;white-space:nowrap">as of ${fmtQsAsOf(r.dataAsOf)}</span>` : '');
   const symCell = r.scoring
     ? `<td class="co-cell"><span class="sym" style="opacity:0.3">${escHtml(r.sym)}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
     : `<td class="co-cell"><b>${escHtml(r.sym)}</b></td>`;
   const heldNote = r.held
     ? ` STICKY: the live read cooled to NEUTRAL, but this ${r.verdict} is held until it fully fades (score below the hold floor) or flips to the opposite side — this keeps an in-progress call from whipsawing intraday.`
     : '';
-  const gapMult = r.gapMultiplierBuy;
+  const gapMult = r.gapMult;
   const gapDamperNote = (gapMult != null && gapMult < 1 && r.overnightGap)
-    ? ` OVERNIGHT-GAP DAMPER: this name averages a ${r.overnightGap.avgAbsOvn}% overnight gap (${r.overnightGap.nights3Pct}% of nights >3%), so the Buy score is cut ${Math.round((1-gapMult)*100)}% (x${gapMult.toFixed(2)}) — a gappier name needs a stronger oversold read to earn a BUY, since more of its move lands where you can't act. SELL is left untouched so exits stay responsive.`
+    ? ` OVERNIGHT-GAP DAMPER: this name averages a ${r.overnightGap.avgAbsOvn}% overnight gap (${r.overnightGap.nights3Pct}% of nights >3%), so both the Buy and Sell scores are cut ${Math.round((1-gapMult)*100)}% (x${gapMult.toFixed(2)}) — a gappier name needs a stronger read to earn a fresh entry on either side, since more of its move lands where you can't act.`
     : '';
   const verdictTip = escHtml(`${r.tier ? r.tier+' ' : ''}${r.verdict} — Buy ${r.buyScore||'—'} · Sell ${r.sellScore||'—'} (each out of 24). Liquidity, ADR, market regime, and VIX gates already applied.${gapDamperNote}${heldNote} Click to see history.`);
   // Abbreviated on-screen only — the tooltip above still spells everything
@@ -3783,39 +3874,43 @@ function qsRowHtml(r, idx){
   // showing "2/6 lean BUY" on a NEUTRAL row (not yet a real signal) would read
   // as a signal that isn't there.
   const isActionable = r.verdict === 'BUY' || r.verdict === 'SELL';
-  const agreementLine = isActionable && r.agreement?.count > 0
-    ? `<span class="qs-subscore" data-tip="${escHtml('Of the 6 directional factors (RSI, %B, Vol Climax, Reversal, RS vs SPY, AH Move), '+r.agreement.count+' independently lean '+r.agreement.direction+' — breadth of agreement, separate from the weighted score above. Broad agreement across several modest factors is often more trustworthy than one factor screaming alone.')}">${r.agreement.count}/${r.agreement.of} factors agree</span>`
+  // Compact detail items — flowed onto ONE line under the verdict header (the
+  // column widens rather than wrapping); full wording stays in each item's tooltip.
+  const agreeItem = isActionable && r.agreement?.count > 0
+    ? `<span data-tip="${escHtml('Of the 6 directional factors (RSI, %B, Vol Climax, Reversal, RS vs SPY, AH Move), '+r.agreement.count+' independently lean '+r.agreement.direction+' — breadth of agreement, separate from the weighted score above. Broad agreement across several modest factors is often more trustworthy than one factor screaming alone.')}">${r.agreement.count}/${r.agreement.of} agree</span>`
     : '';
-  const stopLine = r.stop
-    ? `<span class="qs-subscore" data-tip="${escHtml('Suggested stop ('+r.stop.basis+'), '+(r.stop.side==='short'?'if shorting this SELL signal':'if long on this BUY signal')+' — not a guarantee, just a mechanical risk line based on recent volatility.')}">Stop ${r.stop.side==='short'?'above':'below'} $${r.stop.price.toFixed(2)} (${r.stop.pctFromEntry>=0?'+':''}${r.stop.pctFromEntry.toFixed(1)}%)</span>`
+  const stopItem = r.stop
+    ? `<span data-tip="${escHtml('Suggested stop ('+r.stop.basis+'), '+(r.stop.side==='short'?'for a short entry on this SELL signal':'for a long entry on this BUY signal')+' — not a guarantee, just a mechanical risk line based on recent volatility.')}">stop $${r.stop.price.toFixed(2)} (${r.stop.pctFromEntry>=0?'+':''}${r.stop.pctFromEntry.toFixed(1)}%)</span>`
     : '';
-  // Flag gappy names at a glance — surfaced whenever the overnight profile exists,
-  // so you can size for the overnight risk even when the damper isn't biting yet.
-  const gapLine = (isActionable && r.overnightGap)
-    ? `<span class="qs-subscore" data-tip="${escHtml('Averages a ±'+r.overnightGap.avgAbsOvn+'% move overnight (close→open), and gapped >3% on '+r.overnightGap.nights3Pct+'% of nights over the last ~60 sessions. That is risk that lands while the market is shut — you cannot trade around it, so size accordingly.'+(gapMult!=null&&gapMult<1?' The Buy score is damped x'+gapMult.toFixed(2)+' because of it.':''))}">±${r.overnightGap.avgAbsOvn}% overnight${gapMult!=null&&gapMult<1?' · Buy ×'+gapMult.toFixed(2):''}</span>`
+  const gapItem = (isActionable && r.overnightGap)
+    ? `<span data-tip="${escHtml('Averages a ±'+r.overnightGap.avgAbsOvn+'% move overnight (close→open), and gapped >3% on '+r.overnightGap.nights3Pct+'% of nights over the last ~60 sessions. That is risk that lands while the market is shut — you cannot trade around it, so size accordingly.'+(gapMult!=null&&gapMult<1?' Both the Buy and Sell scores are damped x'+gapMult.toFixed(2)+' because of it.':''))}">±${r.overnightGap.avgAbsOvn}% ovn${gapMult!=null&&gapMult<1?' ×'+gapMult.toFixed(2):''}</span>`
     : '';
-  return `<tr class="${r.scoring?'scoring':(r.blocked?'qs-row-blocked':'')}" data-sym="${r.sym}">
+  const detailItems = [agreeItem, stopItem, gapItem].filter(Boolean).join('<span class="qs-vsep">·</span>');
+  const detailLine = detailItems ? `<div class="qs-vdetail">${detailItems}</div>` : '';
+  // Buy/Sell strength meter — parse the "15/24" score strings to bar widths.
+  const bNum = parseInt(r.buyScore) || 0, sNum = parseInt(r.sellScore) || 0;
+  const meterInline = `<span class="qs-meter qs-meter-inline"><span class="b" style="width:${Math.round(bNum/24*100)}%"></span><span class="s" style="width:${Math.round(sNum/24*100)}%"></span></span>`;
+  const tierLbl = (r.tier && (r.verdict === 'BUY' || r.verdict === 'SELL')) ? `<span class="qs-tier-lbl">${escHtml(r.tier)}</span>` : '';
+  const rowDir = r.verdict === 'BUY' ? ' qs-row-buy' : r.verdict === 'SELL' ? ' qs-row-sell' : '';
+  return `<tr class="${r.scoring?'scoring':(r.blocked?'qs-row-blocked':'')}${rowDir}" data-sym="${r.sym}">
     <td class="idx">${idx}.</td>
     ${symCell}
-    <td class="num">${r.price!=null?'$'+r.price.toFixed(2):'—'}${priceTag}</td>
-    <td class="num" data-col="verdict" style="cursor:pointer" data-tip="${verdictTip}">
-      <span class="qs-verdict qs-verdict-${r.verdict.toLowerCase()} qs-tier-${r.tier||'none'}">${verdictLabel}</span>${r.held ? '<span class="qs-held" data-tip="'+escHtml('Held: the live read cooled to NEUTRAL, but the call is kept sticky until it fully fades or flips — prevents intraday whipsaw.')+'">held</span>' : ''}
-      <span class="qs-subscore-inline">B ${escHtml(r.buyScore||'—')} · S ${escHtml(r.sellScore||'—')}</span>
-      ${agreementLine}
-      ${stopLine}
-      ${gapLine}
+    <td class="num" data-label="Price">${r.price!=null?'$'+r.price.toFixed(2):'—'}${priceTag}</td>
+    <td class="num" data-col="verdict" data-label="Verdict" style="cursor:pointer" data-tip="${verdictTip}">
+      <div class="qs-vhead"><span class="qs-verdict qs-verdict-${r.verdict.toLowerCase()} qs-tier-${r.tier||'none'}">${verdictLabel}</span>${tierLbl}${r.held ? '<span class="qs-held" data-tip="'+escHtml('Held: the live read cooled to NEUTRAL, but the call is kept sticky until it fully fades or flips — prevents intraday whipsaw.')+'">held</span>' : ''}${meterInline}<span class="qs-subscore-inline">B ${escHtml(r.buyScore||'—')} · S ${escHtml(r.sellScore||'—')}</span></div>
+      ${detailLine}
     </td>
-    <td class="num ${qsVCls(r,0)}" data-col="rsi" style="cursor:pointer" data-tip="${tipFor(0)}">${typeof rsiVal==='number'?rsiVal.toFixed(1):'—'}</td>
-    <td class="num ${qsVCls(r,1)}" data-col="pctB" style="cursor:pointer" data-tip="${tipFor(1)}">${bb?.pctB!=null?bb.pctB.toFixed(2):'—'}</td>
-    <td class="num ${qsVCls(r,2)}" data-col="volclimax" style="cursor:pointer" data-tip="${tipFor(2)}">${typeof volClimax==='number'?volClimax.toFixed(2)+'x':'—'}</td>
-    <td class="num ${qsVCls(r,3)}" data-col="reversal" style="cursor:pointer" data-tip="${tipFor(3)}">${typeof reversal==='number'?(reversal*100).toFixed(0)+'%':'—'}</td>
-    <td class="num ${qsVCls(r,4)}" data-col="rs" style="cursor:pointer" data-tip="${tipFor(4)}">${rs?.delta!=null?(rs.delta>=0?'+':'')+(rs.delta*100).toFixed(1)+'pp':'—'}</td>
-    <td class="num ${qsVCls(r,5)}" data-col="ah" style="cursor:pointer" data-tip="${tipFor(5)}">${ah?.chg!=null?(ah.chg>=0?'+':'')+(ah.chg*100).toFixed(1)+'%':'—'}</td>
-    <td class="num ${qsVCls(r,6)}" data-col="dryup" style="cursor:pointer" data-tip="${tipFor(6)}">${typeof dryUp==='number'?(dryUp*100).toFixed(0)+'%':'—'}</td>
-    <td class="num ${qsVCls(r,7)}" data-col="volexp" style="cursor:pointer" data-tip="${tipFor(7)}">${typeof volExp==='number'?volExp.toFixed(2)+'x':'—'}</td>
-    <td class="num" data-tip="${escHtml('GATE — '+(r.volatility?.label||'—')+'. Dampens both Buy and Sell scores equally (multiplier '+(r.adrMultiplier!=null?r.adrMultiplier.toFixed(2):'1.00')+'x).')}">${typeof adrPct==='number'?adrPct.toFixed(1)+'%':'—'}</td>
-    <td class="num" data-tip="${escHtml('GATE — '+(r.liquidity?.label||'—')+'. Dampens both Buy and Sell scores equally (multiplier '+(r.liqMultiplier!=null?r.liqMultiplier.toFixed(2):'1.00')+'x).')}">${fmtQsDollars(liqVal)}</td>
-    <td data-tip="${escHtml(r.blocked ? r.blockedReason||'' : (r.earnings?.daysUntil!=null ? `Earnings in ${r.earnings.daysUntil}d (${r.earnings.date}) — outside the 5-day blackout window` : 'No earnings calendar data'))}">${blockedBadge}</td>
+    <td class="num ${qsVCls(r,0)}" data-col="rsi" data-label="RSI" style="cursor:pointer" data-tip="${tipFor(0)}">${typeof rsiVal==='number'?rsiVal.toFixed(1):'—'}</td>
+    <td class="num ${qsVCls(r,1)}" data-col="pctB" data-label="%B" style="cursor:pointer" data-tip="${tipFor(1)}">${bb?.pctB!=null?bb.pctB.toFixed(2):'—'}</td>
+    <td class="num ${qsVCls(r,2)}" data-col="volclimax" data-label="CLX" style="cursor:pointer" data-tip="${tipFor(2)}">${typeof volClimax==='number'?volClimax.toFixed(2)+'x':'—'}</td>
+    <td class="num ${qsVCls(r,3)}" data-col="reversal" data-label="REV" style="cursor:pointer" data-tip="${tipFor(3)}">${typeof reversal==='number'?(reversal*100).toFixed(0)+'%':'—'}</td>
+    <td class="num ${qsVCls(r,4)}" data-col="rs" data-label="RS" style="cursor:pointer" data-tip="${tipFor(4)}">${rs?.delta!=null?(rs.delta>=0?'+':'')+(rs.delta*100).toFixed(1)+'pp':'—'}</td>
+    <td class="num ${qsVCls(r,5)}" data-col="ah" data-label="AH" style="cursor:pointer" data-tip="${tipFor(5)}">${ah?.chg!=null?(ah.chg>=0?'+':'')+(ah.chg*100).toFixed(1)+'%':'—'}</td>
+    <td class="num ${qsVCls(r,6)}" data-col="dryup" data-label="DRY" style="cursor:pointer" data-tip="${tipFor(6)}">${typeof dryUp==='number'?(dryUp*100).toFixed(0)+'%':'—'}</td>
+    <td class="num ${qsVCls(r,7)}" data-col="volexp" data-label="EXP" style="cursor:pointer" data-tip="${tipFor(7)}">${typeof volExp==='number'?volExp.toFixed(2)+'x':'—'}</td>
+    <td class="num" data-label="ADR" data-tip="${escHtml('GATE — '+(r.volatility?.label||'—')+'. Dampens both Buy and Sell scores equally (multiplier '+(r.adrMultiplier!=null?r.adrMultiplier.toFixed(2):'1.00')+'x).')}">${typeof adrPct==='number'?adrPct.toFixed(1)+'%':'—'}</td>
+    <td class="num" data-label="Liq" data-tip="${escHtml('GATE — '+(r.liquidity?.label||'—')+'. Dampens both Buy and Sell scores equally (multiplier '+(r.liqMultiplier!=null?r.liqMultiplier.toFixed(2):'1.00')+'x).')}">${fmtQsDollars(liqVal)}</td>
+    <td data-label="Earn" data-tip="${escHtml(r.blocked ? r.blockedReason||'' : (r.earnings?.daysUntil!=null ? `Earnings in ${r.earnings.daysUntil}d (${r.earnings.date}) — outside the 5-day blackout window` : (r.earnings?.dataMissing ? 'Earnings calendar data unavailable — the 5-day blackout could not be evaluated' : 'No upcoming earnings in the calendar')))}">${blockedBadge}</td>
   </tr>`;
 }
 
@@ -3832,10 +3927,27 @@ document.getElementById('qsBody')?.addEventListener('click', e => {
   openQsFactHist(tr.dataset.sym, factorIdx, td);
 });
 
+// Compact "Ns/m/h ago" for the status-bar scan-freshness stamp.
+function qsRelTime(ms){
+  const s = Math.round((Date.now() - ms) / 1000);
+  if (s < 60) return s + 's ago';
+  const m = Math.round(s / 60); if (m < 60) return m + 'm ago';
+  const h = Math.round(m / 60); if (h < 24) return h + 'h ago';
+  return Math.round(h / 24) + 'd ago';
+}
+// Mark the active sort column in the header with a direction arrow.
+function qsMarkSortedHeader(){
+  document.querySelectorAll('#qsView thead th[data-qssort]').forEach(th => {
+    const active = th.dataset.qssort === qsSortCol;
+    th.classList.toggle('qs-sorted', active);
+    if (active) th.setAttribute('data-arrow', qsSortDir < 0 ? '▼' : '▲'); else th.removeAttribute('data-arrow');
+  });
+}
 function renderQuickSwing(){
   const banner = document.getElementById('qsRegimeBanner');
   const body = document.getElementById('qsBody');
   if (!banner || !body) return;
+  qsMarkSortedHeader();
 
   const rows = Object.values(qsRowsBySym);
   // Market regime + VIX banner — every row carries the same marketRegime/vix
@@ -3844,12 +3956,17 @@ function renderQuickSwing(){
   const regime = rows.find(r => r && r.marketRegime)?.marketRegime;
   const vix = rows.find(r => r && r.vix)?.vix;
   if (regime) {
+    const freshest = rows.reduce((m, r) => { const t = Date.parse(r?.scored_at); return (isFinite(t) && t > m) ? t : m; }, 0);
+    const scanAgo = freshest ? qsRelTime(freshest) : '';
     banner.className = 'qs-regime ' + (regime.favorable ? 'fav' : 'unfav');
+    banner.setAttribute('data-tip', regime.label);
     banner.innerHTML = `<span class="qs-regime-dot"></span>` +
-      `<span>Market regime: ${escHtml(regime.label)}</span>` +
-      `<span class="qs-regime-sub">${regime.distributionDays} distribution day${regime.distributionDays===1?'':'s'} in the last 25 sessions${vix ? ` · VIX ${vix.level.toFixed(1)} — ${escHtml(vix.label)}` : ''}</span>`;
+      `<span>REGIME ${regime.favorable ? 'FAVORABLE' : 'UNFAVORABLE'}</span>` +
+      `<span class="qs-regime-sub">DIST ${regime.distributionDays}/25${vix ? ` · VIX ${vix.level.toFixed(1)} ${escHtml((vix.label||'').toUpperCase())}` : ''}</span>` +
+      (scanAgo ? `<span class="qs-regime-scan">SCAN ${escHtml(scanAgo)}</span>` : '');
   } else {
     banner.className = 'qs-regime';
+    banner.removeAttribute('data-tip');
     banner.innerHTML = '';
   }
 
@@ -3980,7 +4097,7 @@ function renderQsBacktest(){
   // --- Summary stats over closed trades ---
   const n = closed.length;
   if (!n) {
-    stats.innerHTML = `<div class="qs-bt-empty">No closed trades in the window yet. If this is your first time opening the log, history is backfilling now — otherwise none of your tickers had a BUY that entered and closed in the last 15 days.</div>`;
+    stats.innerHTML = `<div class="qs-bt-empty">No closed trades in the window yet. If this is your first time opening the log, history is backfilling now — otherwise none of your tickers had a BUY or SELL that entered and closed in the last 15 days.</div>`;
   } else {
     const wins = closed.filter(t => t.pnlPct > 0).length;
     const winRate = (wins / n) * 100;
@@ -4017,15 +4134,21 @@ function renderQsBacktest(){
     openEl.innerHTML = '';
   } else {
     const rows = openTrades.map(o => {
+      const isShort = o.side === 'short';
       const live = qsRowsBySym[o.sym?.toUpperCase()]?.price;
-      const unreal = (live > 0 && o.entryPrice > 0) ? ((live - o.entryPrice) / o.entryPrice) * 100 : null;
+      // Unrealized is side-aware: a short profits as price falls below entry.
+      const unreal = (live > 0 && o.entryPrice > 0)
+        ? (isShort ? (o.entryPrice - live) / o.entryPrice : (live - o.entryPrice) / o.entryPrice) * 100
+        : null;
       const stop = o.stopPrice;
-      const breached = (stop > 0 && live > 0 && live <= stop);
+      // A long's stop sits below entry (breached when price ≤ stop); a short's above.
+      const breached = (stop > 0 && live > 0 && (isShort ? live >= stop : live <= stop));
       const stopCell = stop > 0
-        ? `<td data-tip="${escHtml('Stop = entry − 2.5×ATR(5), pinned at entry. The as-if trade auto-exits if price breaks this line.')}">${qsBtPrice(stop)}</td>`
+        ? `<td data-tip="${escHtml('Stop = entry ' + (isShort ? '+' : '−') + ' 2.5×ATR(5), pinned at entry. The as-if trade auto-exits if price breaks this line.')}">${qsBtPrice(stop)}</td>`
         : `<td>—</td>`;
+      const sideTag = `<span class="qs-bt-side qs-bt-side-${isShort?'short':'long'}">${isShort?'SHORT':'LONG'}</span>`;
       const flag = breached ? ` <span style="color:#f87171;font-weight:700">● STOP</span>` : '';
-      return `<tr${breached?' style="background:rgba(248,113,113,.08)"':''}><td>${escHtml(o.sym)}</td><td>${qsBtDate(o.entryScoredAt || o.entryAt)}</td>` +
+      return `<tr${breached?' style="background:rgba(248,113,113,.08)"':''}><td>${escHtml(o.sym)} ${sideTag}</td><td>${qsBtDate(o.entryScoredAt || o.entryAt)}</td>` +
         `<td>${qsBtPrice(o.entryPrice)}</td><td>${qsBtPrice(live)}</td>${stopCell}` +
         `<td class="${unreal==null?'':qsBtPnlClass(unreal)}">${unreal==null?'—':qsBtPct(unreal)}${flag}</td></tr>`;
     }).join('');
@@ -4054,8 +4177,11 @@ function renderQsBacktest(){
 
     const sections = ordered.map(({ sym, trades, agg }) => {
       const rows = trades.map(t => {
+        const isShort = t.side === 'short';
+        const sideTag = `<span class="qs-bt-side qs-bt-side-${isShort?'short':'long'}">${isShort?'S':'L'}</span>`;
         const reason = t.exitReason ? `<span class="qs-bt-reason">${escHtml(t.exitReason)}</span>` : '';
         return `<tr>` +
+          `<td>${sideTag}</td>` +
           `<td>${qsBtDate(t.entryScoredAt || t.entryAt)}</td><td>${qsBtPrice(t.entryPrice)}</td>` +
           `<td>${qsBtDate(t.exitScoredAt || t.exitAt)}</td><td>${qsBtPrice(t.exitPrice)}</td>` +
           `<td>${t.holdDays==null?'—':t.holdDays+'d'}</td>` +
@@ -4073,7 +4199,7 @@ function renderQsBacktest(){
           <span class="qs-bt-tk-cum ${qsBtPnlClass(agg.cum)}">${qsBtDollars(agg.cum)}</span>
         </summary>
         <div class="qs-bt-tk-body">
-          <table class="qs-bt-table"><thead><tr><th>Entry</th><th>Entry $</th><th>Exit</th><th>Exit $</th><th>Hold</th><th>P/L</th><th>Exit on</th></tr></thead><tbody>${rows}</tbody></table>
+          <table class="qs-bt-table"><thead><tr><th>Side</th><th>Entry</th><th>Entry $</th><th>Exit</th><th>Exit $</th><th>Hold</th><th>P/L</th><th>Exit on</th></tr></thead><tbody>${rows}</tbody></table>
         </div>
       </details>`;
     }).join('');

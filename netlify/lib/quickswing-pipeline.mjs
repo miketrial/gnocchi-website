@@ -83,7 +83,7 @@
      goes away, just stop being imported by two files instead of one. */
 import {
   getQuickswingFmpCache, putQuickswingFmpCache, deleteQuickswingFmpCache,
-  getSpyHistCache, putSpyHistCache, getQuickswingRow,
+  getSpyHistCache, putSpyHistCache, getVixHistCache, putVixHistCache, getQuickswingRow,
 } from "./store.mjs";
 import { round2, na, scored, trueRange, atrFrom } from "./ta-helpers.mjs";
 import { safe, delay } from "./fmp-client.mjs";
@@ -454,13 +454,15 @@ export function overnightGapProfile(hist, lookback = GAP_LOOKBACK) {
   return { avgAbsOvn, nights3, n: gaps.length };
 }
 
-/* ---------- Overnight-gap conviction damper (BUY-side only) ----------
-   Turns avgAbsOvn into a multiplier on the BUY score: the gappier the name, the
-   stronger the raw oversold read has to be to still clear the BUY threshold.
-   Mirrors the shape of the other non-directional multipliers (VIX, ADR, regime)
-   and, like the earnings gate and the RS-leader gate, only blunts fresh ENTRIES
-   — SELL is left ungated so a genuine overbought reversal still flips instantly
-   (holding an exit hostage to a name's gappiness would be backwards). Tiers and
+/* ---------- Overnight-gap conviction damper (non-directional) ----------
+   Turns avgAbsOvn into a multiplier on the directional score: the gappier the
+   name, the stronger the raw read has to be to still clear the entry threshold.
+   Mirrors the shape of the other non-directional multipliers (VIX, ADR, regime).
+   Applied to BOTH the BUY and SELL scores: a name that routinely gaps overnight
+   is exactly as dangerous to short into as it is to buy into — the move that
+   erases (or overshoots) your edge lands while the market is shut either way, so
+   a gappy overbought read needs to be stronger to earn a fresh short, same as a
+   gappy oversold read needs to be stronger to earn a fresh long. Tiers and
    penalties are calibrated on an 8-ticker / 250-session backtest replay — see
    the gap-damper study in the commit that added this. */
 export const GAP_DAMPER_TIERS = [
@@ -469,7 +471,7 @@ export const GAP_DAMPER_TIERS = [
   { maxAvg: 0.030, mult: 0.78 }, // gappy (~MU)
   { maxAvg: Infinity, mult: 0.65 }, // very gappy (~SNDK)
 ];
-function gapMultiplierBuy(profile, tiers = GAP_DAMPER_TIERS) {
+function gapMultiplier(profile, tiers = GAP_DAMPER_TIERS) {
   if (!tiers || !profile || profile.avgAbsOvn == null) return 1.0; // unknown/disabled — don't penalize
   for (const t of tiers) if (profile.avgAbsOvn <= t.maxAvg) return t.mult;
   return 1.0;
@@ -523,7 +525,12 @@ function checkLiquidity(hist) {
    technical BUY/SELL score. Underlying buy/sell scores are still computed
    and shown on the row for context — only the headline verdict is blocked. */
 function earningsGate(earningsHist) {
-  if (!earningsHist || !earningsHist.length) return { blocked: false, reason: "No earnings calendar data" };
+  // No calendar data at all → we CANNOT evaluate the blackout. Fail open (many
+  // names legitimately have no near print), but flag it so the row/UI surfaces
+  // "unavailable" rather than silently implying "no earnings risk". A genuine
+  // fetch hiccup and a genuinely earnings-free name look identical here, so the
+  // honest move is to mark the gate un-evaluated, not to imply it passed.
+  if (!earningsHist || !earningsHist.length) return { blocked: false, reason: "Earnings calendar data unavailable — blackout not evaluated", dataMissing: true };
   const today = new Date().toISOString().slice(0, 10);
   const future = earningsHist
     .filter(e => e.epsActual == null && e.date > today)
@@ -620,9 +627,17 @@ export async function getMarketRegime() {
   const vixLevel = vixQuote?.price ?? null;
   const vixClass = classifyVix(vixLevel);
   const vix = vixClass ? { level: vixLevel, label: vixClass.label, multiplier: vixClass.multiplier } : null;
+  // VIX EOD history — for the backtest replay's VIX leg (the live /quote endpoint
+  // has today's level but no series). Cached once per batch, same as SPY hist.
+  let vixHist = await getVixHistCache().catch(() => null);
+  if (!vixHist) {
+    const rawVix = await safe("historical-price-eod/full", "^VIX", "&limit=320").catch(() => []);
+    vixHist = cleanHist(rawVix);
+    if (vixHist.length >= 60) await putVixHistCache(vixHist).catch(() => {});
+  }
   return {
     ok: true, price, sma50, sma200, uptrend, distributionDays: distDays,
-    favorable: uptrend && distDays <= 5, label, hist: spyHist, liveHist, vix,
+    favorable: uptrend && distDays <= 5, label, hist: spyHist, liveHist, vix, vixHist,
   };
 }
 
@@ -683,11 +698,22 @@ function extremeReads(mirrored) {
    this lifted the win rate 69%→75% and avg P/L +1.8%→+2.8%, holding across both
    favorable and unfavorable regimes. (A stricter variant also requiring ≥3 of 6
    factors to agree reached 78%, but muted too many oversold-leader setups for
-   comfort — see the win-rate study.) Only gates BUY (entries); SELL stays
-   ungated so exits remain responsive. */
+   comfort — see the win-rate study.) Gates fresh BUY *entries*; the mirror
+   (sellConvictionOk) gates fresh SELL entries. */
 function buyConvictionOk(mirrored) {
   const rsDelta = mirrored?.[4]?.value?.delta;
   return rsDelta != null && rsDelta >= 0; // must be beating/matching SPY (a leader)
+}
+/* ---------- SELL conviction gate (mirror of buyConvictionOk) ----------
+   A fresh SELL only stands if the stock is a market LAGGARD — RS vs SPY ≤ 0
+   (lagging or matching the market). The symmetric logic to the leader gate: a
+   mean-reversion short works far better fading a rip in a laggard (already
+   rolling over) than shorting a genuine relative-strength leader on a blow-off
+   (leaders keep gapping up on you). Only gates SELL entries — an in-progress
+   short is not re-gated, same as the BUY side. */
+function sellConvictionOk(mirrored) {
+  const rsDelta = mirrored?.[4]?.value?.delta;
+  return rsDelta != null && rsDelta <= 0; // must be lagging/matching SPY (a laggard)
 }
 
 /* ---------- Sticky verdict (hysteresis) ----------
@@ -840,24 +866,26 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
   // VIX — non-directional, so the SAME multiplier applies to both sides
   // (unlike the regime multiplier above, which favors one direction).
   const vixMultiplier = regime?.vix?.multiplier ?? 1.0;
-  // Overnight-gap damper — BUY-only: a gappy name needs a stronger oversold read
-  // to earn an entry, since more of its move lands where you can't act. SELL is
-  // deliberately left ungated (exits stay responsive), same as the RS-leader gate.
+  // Overnight-gap damper — non-directional: a gappy name needs a stronger read to
+  // earn a fresh entry on EITHER side, since more of its move lands where you
+  // can't act whether you're going long or short. Applied to both totals.
   const gapProfile = overnightGapProfile(hist);
-  const gapMultiplierBuy_ = gapMultiplierBuy(gapProfile);
+  const gapMult = gapMultiplier(gapProfile);
 
-  const buyScore = Math.min(QS_MAX_SCORE, Math.round(rawBuyScore * liqMultiplier * adrMultiplier * regimeMultiplierBuy * vixMultiplier * gapMultiplierBuy_));
-  const sellScore = Math.min(QS_MAX_SCORE, Math.round(rawSellScore * liqMultiplier * adrMultiplier * regimeMultiplierSell * vixMultiplier));
+  const buyScore = Math.min(QS_MAX_SCORE, Math.round(rawBuyScore * liqMultiplier * adrMultiplier * regimeMultiplierBuy * vixMultiplier * gapMult));
+  const sellScore = Math.min(QS_MAX_SCORE, Math.round(rawSellScore * liqMultiplier * adrMultiplier * regimeMultiplierSell * vixMultiplier * gapMult));
 
   const { forceBuy, forceSell } = extremeReads(mirrored);
   // Last persisted verdict for this ticker — the state hysteresis needs to keep
   // an in-progress call from whipsawing between scans. Null on first-ever scan.
   const prevVerdict = await getQuickswingRow(sym).then(r => r?.verdict ?? null).catch(() => null);
   let { verdict, tier } = deriveVerdict({ buyScore, sellScore, blocked: eGate.blocked, forceBuy, forceSell });
-  // High-conviction gate: a NEW BUY must be a market leader (RS ≥ 0). A BUY we're
-  // already holding is NOT re-gated — RS ticking negative on an in-progress bar
-  // shouldn't whipsaw an open call to NEUTRAL (a top cause of the intraday flicker).
+  // High-conviction gate: a NEW BUY must be a market leader (RS ≥ 0), a NEW SELL
+  // must be a laggard (RS ≤ 0). A directional call we're already holding is NOT
+  // re-gated — RS ticking across zero on an in-progress bar shouldn't whipsaw an
+  // open call to NEUTRAL (a top cause of the intraday flicker).
   if (verdict === "BUY" && prevVerdict !== "BUY" && !buyConvictionOk(mirrored)) { verdict = "NEUTRAL"; tier = null; }
+  if (verdict === "SELL" && prevVerdict !== "SELL" && !sellConvictionOk(mirrored)) { verdict = "NEUTRAL"; tier = null; }
   // Sticky verdict: hold an existing directional call through a shallow dip.
   let held;
   ({ verdict, tier, held } = applyVerdictHysteresis({ verdict, tier, prevVerdict, buyScore, sellScore, blocked: eGate.blocked, forceBuy, forceSell }));
@@ -887,12 +915,12 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
     volatility: { adrPct: adr.value, points: adr.points, label: adr.summary },
     vix: regime?.vix ? { level: regime.vix.level, label: regime.vix.label } : null,
     overnightGap: gapProfile
-      ? { avgAbsOvn: round2(gapProfile.avgAbsOvn * 100), nights3Pct: Math.round(gapProfile.nights3 * 100), mult: gapMultiplierBuy_ }
+      ? { avgAbsOvn: round2(gapProfile.avgAbsOvn * 100), nights3Pct: Math.round(gapProfile.nights3 * 100), mult: gapMult }
       : null,
-    liqMultiplier, adrMultiplier, regimeMultiplierBuy, regimeMultiplierSell, vixMultiplier, gapMultiplierBuy: gapMultiplierBuy_,
+    liqMultiplier, adrMultiplier, regimeMultiplierBuy, regimeMultiplierSell, vixMultiplier, gapMult,
     blocked: eGate.blocked,
     blockedReason: eGate.blocked ? eGate.reason : null,
-    earnings: { daysUntil: eGate.daysUntil ?? null, date: eGate.date ?? null },
+    earnings: { daysUntil: eGate.daysUntil ?? null, date: eGate.date ?? null, dataMissing: eGate.dataMissing || false },
     marketRegime: regime?.ok ? { favorable: regime.favorable, label: regime.label, distributionDays: regime.distributionDays } : null,
     scored_at: new Date().toISOString(),
   };
@@ -946,9 +974,17 @@ function historicalEarningsBlocked(earningsHist, asOfDate) {
   return daysUntil <= 5;
 }
 
+/* Most recent ^VIX close on/before `dateStr`, from a newest-first VIX EOD series
+   (handles weekends/holidays like spyCloseAsOf). null when unavailable. */
+function vixCloseAsOf(vixHist, dateStr) {
+  if (!Array.isArray(vixHist) || !vixHist.length) return null;
+  for (const b of vixHist) if (b.date <= dateStr) return b.close;
+  return null;
+}
+
 /* Compute just the headline verdict for one historical close — the EOD subset
    of scoreTickerQuickSwing, reusing the same factor functions and multipliers. */
-function historicalVerdict(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers = GAP_DAMPER_TIERS) {
+function historicalVerdict(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers = GAP_DAMPER_TIERS, vixHist = null) {
   const mirrored = [
     checkRsi2(hAsOf),
     checkBollinger(hAsOf),
@@ -969,27 +1005,34 @@ function historicalVerdict(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers = GA
   const regimeFavorable = historicalRegimeFavorable(spyAsOf);
   const regimeMultiplierBuy = regimeFavorable === false ? 0.85 : 1.0;
   const regimeMultiplierSell = regimeFavorable === false ? 1.15 : 1.0;
-  // VIX history unavailable → neutral (1.0), matching the header note.
+  // VIX leg: reconstructed from ^VIX EOD history (available on historical-price-
+  // eod/full, even though it's absent from the /quote endpoint the live scorer
+  // uses). When vixHist isn't supplied it degrades to neutral (1.0). The AH leg
+  // stays neutral (naMirror above) — there is no historical after-hours series.
+  const vixMult = classifyVix(vixCloseAsOf(vixHist, asOfDate))?.multiplier ?? 1.0;
   // Overnight-gap damper reconstructs cleanly from EOD bars (prior close → open),
-  // so — unlike the AH/VIX legs — the replay honors it exactly as the live scorer
-  // does. `gapTiers` is threaded through so the calibration harness can A/B it
-  // (pass null to disable for the baseline arm).
-  const gapMult = gapMultiplierBuy(overnightGapProfile(hAsOf), gapTiers);
+  // so — unlike the AH leg — the replay honors it exactly as the live scorer does,
+  // on both sides. `gapTiers` is threaded through so the calibration harness can
+  // A/B it (pass null to disable for the baseline arm).
+  const gapMult = gapMultiplier(overnightGapProfile(hAsOf), gapTiers);
 
-  const buyScore = Math.min(QS_MAX_SCORE, Math.round(rawBuyScore * liqMultiplier * adrMultiplier * regimeMultiplierBuy * gapMult));
-  const sellScore = Math.min(QS_MAX_SCORE, Math.round(rawSellScore * liqMultiplier * adrMultiplier * regimeMultiplierSell));
+  const buyScore = Math.min(QS_MAX_SCORE, Math.round(rawBuyScore * liqMultiplier * adrMultiplier * regimeMultiplierBuy * vixMult * gapMult));
+  const sellScore = Math.min(QS_MAX_SCORE, Math.round(rawSellScore * liqMultiplier * adrMultiplier * regimeMultiplierSell * vixMult * gapMult));
   const blocked = historicalEarningsBlocked(earningsHist, asOfDate);
   const { forceBuy, forceSell } = extremeReads(mirrored);
   const { verdict } = deriveVerdict({ buyScore, sellScore, blocked, forceBuy, forceSell });
-  // Same high-conviction gate as the live scorer — a BUY must be a market-leader
-  // (RS ≥ 0) with ≥3 of 6 directional factors agreeing.
+  // Same high-conviction gates as the live scorer — a BUY must be a market leader
+  // (RS ≥ 0), a SELL must be a laggard (RS ≤ 0). (The replay gates every entry;
+  // the live scorer only gates fresh ones, but a re-gate that returns NEUTRAL is
+  // never itself an exit in the trade log, so the two converge on closed trades.)
   if (verdict === "BUY" && !buyConvictionOk(mirrored)) return "NEUTRAL";
+  if (verdict === "SELL" && !sellConvictionOk(mirrored)) return "NEUTRAL";
   return verdict;
 }
 
 /* Replay the last `daysBack` sessions and fold each day's verdict through the
    same transition logic the live loop uses, producing a seeded trade log. */
-export function replayQuickSwingTrades(sym, hist, spyHist, earningsHist, { daysBack = BT_SEED_DAYS, gapTiers } = {}) {
+export function replayQuickSwingTrades(sym, hist, spyHist, earningsHist, { daysBack = BT_SEED_DAYS, gapTiers, vixHist = null } = {}) {
   let log = emptyLog();
   if (!hist || hist.length < 21) return log; // not enough bars to score anything
   // Oldest → newest over the trailing window, so trades open/close in order.
@@ -1000,14 +1043,15 @@ export function replayQuickSwingTrades(sym, hist, spyHist, earningsHist, { daysB
     const spyAsOf = spyHist ? histAsOf(spyHist, date) : null;
     // gapTiers === undefined → production default (damper on); pass null to disable.
     const verdict = historicalVerdict(hAsOf, spyAsOf, earningsHist, date,
-      gapTiers === undefined ? GAP_DAMPER_TIERS : gapTiers);
+      gapTiers === undefined ? GAP_DAMPER_TIERS : gapTiers, vixHist);
     const b0 = hAsOf[0];
     const syntheticRow = {
       sym,
       price: b0.close,
       open: b0.open,    // for the stop-loss gap-vs-touch fill in recordQuickswingTransition
-      low: b0.low,      // a stop breach on a daily bar is the LOW piercing the stop
-      atr5: atrFrom(hAsOf, 0, 5), // pins the entry-time stop at entry − 2.5×ATR
+      low: b0.low,      // a long stop breach on a daily bar is the LOW piercing the stop
+      high: b0.high,    // a short stop breach is the HIGH piercing the stop above
+      atr5: atrFrom(hAsOf, 0, 5), // pins the entry-time stop at entry ± 2.5×ATR
       priceIsLive: false,
       verdict,
       scored_at: `${date}T21:00:00.000Z`, // ~US market close
@@ -1023,7 +1067,7 @@ export function replayQuickSwingTrades(sym, hist, spyHist, earningsHist, { daysB
 /* Fetch what the replay needs and produce the seed log. Own FMP fetch (hist +
    earnings); SPY history is passed in from the shared regime object to avoid a
    redundant index fetch. Called once, the first time a ticker is tracked. */
-export async function seedQuickSwingBacktest(sym, { daysBack = BT_SEED_DAYS, spyHist = null } = {}) {
+export async function seedQuickSwingBacktest(sym, { daysBack = BT_SEED_DAYS, spyHist = null, vixHist = null } = {}) {
   const t = sym.toUpperCase();
   let rawHist = [], earningsHist = [];
   try {
@@ -1034,5 +1078,5 @@ export async function seedQuickSwingBacktest(sym, { daysBack = BT_SEED_DAYS, spy
     return emptyLog();
   }
   const hist = cleanHist(rawHist);
-  return replayQuickSwingTrades(t, hist, spyHist, earningsHist, { daysBack });
+  return replayQuickSwingTrades(t, hist, spyHist, earningsHist, { daysBack, vixHist });
 }
