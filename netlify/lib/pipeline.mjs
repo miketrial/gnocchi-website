@@ -794,6 +794,7 @@ function toRow(ticker, scoring, valuation, analysis, l1a) {
   return {
     sym:       ticker.toUpperCase(),
     name:      l1a.company_name || ticker,
+    sector:    l1a.sector_raw || null,
     v: [
       verdict(scoring.col_B), verdict(scoring.col_C), verdict(scoring.col_D),
       verdict(scoring.col_E), verdict(scoring.col_F), verdict(scoring.col_G),

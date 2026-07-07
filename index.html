@@ -70,6 +70,7 @@
   }
   .btn:hover{filter:brightness(.97)}
   .btn:active{transform:scale(.97); opacity:.85}
+  #groupSector.active{background:var(--accent,#2563eb); color:#fff; border-color:var(--accent,#2563eb)}
   .btn .spin{display:inline-block; animation:spin 1s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
 
@@ -264,6 +265,18 @@
   .sec-ind{background:#fef3c7;color:#92400e}
   .sec-energy{background:#fee2e2;color:#991b1b}
   .sec-cons{background:#fce7f3;color:#9d174d}
+  .sec-fin{background:#dcfce7;color:#166534}
+  .sec-hlth{background:#cffafe;color:#155e75}
+  .sec-mat{background:#f5f5f4;color:#57534e}
+  .sec-util{background:#fef9c3;color:#854d0e}
+  .sec-re{background:#ffe4e6;color:#9f1239}
+  .sec-other{background:#eef1f5;color:#64748b}
+
+  /* sector group header row (grouping overlay) */
+  tr.sec-group-head td{padding:6px 8px 3px;border-bottom:1px solid var(--line,#e2e6ec);background:transparent}
+  tr.sec-group-head .sec{font-size:8px;padding:1px 6px}
+  tr.sec-group-head em{font-style:normal;color:var(--ink-faint);font-size:8px;margin-left:6px}
+  [data-theme="white"] tr.sec-group-head td{border-bottom-color:#d5d9df}
 
   .score{font-weight:700; font-size:10px; padding:1px 5px; border-radius:5px; text-align:center; cursor:pointer}
   .score:not(.n):hover{opacity:.8}
@@ -1083,6 +1096,7 @@
         <button class="btn" id="rescan">Rescan</button>
         <button class="btn" id="forceRescan" title="Force a full rescan of every row — bypasses the 'fresh rows' shortcut and re-pulls FMP for everything. Same as Shift+click on Rescan.">Force Rescan</button>
         <button class="btn" id="restoreOrder" title="Restore your saved drag-drop order and clear column sort" style="display:none">↺ Order</button>
+        <button class="btn" id="groupSector" title="Group rows by sector — pins stay on top, and your column sort is kept within each sector">⊞ Sector</button>
         <button class="btn" id="pipelineBtn" onclick="document.getElementById('pipelineModal').style.display='flex'">Scoring Pipeline</button>
       </div>
       <div class="rescan-timer" id="rescanTimer"></div>
@@ -1724,7 +1738,67 @@ let net = [
 /* ---------------- sort state ---------------- */
 let sortCol = null, sortDir = 1;
 let stSortCol = null, stSortDir = -1; // Short Term sort (-1 = desc = highest score first)
+let groupBySector = localStorage.getItem('gn_group_sector')==='1'; // sector-grouping overlay (shared by both views)
 const SECTOR_LABEL = {tech:'Tech',semi:'Semis',saas:'SaaS',hw:'Hardware',ind:'Industrials',energy:'Energy',cons:'Consumer'};
+
+/* ---------------- sector grouping ---------------- */
+// Normalize a sector string (seed short-code OR raw FMP full name) to a single
+// canonical {key,label}. `key` drives the .sec-<key> badge color; `label` is
+// the display text. Everything unknown/empty folds into the 'other' bucket,
+// which always renders last.
+function normalizeSector(raw){
+  const s = (raw||'').trim();
+  if(!s) return {key:'other', label:'Unclassified'};
+  const k = s.toLowerCase();
+  // Seed short codes pass through with their existing labels.
+  if(SECTOR_LABEL[k]) return {key:k, label:SECTOR_LABEL[k]};
+  // Raw FMP full names fold into buckets.
+  const FMP = {
+    'technology':               {key:'tech',   label:'Technology'},
+    'communication services':   {key:'tech',   label:'Communication'},
+    'financial services':       {key:'fin',    label:'Financials'},
+    'financial':                {key:'fin',    label:'Financials'},
+    'healthcare':               {key:'hlth',   label:'Healthcare'},
+    'consumer cyclical':        {key:'cons',   label:'Consumer'},
+    'consumer defensive':       {key:'cons',   label:'Consumer'},
+    'industrials':              {key:'ind',    label:'Industrials'},
+    'energy':                   {key:'energy', label:'Energy'},
+    'basic materials':          {key:'mat',    label:'Materials'},
+    'utilities':                {key:'util',   label:'Utilities'},
+    'real estate':              {key:'re',     label:'Real Estate'},
+  };
+  return FMP[k] || {key:'other', label:s};
+}
+// Resolve a watchlist row's sector. Long-Term rows may not carry `sector` yet
+// (older stored rows / before the pipeline change), so fall back to the Swing
+// pipeline's live sector keyed by symbol.
+function sectorOf(row){
+  const raw = row.sector
+    || shortRowsBySym[(row.sym||'').toUpperCase()]?.sector
+    || '';
+  return normalizeSector(raw);
+}
+// Build the render list with interleaved sector-header markers. Pinned block is
+// left untouched on top; unpinned rows cluster into sector groups in first-seen
+// (i.e. current-sort) order, so the active column sort is preserved within each
+// group. Returns [{row} | {header:{key,label,count}}].
+function groupedRenderList(pinned, unpinned){
+  if(!groupBySector) return [...pinned, ...unpinned].map(r=>({row:r}));
+  const out = pinned.map(r=>({row:r}));
+  const buckets = new Map();
+  for(const r of unpinned){
+    const {key,label} = sectorOf(r);
+    if(!buckets.has(key)) buckets.set(key,{key,label,rows:[]});
+    buckets.get(key).rows.push(r);
+  }
+  const groups = [...buckets.values()].sort((a,b)=>(a.key==='other'?1:0)-(b.key==='other'?1:0));
+  for(const g of groups){
+    out.push({header:{key:g.key, label:g.label, count:g.rows.length}});
+    for(const r of g.rows) out.push({row:r});
+  }
+  return out;
+}
+
 function sortVal(r, col){
   const num = s => parseFloat((s||'').replace(/[~x%]/g,'')) || 0;
   switch(col){
@@ -1830,6 +1904,20 @@ document.getElementById('restoreOrder').addEventListener('click', () => {
   document.getElementById('restoreOrder').style.display = 'none';
 });
 
+// Sector-grouping toggle — purely a render overlay (doesn't touch sort/pins/order).
+(function initGroupSector(){
+  const btn = document.getElementById('groupSector');
+  if(!btn) return;
+  const paint = () => btn.classList.toggle('active', groupBySector);
+  paint();
+  btn.addEventListener('click', () => {
+    groupBySector = !groupBySector;
+    try{ localStorage.setItem('gn_group_sector', groupBySector?'1':'0'); }catch(e){}
+    paint();
+    renderWatchlist(); renderShortWatchlist();
+  });
+})();
+
 /* ---------------- render watchlist ---------------- */
 function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
@@ -1859,18 +1947,32 @@ function isUnavailable(reason){
 }
 function renderWatchlist(){
   const tb=document.getElementById('wlBody'); tb.innerHTML='';
-  // Pinned rows first, then the rest in their existing order
+  // Pinned rows first, then the rest — optionally clustered into sector groups.
   const pinned = watchlist.filter(r=>pinnedSyms.has(r.sym));
   const unpinned = watchlist.filter(r=>!pinnedSyms.has(r.sym));
-  const ordered = [...pinned, ...unpinned];
-  const dividerAt = pinned.length > 0 && unpinned.length > 0 ? pinned.length : -1;
-  ordered.forEach((r,i)=>{
-    if(i===dividerAt){
+  const list = groupedRenderList(pinned, unpinned);
+  const showPinDivider = pinned.length > 0 && unpinned.length > 0;
+  const numCols=document.querySelectorAll('thead th').length||18;
+  let rowNum = 0, lastPinnedTr = null, pinDividerDone = false;
+  list.forEach(item=>{
+    const isPinnedRow = !!(item.row && pinnedSyms.has(item.row.sym));
+    // Divider between the pinned block and the first non-pinned element.
+    if(showPinDivider && !pinDividerDone && !isPinnedRow){
+      if(lastPinnedTr) lastPinnedTr.classList.add('pin-last');
       const div=document.createElement('tr'); div.className='pin-divider';
-      const numCols=document.querySelectorAll('thead th').length||18;
       div.innerHTML=`<td colspan="${numCols}"></td>`;
       tb.appendChild(div);
+      pinDividerDone = true;
+      if(item.row) item._pinFirst = true;
     }
+    // Sector group header row (grouping overlay only).
+    if(item.header){
+      const h=document.createElement('tr'); h.className='sec-group-head';
+      h.innerHTML=`<td colspan="${numCols}"><span class="sec sec-${item.header.key}">${escHtml(item.header.label)}</span><em>${item.header.count}</em></td>`;
+      tb.appendChild(h);
+      return;
+    }
+    const r=item.row;
     const reasons=r.reasons||[];
     const checks=(r.v||[]).map((g,k)=>{
       const reason=reasons[k]||LABELS[k];
@@ -1880,9 +1982,8 @@ function renderWatchlist(){
     const hasNA=reasons.some(isUnavailable);
     const tr=document.createElement('tr');
     tr.dataset.sym=r.sym;
-    if(pinnedSyms.has(r.sym)) tr.classList.add('pinned');
-    if(dividerAt>0 && i===dividerAt-1) tr.classList.add('pin-last');
-    if(dividerAt>0 && i===dividerAt) tr.classList.add('pin-first');
+    if(isPinnedRow) tr.classList.add('pinned');
+    if(item._pinFirst) tr.classList.add('pin-first');
     if(r.scoring) tr.classList.add('scoring');
     else tr.classList.add(hasNA?'sc-na':'sc-'+scoreClass(r.score));
     const scoreEl=r.scoring
@@ -1899,9 +2000,9 @@ function renderWatchlist(){
     const betaClass=r.beta>=2?'mom-hi':r.beta>=1?'':'mom-lo';
     const coCell=r.scoring
       ?`<td class="co-cell"><span class="sym" style="opacity:0.3">${r.sym}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
-      :`<td class="co-cell"><span class="sym">${r.sym}</span>${r.warnings&&r.warnings.length?`<span class="warn-badge" title="${escHtml('Data-integrity warning:\n• '+r.warnings.join('\n• '))}">⚠</span>`:''}${r.sector?`<span class="sec sec-${r.sector}">${SECTOR_LABEL[r.sector]||r.sector}</span>`:''} <span class="name">${escHtml((r.name||'').length>16?(r.name.slice(0,15)+'…'):r.name)}</span><div class="checked" data-since="${r.scored_at||''}"></div></td>`;
+      :`<td class="co-cell"><span class="sym">${r.sym}</span>${r.warnings&&r.warnings.length?`<span class="warn-badge" title="${escHtml('Data-integrity warning:\n• '+r.warnings.join('\n• '))}">⚠</span>`:''}${r.sector?(()=>{const s=normalizeSector(r.sector);return `<span class="sec sec-${s.key}">${escHtml(s.label)}</span>`;})():''} <span class="name">${escHtml((r.name||'').length>16?(r.name.slice(0,15)+'…'):r.name)}</span><div class="checked" data-since="${r.scored_at||''}"></div></td>`;
     tr.innerHTML=`
-      <td class="idx">${i+1}.</td>
+      <td class="idx">${rowNum+1}.</td>
       ${coCell}
       <td class="num price-cell">${r.price!=null?'$'+(+r.price).toFixed(2):'—'}</td>
       <td class="grp-start"><div class="checks">${checks}</div></td>
@@ -1960,6 +2061,8 @@ function renderWatchlist(){
       );
       dragSrc = null;
     });
+    rowNum++;
+    if(isPinnedRow) lastPinnedTr = tr;
     tb.appendChild(tr);
   });
   updateChecked();
@@ -2615,6 +2718,9 @@ function setView(v){
   // already always force-fetches fresh FMP (see rescanShort / rescanQuickSwing).
   const fr=document.getElementById('forceRescan');
   if(fr) fr.style.display=(isShort||isQs)?'none':'';
+  // Sector grouping only applies to the two shared-watchlist screeners.
+  const gs=document.getElementById('groupSector');
+  if(gs) gs.style.display=(v==='watchlist'||isShort)?'':'none';
   const navTog=document.getElementById('navToggle');
   if(navTog){
     navTog.style.display=(isShort||isQs)?'none':'';
@@ -3518,6 +3624,9 @@ async function ensureShortDataLoaded(){
   applyStSort();
   applyStSortHeaders();
   renderShortWatchlist();
+  // A grouped Long-Term view derives sector for older rows from this data via
+  // the sectorOf fallback — refresh it now that the sectors are available.
+  if (groupBySector) renderWatchlist();
 }
 
 /* ===== QUICK SWING FEATURE =====
@@ -5564,18 +5673,30 @@ function renderShortWatchlist(){
   // surfaces Ready / Watching / Demoted; the table just highlights in place.
   const pinned   = watchlist.filter(r => pinnedSyms.has(r.sym));
   const unpinned = watchlist.filter(r => !pinnedSyms.has(r.sym));
-  let ordered = [...pinned, ...unpinned];
-  const dividerAt = (pinned.length > 0 && unpinned.length > 0) ? pinned.length : -1;
+  const list = groupedRenderList(pinned, unpinned);
+  const showPinDivider = (pinned.length > 0 && unpinned.length > 0);
+  const numCols = document.querySelectorAll('#shortView thead th').length || 13;
+  let rowNum = 0, lastPinnedTr = null, pinDividerDone = false;
 
   renderWatchPanel();
 
-  ordered.forEach((wl, i) => {
-    if (i === dividerAt) {
+  list.forEach(item => {
+    const isPinnedRow = !!(item.row && pinnedSyms.has(item.row.sym));
+    if (showPinDivider && !pinDividerDone && !isPinnedRow) {
+      if (lastPinnedTr) lastPinnedTr.classList.add('pin-last');
       const div = document.createElement('tr'); div.className = 'pin-divider';
-      const numCols = document.querySelectorAll('#shortView thead th').length || 13;
       div.innerHTML = `<td colspan="${numCols}"></td>`;
       tb.appendChild(div);
+      pinDividerDone = true;
+      if (item.row) item._pinFirst = true;
     }
+    if (item.header) {
+      const h = document.createElement('tr'); h.className = 'sec-group-head';
+      h.innerHTML = `<td colspan="${numCols}"><span class="sec sec-${item.header.key}">${escHtml(item.header.label)}</span><em>${item.header.count}</em></td>`;
+      tb.appendChild(h);
+      return;
+    }
+    const wl = item.row;
     const sym = (wl.sym || '').toUpperCase();
     const isLegacy  = !!wl.legacy;
     const isScoring = !!wl.shortScoring;
@@ -5592,9 +5713,8 @@ function renderShortWatchlist(){
     const cls = (isScoring || isLegacy) ? '' : 'sc-' + shortScoreClass(score);
     const tr = document.createElement('tr');
     tr.dataset.sym = sym;
-    if (pinnedSyms.has(sym)) tr.classList.add('pinned');
-    if (dividerAt > 0 && i === dividerAt - 1) tr.classList.add('pin-last');
-    if (dividerAt > 0 && i === dividerAt)     tr.classList.add('pin-first');
+    if (isPinnedRow) tr.classList.add('pinned');
+    if (item._pinFirst) tr.classList.add('pin-first');
     if (isScoring) tr.classList.add('scoring');
     else if (isLegacy) tr.classList.add('legacy');
     else tr.classList.add(cls);
@@ -5686,7 +5806,7 @@ function renderShortWatchlist(){
     };
 
     tr.innerHTML = `
-      <td class="idx">${i + 1}.</td>
+      <td class="idx">${rowNum + 1}.</td>
       ${coCell}
       <td class="num price-cell">${price != null ? '$' + (+price).toFixed(2) : '—'}</td>
       <td class="grp-start"><div class="checks">${checks}</div></td>
@@ -5744,6 +5864,8 @@ function renderShortWatchlist(){
       );
       dragSrc = null;
     });
+    rowNum++;
+    if (isPinnedRow) lastPinnedTr = tr;
     tb.appendChild(tr);
     if (isScoring) syncCheckAnim(sym);
   });
