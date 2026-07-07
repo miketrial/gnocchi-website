@@ -683,6 +683,10 @@
   #qsBtPop table.qs-bt-table td.qs-bt-pos, #qsBtPop .qs-bt-stat .v.qs-bt-pos{ color:#34d399; font-weight:700 }
   #qsBtPop table.qs-bt-table td.qs-bt-neg, #qsBtPop .qs-bt-stat .v.qs-bt-neg{ color:#f87171; font-weight:700 }
   #qsBtPop .qs-bt-reason{ font-size:8.5px; color:#8a95a8; text-transform:uppercase; letter-spacing:.3px }
+  /* Long/short side badges on open + closed trades (bidirectional log) */
+  #qsBtPop .qs-bt-side{ font-size:8px; font-weight:700; letter-spacing:.4px; padding:1px 4px; border-radius:3px; vertical-align:middle }
+  #qsBtPop .qs-bt-side-long{ background:rgba(52,211,153,.16); color:#34d399 }
+  #qsBtPop .qs-bt-side-short{ background:rgba(248,113,113,.16); color:#f87171 }
   #qsBtPop .qs-bt-empty{ font-size:11px; color:#8a95a8; padding:14px 4px; line-height:1.5 }
   #qsBtPop .qs-bt-note{ font-size:9px; color:#6b7488; margin-top:14px; padding-top:10px;
     border-top:1px solid rgba(255,255,255,.06); line-height:1.5 }
@@ -1302,7 +1306,7 @@
     <span class="wp-title" style="border-bottom:1px dashed currentColor">Bounce</span>
     <span class="wp-sub">1-2 day mean-reversion setups · its own independent list, separate from Long-Term/Swing · click a column header to sort · click any data cell for its scan history · right-click a row for Rescan / Delete · shift-click to select a range</span>
     <!-- ===== QUICK SWING FEATURE ===== Backtest log opener (top-right, mirrors the Watchlist Backtest button) -->
-    <span id="qsBtBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="As-if you bought every BUY and sold on a SELL flip or a 2.5×ATR stop-loss — long only, rolling 15-day window">▢ Backtest log</span>
+    <span id="qsBtBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="As-if you went long every BUY and short every SELL, each exiting on the opposite flip or a 2.5×ATR stop — rolling 15-day window. An EOD reconstruction of recent activity, not a live tick-by-tick track record.">▢ Backtest log</span>
     <!-- ===== END QUICK SWING FEATURE ===== -->
   </div>
   <!-- ===== QUICK SWING FEATURE ===== -->
@@ -1319,7 +1323,7 @@
           <th></th>
           <th class="sortable" data-qssort="sym">Ticker</th>
           <th class="num sortable" data-qssort="price">Price</th>
-          <th class="num sortable" data-qssort="verdict" data-tip="BUY/SELL/NEUTRAL verdict, reduced from independent Buy and Sell scores (each 0-24, summed across 6 bidirectional factors + 2 volatility-context factors, then scaled by the Liquidity, ADR, market-regime, and VIX gates). 75%+ = strong, 55%+ = moderate, 30%+ = weak. A deeply oversold RSI(2)≤5 or %B below the band also forces at least a weak BUY even when the weighted score is muted (mirror for overbought → SELL), so a textbook extreme on a wild name isn't missed. LEADER GATE: a BUY only stands if the stock is beating or matching the market (RS vs SPY ≥ 0) — otherwise it's shown NEUTRAL. This fades dips only in relative-strength leaders, not laggards/falling knives; backtested it lifts the win rate ~69%→75%. SELL isn't gated (exits stay responsive). BLOCKED overrides everything inside the earnings blackout window. Also shows how many of the 6 directional factors agree with the call, and a suggested stop (1.5x ATR(5)) when a BUY or SELL fires.">Verdict</th>
+          <th class="num sortable" data-qssort="verdict" data-tip="BUY/SELL/NEUTRAL verdict, reduced from independent Buy and Sell scores (each 0-24, summed across 6 bidirectional factors + 2 volatility-context factors, then scaled by the Liquidity, ADR, market-regime, and VIX gates). 75%+ = strong, 55%+ = moderate, 30%+ = weak. A deeply oversold RSI(2)≤5 or %B below the band also forces at least a weak BUY even when the weighted score is muted (mirror for overbought → SELL), so a textbook extreme on a wild name isn't missed. LEADER / LAGGARD GATE: a fresh BUY only stands if the stock is beating or matching the market (RS vs SPY ≥ 0); a fresh SELL only stands if it's lagging or matching (RS ≤ 0) — otherwise it's shown NEUTRAL. This fades dips in relative-strength leaders and rips in laggards, not falling knives or runaway rockets; backtested the BUY gate lifts the win rate ~69%→75%. A call already open isn't re-gated (exits and covers stay responsive). BLOCKED overrides everything inside the earnings blackout window. Also shows how many of the 6 directional factors agree with the call, and a suggested stop (2.5× ATR(5)) when a BUY or SELL fires.">Verdict</th>
           <th class="num sortable" data-qssort="rsi" data-tip="2-day RSI — a much more reactive oversold/overbought read than the standard 14-day RSI, tuned to catch 1-2 day extremes rather than multi-week trend. Lower = more oversold (BUY): ≤5 deeply oversold, ≤10 oversold, ≤20 stretched down. Higher = more overbought (SELL): ≥95 deeply overbought, ≥90 overbought, ≥80 stretched up. Live during market hours — uses the current quote as today's in-progress bar, not just yesterday's close.">RSI(2)</th>
           <th class="num sortable" data-qssort="pctB" data-tip="Bollinger %B(20,2σ) — where price sits inside its own 20-day volatility band. Below 0 (BUY): below the lower band, the more negative the more stretched down. Above 1 (SELL): above the upper band, the more it exceeds 1 the more stretched up. Live during market hours.">%B</th>
           <th class="num sortable" data-qssort="volclimax" data-tip="Last session's volume vs its own 20-day average, read against direction. A huge spike on a down day often marks capitulation (BUY — the sellers who were going to sell, already have); a huge spike on an up day can mark a blow-off top (SELL — the buyers who were going to buy, already have). Updates once daily after close — mid-session volume-so-far isn't comparable to a full day's average, so this can't be shown live without being misleading.">Vol Climax</th>
@@ -1514,7 +1518,7 @@
     <span style="font-size:12px;font-weight:700;letter-spacing:.3px">Bounce backtest · as-if trade log</span>
     <span id="qsBtClose" style="cursor:pointer;color:#8a95a8;font-size:13px;padding:0 2px">✕</span>
   </div>
-  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px">Bought every BUY, sold on a SELL flip or a 2.5×ATR stop · long only · rolling 15-day window (backfilled the first time you open this)</div>
+  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px">Long every BUY, short every SELL — each exits on the opposite flip or a 2.5×ATR stop · rolling 15-day window of recent activity (an EOD reconstruction, not a live track record) · backfilled the first time you open this</div>
   <div id="qsBtStatus" style="display:none;font-size:10px;color:#fbbf24;margin-bottom:10px">⟳ Backfilling 15-day history…</div>
   <div class="qs-bt-layout">
     <aside class="qs-bt-key">
@@ -1527,8 +1531,8 @@
         <dt>Cumulative</dt><dd>Total $ if you'd put a fixed $10,000 into every trade.</dd>
         <dt>Edge vs SPY</dt><dd>Your avg P/L minus what <em>SPY</em> returned over the same trade dates — did timing the bounce beat just being in the market? Positive = the signal added value.</dd>
         <dt>Equity curve</dt><dd>Running cumulative $ after each closed trade, in exit order, with <em>SPY</em> buy-and-hold overlaid. Rising above the dashed SPY line = the machine is adding value.</dd>
-        <dt>Open</dt><dd>A BUY still running. <em>Now</em> is the live price, <em>Stop</em> the auto-exit line (entry − 2.5×ATR), <em>Unrealized</em> the paper gain so far. A red <em>● STOP</em> means price is at/through the stop.</dd>
-        <dt>Closed</dt><dd>Finished trades, grouped by ticker (best cumulative first). Click a ticker to expand. <em>Exit on</em> is why it closed — <em>SELL</em> (overbought flip) or <em>STOP</em> (broke its 2.5×ATR stop).</dd>
+        <dt>Open</dt><dd>A <em>LONG</em> (from a BUY) or <em>SHORT</em> (from a SELL) still running. <em>Now</em> is the live price, <em>Stop</em> the auto-exit line (entry −2.5×ATR for a long, +2.5×ATR for a short), <em>Unrealized</em> the paper gain so far. A red <em>● STOP</em> means price is at/through the stop.</dd>
+        <dt>Closed</dt><dd>Finished trades, grouped by ticker (best cumulative first). <em>L/S</em> marks each as long or short. Click a ticker to expand. <em>Exit on</em> is why it closed — <em>SELL</em> (a long's overbought flip), <em>BUY</em> (a short's cover), or <em>STOP</em> (broke its 2.5×ATR stop).</dd>
       </dl>
     </aside>
     <div class="qs-bt-main">
@@ -1538,7 +1542,7 @@
       <div id="qsBtClosed"></div>
     </div>
   </div>
-  <div class="qs-bt-note">The 15-day seed is a historical replay of the EOD factors (after-hours and VIX legs can't be reconstructed, so those days may differ slightly from what the live tool showed). Forward datapoints are recorded each time you open the app or rescan, at the price that scan saw. The 2.5×ATR stop assumes a fill at the stop price (or the day's open on a gap-down). No slippage or commissions. Cumulative $ assumes a fixed $10,000 per trade.</div>
+  <div class="qs-bt-note">This is a rolling 15-day window of <em>recent activity</em>, not a full track record — too few trades to judge the strategy, and deliberately capped at 15 days. The seed is a historical replay of the EOD factors decided at each daily close (the after-hours leg can't be reconstructed — there's no historical after-hours data — so those days may differ slightly from what the live tool showed intraday; the VIX leg <em>is</em> now reconstructed from ^VIX EOD history). Forward datapoints are recorded each time you open the app or rescan, at the price that scan saw. The 2.5×ATR stop assumes a fill at the stop price (or the day's open on a gap-through). SPY buy-and-hold is the benchmark for both longs and shorts (opportunity cost of just holding the market those days). No slippage or commissions. Cumulative $ assumes a fixed $10,000 per trade.</div>
 </div>
 <!-- ===== END QUICK SWING FEATURE ===== -->
 
@@ -3759,7 +3763,11 @@ function qsRowHtml(r, idx){
   const tipFor = k => escHtml(qsTipForChip(k, r.reasons?.[k]));
   const blockedBadge = r.blocked
     ? `<span class="qs-blocked-badge" data-tip="${escHtml(r.blockedReason||'')}">Blocked</span>`
-    : (r.earnings?.daysUntil != null ? `<span style="color:var(--ink-faint);font-size:10px">${r.earnings.daysUntil}d</span>` : '—');
+    : (r.earnings?.daysUntil != null
+        ? `<span style="color:var(--ink-faint);font-size:10px">${r.earnings.daysUntil}d</span>`
+        : (r.earnings?.dataMissing
+            ? `<span style="color:var(--warn-fg,#b8860b);font-size:10px;cursor:help" data-tip="${escHtml('Earnings calendar data unavailable for this name — the 5-day earnings blackout could NOT be evaluated. Treat with caution: a print could be near without the gate catching it.')}">n/a</span>`
+            : '—'));
   const priceTag = r.priceIsLive
     ? `<br><span data-tip="${escHtml('Live intraday price from FMP. RSI(2), %B, and RS vs SPY are computed using this live price too. Vol Climax, Reversal, Vol Dry-Up, Vol Expansion, ADR%, and Liquidity still use the completed session as of '+fmtQsAsOf(r.dataAsOf)+' — those need a finished day to mean anything.')}" style="color:var(--good-fg,#2f7d4f);font-size:9px;font-weight:600;cursor:default">● live</span>`
     : (r.dataAsOf ? `<br><span style="color:var(--ink-faint);font-size:9px;font-weight:400">as of ${fmtQsAsOf(r.dataAsOf)}</span>` : '');
@@ -3769,9 +3777,9 @@ function qsRowHtml(r, idx){
   const heldNote = r.held
     ? ` STICKY: the live read cooled to NEUTRAL, but this ${r.verdict} is held until it fully fades (score below the hold floor) or flips to the opposite side — this keeps an in-progress call from whipsawing intraday.`
     : '';
-  const gapMult = r.gapMultiplierBuy;
+  const gapMult = r.gapMult;
   const gapDamperNote = (gapMult != null && gapMult < 1 && r.overnightGap)
-    ? ` OVERNIGHT-GAP DAMPER: this name averages a ${r.overnightGap.avgAbsOvn}% overnight gap (${r.overnightGap.nights3Pct}% of nights >3%), so the Buy score is cut ${Math.round((1-gapMult)*100)}% (x${gapMult.toFixed(2)}) — a gappier name needs a stronger oversold read to earn a BUY, since more of its move lands where you can't act. SELL is left untouched so exits stay responsive.`
+    ? ` OVERNIGHT-GAP DAMPER: this name averages a ${r.overnightGap.avgAbsOvn}% overnight gap (${r.overnightGap.nights3Pct}% of nights >3%), so both the Buy and Sell scores are cut ${Math.round((1-gapMult)*100)}% (x${gapMult.toFixed(2)}) — a gappier name needs a stronger read to earn a fresh entry on either side, since more of its move lands where you can't act.`
     : '';
   const verdictTip = escHtml(`${r.tier ? r.tier+' ' : ''}${r.verdict} — Buy ${r.buyScore||'—'} · Sell ${r.sellScore||'—'} (each out of 24). Liquidity, ADR, market regime, and VIX gates already applied.${gapDamperNote}${heldNote} Click to see history.`);
   // Abbreviated on-screen only — the tooltip above still spells everything
@@ -3787,12 +3795,12 @@ function qsRowHtml(r, idx){
     ? `<span class="qs-subscore" data-tip="${escHtml('Of the 6 directional factors (RSI, %B, Vol Climax, Reversal, RS vs SPY, AH Move), '+r.agreement.count+' independently lean '+r.agreement.direction+' — breadth of agreement, separate from the weighted score above. Broad agreement across several modest factors is often more trustworthy than one factor screaming alone.')}">${r.agreement.count}/${r.agreement.of} factors agree</span>`
     : '';
   const stopLine = r.stop
-    ? `<span class="qs-subscore" data-tip="${escHtml('Suggested stop ('+r.stop.basis+'), '+(r.stop.side==='short'?'if shorting this SELL signal':'if long on this BUY signal')+' — not a guarantee, just a mechanical risk line based on recent volatility.')}">Stop ${r.stop.side==='short'?'above':'below'} $${r.stop.price.toFixed(2)} (${r.stop.pctFromEntry>=0?'+':''}${r.stop.pctFromEntry.toFixed(1)}%)</span>`
+    ? `<span class="qs-subscore" data-tip="${escHtml('Suggested stop ('+r.stop.basis+'), '+(r.stop.side==='short'?'for a short entry on this SELL signal':'for a long entry on this BUY signal')+' — not a guarantee, just a mechanical risk line based on recent volatility.')}">Stop ${r.stop.side==='short'?'above':'below'} $${r.stop.price.toFixed(2)} (${r.stop.pctFromEntry>=0?'+':''}${r.stop.pctFromEntry.toFixed(1)}%)</span>`
     : '';
   // Flag gappy names at a glance — surfaced whenever the overnight profile exists,
   // so you can size for the overnight risk even when the damper isn't biting yet.
   const gapLine = (isActionable && r.overnightGap)
-    ? `<span class="qs-subscore" data-tip="${escHtml('Averages a ±'+r.overnightGap.avgAbsOvn+'% move overnight (close→open), and gapped >3% on '+r.overnightGap.nights3Pct+'% of nights over the last ~60 sessions. That is risk that lands while the market is shut — you cannot trade around it, so size accordingly.'+(gapMult!=null&&gapMult<1?' The Buy score is damped x'+gapMult.toFixed(2)+' because of it.':''))}">±${r.overnightGap.avgAbsOvn}% overnight${gapMult!=null&&gapMult<1?' · Buy ×'+gapMult.toFixed(2):''}</span>`
+    ? `<span class="qs-subscore" data-tip="${escHtml('Averages a ±'+r.overnightGap.avgAbsOvn+'% move overnight (close→open), and gapped >3% on '+r.overnightGap.nights3Pct+'% of nights over the last ~60 sessions. That is risk that lands while the market is shut — you cannot trade around it, so size accordingly.'+(gapMult!=null&&gapMult<1?' Both the Buy and Sell scores are damped x'+gapMult.toFixed(2)+' because of it.':''))}">±${r.overnightGap.avgAbsOvn}% overnight${gapMult!=null&&gapMult<1?' · Score ×'+gapMult.toFixed(2):''}</span>`
     : '';
   return `<tr class="${r.scoring?'scoring':(r.blocked?'qs-row-blocked':'')}" data-sym="${r.sym}">
     <td class="idx">${idx}.</td>
@@ -3815,7 +3823,7 @@ function qsRowHtml(r, idx){
     <td class="num ${qsVCls(r,7)}" data-col="volexp" style="cursor:pointer" data-tip="${tipFor(7)}">${typeof volExp==='number'?volExp.toFixed(2)+'x':'—'}</td>
     <td class="num" data-tip="${escHtml('GATE — '+(r.volatility?.label||'—')+'. Dampens both Buy and Sell scores equally (multiplier '+(r.adrMultiplier!=null?r.adrMultiplier.toFixed(2):'1.00')+'x).')}">${typeof adrPct==='number'?adrPct.toFixed(1)+'%':'—'}</td>
     <td class="num" data-tip="${escHtml('GATE — '+(r.liquidity?.label||'—')+'. Dampens both Buy and Sell scores equally (multiplier '+(r.liqMultiplier!=null?r.liqMultiplier.toFixed(2):'1.00')+'x).')}">${fmtQsDollars(liqVal)}</td>
-    <td data-tip="${escHtml(r.blocked ? r.blockedReason||'' : (r.earnings?.daysUntil!=null ? `Earnings in ${r.earnings.daysUntil}d (${r.earnings.date}) — outside the 5-day blackout window` : 'No earnings calendar data'))}">${blockedBadge}</td>
+    <td data-tip="${escHtml(r.blocked ? r.blockedReason||'' : (r.earnings?.daysUntil!=null ? `Earnings in ${r.earnings.daysUntil}d (${r.earnings.date}) — outside the 5-day blackout window` : (r.earnings?.dataMissing ? 'Earnings calendar data unavailable — the 5-day blackout could not be evaluated' : 'No upcoming earnings in the calendar')))}">${blockedBadge}</td>
   </tr>`;
 }
 
@@ -3980,7 +3988,7 @@ function renderQsBacktest(){
   // --- Summary stats over closed trades ---
   const n = closed.length;
   if (!n) {
-    stats.innerHTML = `<div class="qs-bt-empty">No closed trades in the window yet. If this is your first time opening the log, history is backfilling now — otherwise none of your tickers had a BUY that entered and closed in the last 15 days.</div>`;
+    stats.innerHTML = `<div class="qs-bt-empty">No closed trades in the window yet. If this is your first time opening the log, history is backfilling now — otherwise none of your tickers had a BUY or SELL that entered and closed in the last 15 days.</div>`;
   } else {
     const wins = closed.filter(t => t.pnlPct > 0).length;
     const winRate = (wins / n) * 100;
@@ -4017,15 +4025,21 @@ function renderQsBacktest(){
     openEl.innerHTML = '';
   } else {
     const rows = openTrades.map(o => {
+      const isShort = o.side === 'short';
       const live = qsRowsBySym[o.sym?.toUpperCase()]?.price;
-      const unreal = (live > 0 && o.entryPrice > 0) ? ((live - o.entryPrice) / o.entryPrice) * 100 : null;
+      // Unrealized is side-aware: a short profits as price falls below entry.
+      const unreal = (live > 0 && o.entryPrice > 0)
+        ? (isShort ? (o.entryPrice - live) / o.entryPrice : (live - o.entryPrice) / o.entryPrice) * 100
+        : null;
       const stop = o.stopPrice;
-      const breached = (stop > 0 && live > 0 && live <= stop);
+      // A long's stop sits below entry (breached when price ≤ stop); a short's above.
+      const breached = (stop > 0 && live > 0 && (isShort ? live >= stop : live <= stop));
       const stopCell = stop > 0
-        ? `<td data-tip="${escHtml('Stop = entry − 2.5×ATR(5), pinned at entry. The as-if trade auto-exits if price breaks this line.')}">${qsBtPrice(stop)}</td>`
+        ? `<td data-tip="${escHtml('Stop = entry ' + (isShort ? '+' : '−') + ' 2.5×ATR(5), pinned at entry. The as-if trade auto-exits if price breaks this line.')}">${qsBtPrice(stop)}</td>`
         : `<td>—</td>`;
+      const sideTag = `<span class="qs-bt-side qs-bt-side-${isShort?'short':'long'}">${isShort?'SHORT':'LONG'}</span>`;
       const flag = breached ? ` <span style="color:#f87171;font-weight:700">● STOP</span>` : '';
-      return `<tr${breached?' style="background:rgba(248,113,113,.08)"':''}><td>${escHtml(o.sym)}</td><td>${qsBtDate(o.entryScoredAt || o.entryAt)}</td>` +
+      return `<tr${breached?' style="background:rgba(248,113,113,.08)"':''}><td>${escHtml(o.sym)} ${sideTag}</td><td>${qsBtDate(o.entryScoredAt || o.entryAt)}</td>` +
         `<td>${qsBtPrice(o.entryPrice)}</td><td>${qsBtPrice(live)}</td>${stopCell}` +
         `<td class="${unreal==null?'':qsBtPnlClass(unreal)}">${unreal==null?'—':qsBtPct(unreal)}${flag}</td></tr>`;
     }).join('');
@@ -4054,8 +4068,11 @@ function renderQsBacktest(){
 
     const sections = ordered.map(({ sym, trades, agg }) => {
       const rows = trades.map(t => {
+        const isShort = t.side === 'short';
+        const sideTag = `<span class="qs-bt-side qs-bt-side-${isShort?'short':'long'}">${isShort?'S':'L'}</span>`;
         const reason = t.exitReason ? `<span class="qs-bt-reason">${escHtml(t.exitReason)}</span>` : '';
         return `<tr>` +
+          `<td>${sideTag}</td>` +
           `<td>${qsBtDate(t.entryScoredAt || t.entryAt)}</td><td>${qsBtPrice(t.entryPrice)}</td>` +
           `<td>${qsBtDate(t.exitScoredAt || t.exitAt)}</td><td>${qsBtPrice(t.exitPrice)}</td>` +
           `<td>${t.holdDays==null?'—':t.holdDays+'d'}</td>` +
@@ -4073,7 +4090,7 @@ function renderQsBacktest(){
           <span class="qs-bt-tk-cum ${qsBtPnlClass(agg.cum)}">${qsBtDollars(agg.cum)}</span>
         </summary>
         <div class="qs-bt-tk-body">
-          <table class="qs-bt-table"><thead><tr><th>Entry</th><th>Entry $</th><th>Exit</th><th>Exit $</th><th>Hold</th><th>P/L</th><th>Exit on</th></tr></thead><tbody>${rows}</tbody></table>
+          <table class="qs-bt-table"><thead><tr><th>Side</th><th>Entry</th><th>Entry $</th><th>Exit</th><th>Exit $</th><th>Hold</th><th>P/L</th><th>Exit on</th></tr></thead><tbody>${rows}</tbody></table>
         </div>
       </details>`;
     }).join('');

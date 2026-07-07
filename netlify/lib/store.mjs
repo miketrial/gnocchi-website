@@ -342,6 +342,19 @@ export async function putSpyHistCache(hist) {
   await spyHistStore().setJSON("SPY", { ts: Date.now(), data: hist });
 }
 
+/* ---------- Shared ^VIX history cache ----------
+   Same pattern as SPY: the backtest replay reconstructs the VIX multiplier as of
+   each past close from ^VIX EOD history, fetched and cached ONCE per batch rather
+   than per ticker. Reuses the spy-hist store under a distinct key. */
+export async function getVixHistCache() {
+  const entry = await spyHistStore().get("VIX", { type: "json" }).catch(() => null);
+  if (!entry || !entry.ts || Date.now() - entry.ts > SPY_HIST_TTL_MS) return null;
+  return entry.data;
+}
+export async function putVixHistCache(hist) {
+  await spyHistStore().setJSON("VIX", { ts: Date.now(), data: hist });
+}
+
 /* ---------- EPS estimate snapshots (for 30-day revision detection) ----------
    Stored as { "YYYY-MM-DD": fwdEpsNumber, ... } per ticker. On each scan, we
    write today's value and look back ~30 days to detect direction of change. */

@@ -44,10 +44,10 @@ export default async () => {
         const isReseed = existing && existing.seedVersion != null && existing.seedVersion !== BT_SEED_VERSION;
         let next;
         if (isReseed) {
-          const seed = await seedQuickSwingBacktest(sym, { daysBack: BT_WINDOW_DAYS, spyHist: regime?.hist });
+          const seed = await seedQuickSwingBacktest(sym, { daysBack: BT_WINDOW_DAYS, spyHist: regime?.hist, vixHist: regime?.vixHist });
           next = pruneTradeWindow({ open: seed.open, closed: seed.closed, seeded: true, seedVersion: BT_SEED_VERSION });
         } else {
-          const seed = await seedQuickSwingBacktest(sym, { daysBack: BT_SEED_DAYS, spyHist: regime?.hist });
+          const seed = await seedQuickSwingBacktest(sym, { daysBack: BT_SEED_DAYS, spyHist: regime?.hist, vixHist: regime?.vixHist });
           next = pruneTradeWindow(mergeSeed(existing, seed));
         }
         annotateBenchmarks(next, regime?.hist); // fill SPY benchmark on any trade still missing it
