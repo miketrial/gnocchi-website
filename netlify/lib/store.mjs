@@ -16,7 +16,7 @@ const qsRowStore       = () => getStore("qs-rows");      // key = TICKER, per-ti
 const qsTradesStore    = () => getStore("qs-trades");    // key = TICKER, per-ticker paper-trade backtest log
 const qsFmpStore       = () => getStore("qs-fmp");       // key = TICKER, per-ticker raw FMP fan-out cache (24h TTL)
 const qsAlertStore     = () => getStore("qs-alert-state");// key = TICKER, last verdict a Telegram alert was sent for (dedup)
-const spyHistStore     = () => getStore("spy-hist");     // key = "SPY", one shared blob for the whole scan batch
+const spyHistStore     = () => getStore("spy-hist");     // key = index/ETF symbol ("SPY", "VIX", "XLK", "SMH", ...), one shared blob per symbol per scan batch
 
 /* ---------- FMP cache (24h TTL) ---------- */
 const FMP_TTL_MS = 24 * 60 * 60 * 1000;
@@ -385,6 +385,21 @@ export async function getVixHistCache() {
 }
 export async function putVixHistCache(hist) {
   await spyHistStore().setJSON("VIX", { ts: Date.now(), data: hist });
+}
+
+/* ---------- Shared sector ETF history cache (Swing's Sector RS factor) ----------
+   Same pattern as SPY/VIX above, generalized to a symbol key (SMH, XLK, XLF,
+   ...) since a Swing scan batch only touches a handful of distinct sector
+   ETFs (one per sector represented in the watchlist), not one per ticker.
+   Reuses the spy-hist store — it's already a general "shared index history"
+   cache, not SPY-specific. */
+export async function getSectorHistCache(etfSymbol) {
+  const entry = await spyHistStore().get(etfSymbol.toUpperCase(), { type: "json" }).catch(() => null);
+  if (!entry || !entry.ts || Date.now() - entry.ts > SPY_HIST_TTL_MS) return null;
+  return entry.data;
+}
+export async function putSectorHistCache(etfSymbol, hist) {
+  await spyHistStore().setJSON(etfSymbol.toUpperCase(), { ts: Date.now(), data: hist });
 }
 
 /* ---------- EPS estimate snapshots (for 30-day revision detection) ----------

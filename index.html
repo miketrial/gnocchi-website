@@ -1318,7 +1318,7 @@
         <tr class="grphdr">
           <th colspan="3"></th>
           <th colspan="3" class="grp">Setup</th>
-          <th colspan="2" class="grp">Momentum</th>
+          <th colspan="3" class="grp">Momentum</th>
           <th colspan="2" class="grp">Valuation</th>
           <th colspan="2" class="grp">Quality</th>
           <th colspan="2" class="grp">Catalyst</th>
@@ -1327,11 +1327,12 @@
           <th></th>
           <th class="sortable" data-sort="name">Company<span class="sub">(ticker)</span></th>
           <th class="num sortable" data-sort="price">Price<span class="sub">live</span></th>
-          <th class="grp-start"><div class="chkhdr"><span><span class="hl">Trend</span></span><span><span class="hl">3M Mom</span></span><span><span class="hl">Near Hi</span></span><span><span class="hl">Liquid</span></span><span><span class="hl">Anlyst Rev</span></span><span><span class="hl">Value</span></span><span><span class="hl">Quality</span></span><span><span class="hl">Leverage</span></span><span><span class="hl">Catalyst</span></span><span><span class="hl">Vol Surge</span></span></div></th>
-          <th class="sortable" data-sort="score" data-rulecard="score" style="cursor:help">Score<span class="sub">of 30</span></th>
+          <th class="grp-start"><div class="chkhdr"><span><span class="hl">Trend</span></span><span><span class="hl">3M Mom</span></span><span><span class="hl">Near Hi</span></span><span><span class="hl">Liquid</span></span><span><span class="hl">Anlyst Rev</span></span><span><span class="hl">Value</span></span><span><span class="hl">Quality</span></span><span><span class="hl">Leverage</span></span><span><span class="hl">Catalyst</span></span><span><span class="hl">Vol Surge</span></span><span><span class="hl">Sector RS</span></span></div></th>
+          <th class="sortable" data-sort="score" data-rulecard="score" style="cursor:help">Score<span class="sub">of 33</span></th>
           <th class="num sortable" data-sort="vspe" data-rulecard="vsSect" style="cursor:help">VS Sector<span class="sub">P/E</span></th>
           <th class="grp-start" data-rulecard="trend" style="cursor:help">Trend<span class="sub">price &amp; DMA</span></th>
           <th data-rulecard="mom" style="cursor:help">3M Return<span class="sub">vs 0</span></th>
+          <th data-rulecard="sectorRs" style="cursor:help">Sector RS<span class="sub">vs SPY</span></th>
           <th class="grp-start" data-rulecard="fwdpe" style="cursor:help">Fwd P/E<span class="sub">vs sector</span></th>
           <th data-rulecard="epsrev" style="cursor:help">Anlyst Rev<span class="sub">PT &amp; ratings</span></th>
           <th class="grp-start" data-rulecard="qual" style="cursor:help">FCF / ROE<span class="sub">TTM</span></th>
@@ -1345,7 +1346,7 @@
   </div>
 
   <div class="legend">
-    <div class="ttl">Swing scoring &nbsp;·&nbsp; 10 factors tuned for 1wk-3mo swing trades</div>
+    <div class="ttl">Swing scoring &nbsp;·&nbsp; 11 factors tuned for 1wk-3mo swing trades</div>
     <span><b style="background:var(--good-bg);color:var(--good-fg)">●</b><span style="color:var(--good-fg);font-weight:600">Green</span> · factor passes</span>
     <span><b style="background:var(--bad-bg);color:var(--bad-fg)">●</b><span style="color:var(--bad-fg);font-weight:600">Red</span> · factor fails</span>
     <span><b style="background:var(--pur-bg);color:var(--pur-fg)">●</b><span style="color:var(--pur-fg);font-weight:600">Purple</span> · data not available from FMP for this ticker</span>
@@ -2109,10 +2110,11 @@ const ST_FACTOR_META = [
   { label:'Net Debt/EBITDA', unit:'x',  toVal: r => r?.ratio != null ? +r.ratio.toFixed(2) : null },
   { label:'Days to Earnings',unit:'d',  toVal: r => r?.daysUntil != null ? r.daysUntil : null },
   { label:'Vol Surge',       unit:'x',  toVal: r => r?.rv != null ? +r.rv.toFixed(2) : null },
+  { label:'Sector RS',       unit:'pp', toVal: r => r?.delta != null ? +(r.delta*100).toFixed(1) : null },
 ];
 
 // Map data-column attribute values (set on TDs) to factor indices
-const ST_COL_TO_FACTOR = { score:-1, trend:0, mom:1, fwdpe:5, epsrev:4, qual:6, lev:7, cat:8, vs:9 };
+const ST_COL_TO_FACTOR = { score:-1, trend:0, mom:1, fwdpe:5, epsrev:4, qual:6, lev:7, cat:8, vs:9, sectorRs:10 };
 
 function saveShortHistory(sym, row) {
   if (!row || !row.scored_at) return;
@@ -2147,19 +2149,20 @@ function buildStFactChart(entries, factorIdx) {
   let svg = '';
 
   if (factorIdx === -1) {
-    // Overall score — detect scale: legacy /10 entries cap at 10, new /30 go higher
+    // Overall score — detect scale: legacy /10 entries cap at 10, new /33 go higher
+    // (was /30 before the Sector RS factor added an 11th check)
     const maxScore = Math.max(...entries.map(e => parseInt(e.score) || 0), 1);
-    const scale = maxScore > 10 ? 30 : 10;
+    const scale = maxScore > 10 ? 33 : 10;
     const ys = v => pt + cH - (v/scale)*cH;
-    const gridLines = scale === 30 ? [0,10,20,30] : [0,5,10];
+    const gridLines = scale === 33 ? [0,11,22,33] : [0,5,10];
     gridLines.forEach(v => {
       svg += `<line x1="${pl}" y1="${ys(v)}" x2="${W-pr}" y2="${ys(v)}" stroke="rgba(255,255,255,.07)" stroke-width="0.5"/>`;
       svg += `<text x="${pl-4}" y="${ys(v)+3.5}" text-anchor="end" fill="#606878" font-size="8">${v}</text>`;
     });
     const pts = entries.map((e,i) => {
       const v = parseInt(e.score) || 0;
-      const good = scale === 30 ? v >= 20 : v >= 7;
-      const mid  = scale === 30 ? v >= 12 : v >= 5;
+      const good = scale === 33 ? v >= 22 : v >= 7;
+      const mid  = scale === 33 ? v >= 13 : v >= 5;
       return { x: xs(i), y: ys(v), v, verdict: good?'good':mid?'mixed':'bad' };
     });
     if (n > 1) {
@@ -2196,6 +2199,7 @@ function buildStFactChart(entries, factorIdx) {
         4: [-5, 0, 5],       // analyst composite %: -5=weak, 0=ok, 5=good
         7: [1, 3, 5],        // leverage x: 1=good, 3=ok, 5=weak (lower=better)
         9: [0.8, 1.5, 2.5],  // vol surge x: 0.8=weak, 1.5=ok, 2.5=good
+        10: [-3, 8, 15],     // sector RS pp vs SPY: -3=weak, 8=ok, 15=good
       };
       (thresholds[factorIdx] || []).forEach(tv => {
         if (tv >= lo && tv <= hi) {
@@ -3466,7 +3470,7 @@ window.addEventListener('scroll',()=>{
  *  Short Term view (FMP-only, swing trading 1wk-3mo)                 *
  * ================================================================== */
 
-// Tooltip text for each of the 10 chips (factor, why it matters, rule).
+// Tooltip text for each of the 11 chips (factor, why it matters, rule).
 // "Your value:" gets appended at render time from the per-row computed value.
 const SHORT_LABELS = [
   { name: "Trend",          why: "An uptrend (price above both its 50-day and 200-day moving averages, with 50 above 200) is the single strongest predictor that recent strength will continue over the next 2-12 weeks.", rule: "Price > 50-day MA > 200-day MA" },
@@ -3479,6 +3483,7 @@ const SHORT_LABELS = [
   { name: "Leverage",       why: "Over-levered names are most fragile when rates move or sentiment shifts — the kind of single-day -15% gap you can't trade out of.", rule: "Net debt / EBITDA < 3x (or net cash position)" },
   { name: "Catalyst",       why: "Swing trades work best when there's a known event within the holding window that will re-rate the stock — most commonly the next earnings release.", rule: "Earnings between 7 and 90 days from today" },
   { name: "Volume Surge",   why: "Today's trading volume relative to its 20-day average. Unusually high volume (≥ 1.5×) is one of the most reliable leading indicators of a near-term move — institutions accumulating or distributing leave a footprint here before it shows up in price.", rule: "Today's volume ≥ 1.5× the 20-day average" },
+  { name: "Sector RS",      why: "Stocks in sectors that are beating the market tend to keep beating it — a momentum-confirmation signal, backtested against real forward returns (see scripts/study-short-factors.mjs). NOT an early-warning for a sector rotation: it's a slow 3-12 month weighted window, so a high score means 'this sector has been a leader,' not 'this sector is safe from a reversal.'", rule: "Sector ETF's weighted 3-12mo return ≥ SPY's by 8pp or more" },
 ];
 
 // Newbie tooltip text built from the label + actual computed value
@@ -4313,8 +4318,8 @@ async function rescanQuickSwing(e){
 function shortScoreClass(s){
   const n = parseInt((s||'').toString());
   if (isNaN(n)) return 'na';   // unscored rows render in neutral, not red
-  if (n >= 20) return 'g';     // ≥ 20/30 (67%) — strong setup
-  if (n >= 12) return 'y';     // ≥ 12/30 (40%) — mixed
+  if (n >= 22) return 'g';     // ≥ 22/33 (67%) — strong setup
+  if (n >= 13) return 'y';     // ≥ 13/33 (~40%) — mixed
   return 'r';
 }
 
@@ -4325,7 +4330,7 @@ function shortScoreClass(s){
 // Persisted to Netlify Blobs (/api/watch-state) so all visitors share state.
 // localStorage is used as a fast local cache / offline fallback.
 // User clicks the flag to toggle "watching" on/off. The render loop
-// auto-promotes to "ready" when score ≥ 22, Catalyst good/ok, Vol Surge
+// auto-promotes to "ready" when score ≥ 24, Catalyst good/ok, Vol Surge
 // good/ok. When a "ready" stock falls back, it's demoted to "watching"
 // AND a demoted record is captured with the failure reasons so the user
 // sees what changed in the red card.
@@ -4488,7 +4493,7 @@ function readyFailureReasons(r){
   const tvp = tvpFor(r);
   if (!tvp) return ['no data'];
   const scoreNum = parseInt(r.score) || 0;
-  if (scoreNum < 22) return [`score ${scoreNum}/30 below 22 threshold`];
+  if (scoreNum < 24) return [`score ${scoreNum}/33 below 24 threshold`];
   const lost = [];
   if (!tvp.T) lost.push('T');
   if (!tvp.V) lost.push(tvp.volWarn ? 'V (distribution)' : 'V');
@@ -4823,7 +4828,7 @@ function tradeCard(sym, opts){
   return `${outerOpen}
     <div class="wp-tc-head">
       <span class="wp-tc-sym">${sym}</span>
-      <span class="wp-tc-sub">${score}/30 · ${greens}/3 ${sigPills} ${daysBadge}${earnBadge}</span>
+      <span class="wp-tc-sub">${score}/33 · ${greens}/3 ${sigPills} ${daysBadge}${earnBadge}</span>
       ${closeBtn}
     </div>
     <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;margin:4px 0 0">
@@ -4858,8 +4863,8 @@ function renderWatchPanel(){
       const score  = r?.score ? parseInt(r.score) || 0 : 0;
       readyMeta[sym] = { greens, score };
       // Premium = high-conviction setup: either a full 3/3 hit, OR ≥2 greens
-      // with a strong score (≥26). Standard = everything else still in Ready.
-      const isPremium = greens === 3 || (greens >= 2 && score >= 26);
+      // with a strong score (≥29). Standard = everything else still in Ready.
+      const isPremium = greens === 3 || (greens >= 2 && score >= 29);
       if (isPremium) readyPremium.push(sym);
       else readyStandard.push(sym);
     }
@@ -4904,17 +4909,17 @@ function renderWatchPanel(){
     }).join('');
     let body;
     if (kind === 'ready' && items.length) {
-      // Split Ready into Premium (3/3 + score≥26) and Standard sub-groups.
+      // Split Ready into Premium (3/3 + score≥29) and Standard sub-groups.
       // Both render as compact TVP chips — the full price-ladder trade card
       // is too tall to show inline for every Premium ticker at once, so it's
       // reserved for the click-through popover (showTickerHistory).
       const prem = renderItems(readyPremium);
       const std  = renderItems(readyStandard);
       const premHead = readyPremium.length
-        ? `<div class="wp-tier-head wp-tier-prem">★ Premium <span class="wp-tier-sub">3/3 · or 2/3 with score ≥ 26</span><span class="wp-tier-count">${readyPremium.length}</span></div>${prem}`
+        ? `<div class="wp-tier-head wp-tier-prem">★ Premium <span class="wp-tier-sub">3/3 · or 2/3 with score ≥ 29</span><span class="wp-tier-count">${readyPremium.length}</span></div>${prem}`
         : '';
       const stdHead = readyStandard.length
-        ? `<div class="wp-tier-head wp-tier-std">Standard <span class="wp-tier-sub">1–2 green with score 22–25</span><span class="wp-tier-count">${readyStandard.length}</span></div>${std}`
+        ? `<div class="wp-tier-head wp-tier-std">Standard <span class="wp-tier-sub">1–2 green with score 24–28</span><span class="wp-tier-count">${readyStandard.length}</span></div>${std}`
         : '';
       body = premHead + stdHead;
     } else {
@@ -4975,11 +4980,11 @@ const ruleCard = document.getElementById('ruleCard');
 const RULE_CARDS = {
   score: {
     title: 'Score — how to read it',
-    summary: 'Composite of the 10 short-term factors. Each factor scores 0–3 (bad / weak / ok / good) for a max of 30.',
+    summary: 'Composite of the 11 short-term factors. Each factor scores 0–3 (bad / weak / ok / good) for a max of 33.',
     bands: [
-      ['good', '20–30', 'Strong setup. Multiple factors aligned. Worth watching for entry.'],
-      ['ok',   '12–19', 'Mixed. Some tailwinds, some red flags. Wait for confirmation.'],
-      ['bad',  '0–11',  'Weak. Not a swing-trade candidate right now — revisit after a rescan.'],
+      ['good', '22–33', 'Strong setup. Multiple factors aligned. Worth watching for entry.'],
+      ['ok',   '13–21', 'Mixed. Some tailwinds, some red flags. Wait for confirmation.'],
+      ['bad',  '0–12',  'Weak. Not a swing-trade candidate right now — revisit after a rescan.'],
     ],
     rules: [
       ['Score alone is a ranking, not a buy signal.', 'A 24 with red Vol Surge is worse than a 21 with green Vol Surge + ↑ flow.'],
@@ -5028,6 +5033,20 @@ const RULE_CARDS = {
       ['But beware vertical moves.', '+60% in 3 months = late. Look for steady climbers, not parabolic ones.'],
     ],
     footer: 'Combine with Trend: green here + green Trend is the cleanest momentum setup.',
+  },
+  sectorRs: {
+    title: 'Sector RS — is the whole sector leading?',
+    summary: 'Ticker\'s sector ETF (or SMH for Semiconductors) weighted 3-12mo return, minus SPY\'s. Backtested against real forward returns before shipping — see scripts/study-short-factors.mjs.',
+    bands: [
+      ['good', '+15pp or more', 'Sector strongly leading the market.'],
+      ['ok',   '+8pp to +15pp', 'Sector beating the market.'],
+      ['bad',  'Under +8pp',    'Sector roughly in line or lagging.'],
+    ],
+    rules: [
+      ['This is momentum confirmation, not a rotation warning.', 'It\'s a slow 3-12mo weighted window — during the actual June-July 2026 semiconductor rotation, AVGO\'s sector score stayed high the entire way down. A green chip here means "this sector has been a leader," not "this sector is safe from a reversal."'],
+      ['Use it to size conviction on an otherwise-green setup, not to time an exit.', 'Pair with the ticker\'s own Trend/3M Momentum — sector strength without ticker strength is a weaker case.'],
+    ],
+    footer: 'Sector ETF map: 11 GICS SPDR sector ETFs, with Semiconductors specifically mapped to SMH instead of the broader XLK.',
   },
   fwdpe: {
     title: 'Fwd P/E — overpayment filter',
@@ -5506,7 +5525,7 @@ function renderShortWatchlist(){
     const tvp = tvpFor(r);
     if (!tvp) continue;
     // Ready criteria, in priority order:
-    //   1. score ≥ 22 (quality gate — junk tickers can't sit in Ready)
+    //   1. score ≥ 24 (quality gate — junk tickers can't sit in Ready)
     //   2. ≥1 of T/V/P is currently green OR was green within the last 24h
     //      (yellow counts: gives the user a 24h alert window to react before
     //      the stock auto-demotes).
@@ -5518,16 +5537,16 @@ function renderShortWatchlist(){
       (!tvp.T && (lastGreenAt(sym,'T') ?? 0) > now - SIG_STALE_MS ? 1 : 0) +
       (!tvp.V && (lastGreenAt(sym,'V') ?? 0) > now - SIG_STALE_MS ? 1 : 0) +
       (!tvp.P && (lastGreenAt(sym,'P') ?? 0) > now - SIG_STALE_MS ? 1 : 0);
-    // r.score is "NN/30" (string) from the pipeline — parse before comparing.
+    // r.score is "NN/33" (string) from the pipeline — parse before comparing.
     const scoreNum = parseInt(r.score) || 0;
-    const scoreOk = scoreNum >= 22;
+    const scoreOk = scoreNum >= 24;
     const qualifiesReady = scoreOk && (greenCount >= 1 || yellowCount >= 1);
     if (state === 'watching' && scoreOk && greenCount >= 1) {
       watchFlags[sym] = 'ready';
       justPromoted.add(sym);
       flagsDirty = true;
       if (demotedRecent[sym]) { delete demotedRecent[sym]; demotedDirty = true; }
-      logActivity(sym, 'promote', `${greenCount}/3 entry signals · score ${scoreNum}/30`);
+      logActivity(sym, 'promote', `${greenCount}/3 entry signals · score ${scoreNum}/33`);
     } else if (state === 'ready' && !qualifiesReady) {
       watchFlags[sym] = 'watching';
       flagsDirty = true;
@@ -5569,7 +5588,7 @@ function renderShortWatchlist(){
       return `<div class="chk ${cls}" data-tip="${escHtml(tipForChip(k, reasons[k]))}"></div>`;
     }).join('');
 
-    const score = r.score || '—/30';
+    const score = r.score || '—/33';
     const cls = (isScoring || isLegacy) ? '' : 'sc-' + shortScoreClass(score);
     const tr = document.createElement('tr');
     tr.dataset.sym = sym;
@@ -5597,6 +5616,7 @@ function renderShortWatchlist(){
     })();
     const mom = raw[1] != null ? `${(raw[1] * 100).toFixed(1)}%` : '—';
     const momCls = (raw[1] != null && raw[1] > 0) ? 'mom-hi' : (raw[1] != null && raw[1] < 0) ? 'mom-lo' : '';
+    const sectorRs = raw[10] && raw[10].delta != null ? `${raw[10].delta >= 0 ? '+' : ''}${(raw[10].delta * 100).toFixed(1)}pp` : '—';
     const fwdPe = raw[5] && raw[5].fwdPe != null ? `${raw[5].fwdPe.toFixed(1)}x` : '—';
     const epsRev = (() => {
       const v = raw[4];
@@ -5650,7 +5670,7 @@ function renderShortWatchlist(){
     const wfTitle = wfState === 'ready'
       ? 'Ready to trade — criteria met. Click to clear.' + wfTipExtra
       : wfState === 'watching'
-        ? 'Watching — auto-promotes to Ready when score ≥22 and Catalyst + Vol Surge are healthy. Click to clear.'
+        ? 'Watching — auto-promotes to Ready when score ≥24 and Catalyst + Vol Surge are healthy. Click to clear.'
         : 'Click to add to watch list — get a green flash when entry criteria fire.';
     const wfBtn = `<span class="wflag ${wfState}" data-wflag="${sym}" data-tip="${escHtml(wfTitle)}">${wfContent}</span>`;
     const coCell = isScoring
@@ -5670,10 +5690,11 @@ function renderShortWatchlist(){
       ${coCell}
       <td class="num price-cell">${price != null ? '$' + (+price).toFixed(2) : '—'}</td>
       <td class="grp-start"><div class="checks">${checks}</div></td>
-      <td data-col="score" style="cursor:pointer" data-tip="${escHtml('Composite score: '+score+'. Each of the 10 factors scores 0–3 points (bad/weak/ok/good) for a max of 30. 20+/30 is a strong setup, 12–19 is mixed, under 12 is weak. Click to see score history.')}"><span class="score ${shortScoreClass(score)}">${score}</span></td>
+      <td data-col="score" style="cursor:pointer" data-tip="${escHtml('Composite score: '+score+'. Each of the 11 factors scores 0–3 points (bad/weak/ok/good) for a max of 33. 22+/33 is a strong setup, 13–21 is mixed, under 13 is weak. Click to see score history.')}"><span class="score ${shortScoreClass(score)}">${score}</span></td>
       <td class="num" data-tip="Forward P/E vs the sector median. Negative = cheaper than peers, positive = more expensive. Risk filter: overpriced stocks fall harder on missed catalysts."><span class="pill ${vsSectPillCls}">${vsSect}</span></td>
       <td class="grp-start num ${vCls(0)}" data-col="trend" style="cursor:pointer" data-tip="${tipFor(0)}">${trendVal}</td>
       <td class="num ${vCls(1)}" data-col="mom" style="cursor:pointer" data-tip="${tipFor(1)}">${mom}</td>
+      <td class="num ${vCls(10)}" data-col="sectorRs" style="cursor:pointer" data-tip="${tipFor(10)}">${sectorRs}</td>
       <td class="grp-start num ${vCls(5)}" data-col="fwdpe" style="cursor:pointer" data-tip="${tipFor(5)}">${fwdPe}</td>
       <td class="num ${vCls(4)}" data-col="epsrev" style="cursor:pointer" data-tip="${tipFor(4)}">${epsRev}</td>
       <td class="grp-start num ${vCls(6)}" data-col="qual" style="cursor:pointer" data-tip="${tipFor(6)}">${qual}</td>
