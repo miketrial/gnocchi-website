@@ -587,7 +587,7 @@
   #qsView thead th.sortable:hover{ background:rgba(20,25,30,.075) }
   #qsView thead th.qs-sorted{ color:var(--ink,#16191c); background:rgba(20,25,30,.09) }
   #qsView thead th.qs-sorted::after{ content:attr(data-arrow); margin-left:3px; opacity:.7; font-size:8px }
-  #qsView tbody td{ padding:5px 7px; line-height:1.3; font-size:11px;
+  #qsView tbody td{ padding:3px 8px; line-height:1.25; font-size:11px;
     border-bottom:0.5px solid rgba(20,25,30,.07); border-right:0.5px solid rgba(20,25,30,.04) }
   #qsView tbody td br{ line-height:1.25 }
   #qsView tbody tr:hover td{ background:rgba(20,25,30,.022) }
@@ -627,9 +627,9 @@
   #qsView tbody td.st-sell-ok { background:rgba(236,64,52,.07); color:#c0342a; font-weight:500; box-shadow:inset 0 -2px 0 rgba(236,64,52,.55) }
   #qsView tbody td.st-ctx    { background:rgba(47,131,230,.11); color:#245fb0; font-weight:500; box-shadow:inset 0 -2px 0 #2f83e6 }
   #qsView tbody td.st-ctx-lo { background:rgba(47,131,230,.055); color:#245fb0; box-shadow:inset 0 -2px 0 rgba(47,131,230,.5) }
-  #qsView tbody td.st-neutral{ color:var(--ink-faint) }
-  #qsView tbody td.st-bad    { color:var(--ink-faint) }
-  #qsView tbody td.st-na     { color:var(--ink-faint); opacity:.75 }
+  #qsView tbody td.st-neutral{ color:#5c636d }
+  #qsView tbody td.st-bad    { color:#5c636d }
+  #qsView tbody td.st-na     { color:#7a808a }
   #qsView tbody tr:hover td.st-good{ background:rgba(22,176,106,.22) }
   #qsView tbody tr:hover td.st-sell-bad{ background:rgba(236,64,52,.2) }
   #qsView tbody tr:hover td.st-weak{ background:rgba(234,160,17,.2) }
@@ -650,6 +650,12 @@
     background:rgba(20,25,30,.08); border-radius:1px; overflow:hidden }
   .qs-meter span{ display:block }
   .qs-meter .b{ background:#16b06a } .qs-meter .s{ background:#ec4034 }
+  /* Option B: verdict header on one row (badge · meter · B/S), detail on one line */
+  .qs-meter-inline{ display:inline-flex; width:66px; height:5px; margin:0; vertical-align:middle }
+  .qs-vhead{ display:flex; align-items:center; gap:6px; flex-wrap:nowrap; white-space:nowrap }
+  .qs-vdetail{ white-space:nowrap; font-size:9.5px; color:#7a808a; margin-top:3px; letter-spacing:.1px }
+  .qs-vdetail [data-tip]{ cursor:help }
+  .qs-vsep{ color:#c2c7ce; margin:0 3px }
 
   .qs-subscore{ display:block; font-size:9.5px; color:var(--ink-faint); font-weight:400; margin-top:3px; line-height:1.25 }
   .qs-subscore-inline{ font-size:9.5px; color:var(--ink-soft,#5c636d); font-weight:500; margin-left:6px; letter-spacing:.2px }
@@ -657,6 +663,21 @@
     font-size:8.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.3px;
     color:#96690a; background:rgba(234,160,17,.16); border:0.5px solid #dcb04e;
     vertical-align:middle; cursor:default }
+
+  /* Colour key — swatches mirror the exact cell tint + lean bar of the table. */
+  .qs-key{ display:flex; flex-wrap:wrap; gap:7px 18px; width:100%; margin:2px 0 8px;
+    font-family:ui-monospace,Menlo,monospace }
+  .qs-key span{ display:inline-flex; align-items:center; gap:6px; font-size:9.5px; color:var(--ink-soft,#5c636d) }
+  .qs-key i{ width:15px; height:12px; border-radius:2px; flex:none }
+  .qs-key i.k-good{ background:rgba(22,176,106,.15); box-shadow:inset 0 -2px 0 #16b06a }
+  .qs-key i.k-sell{ background:rgba(236,64,52,.13); box-shadow:inset 0 -2px 0 #ec4034 }
+  .qs-key i.k-weak{ background:rgba(234,160,17,.14); box-shadow:inset 0 -2px 0 #eaa011 }
+  .qs-key i.k-ctx { background:rgba(47,131,230,.11); box-shadow:inset 0 -2px 0 #2f83e6 }
+  .qs-key i.k-none{ background:transparent; box-shadow:inset 0 -2px 0 rgba(20,25,30,.14) }
+  .qs-key b.k-buy{ display:inline-block; font-size:8px; font-weight:600; letter-spacing:.4px;
+    color:#fff; background:#16a35c; border-radius:2px; padding:1px 5px }
+  .qs-key b.k-sellt{ display:inline-block; font-size:8px; font-weight:600; letter-spacing:.4px;
+    color:#fff; background:#e5403a; border-radius:2px; padding:1px 5px }
 
   /* ---- mobile: reflow the grid into one card per ticker (no h-scroll) ---- */
   @media (max-width:760px){
@@ -684,6 +705,9 @@
     #qsView tbody td[data-label="Liq"]::before{ content:"LIQ "; color:var(--ink-faint) }
     #qsView tbody td[data-label="Earn"]::before{ content:"EARN "; color:var(--ink-faint) }
     .qs-meter{ width:100% }
+    #qsView tbody td .qs-vhead{ flex-wrap:wrap; white-space:normal }
+    #qsView tbody td .qs-vdetail{ white-space:normal }
+    .qs-meter-inline{ width:80px }
   }
   /* --- Backtest ("as-if") paper-trade log — lives inside the dark #qsBtPop popover --- */
   /* Two-column layout: left key rail + right content. */
@@ -1384,6 +1408,14 @@
   </div>
   <div class="legend">
     <div class="ttl">Bounce scoring &nbsp;·&nbsp; bidirectional BUY/SELL, tuned for a 1-2 day mean-reversion hold</div>
+    <div class="qs-key">
+      <span><i class="k-good"></i>Buy lean</span>
+      <span><i class="k-sell"></i>Sell lean</span>
+      <span><i class="k-weak"></i>Weak / stretched</span>
+      <span><i class="k-ctx"></i>Context — non-directional (Vol Dry-Up, Vol Expansion)</span>
+      <span><i class="k-none"></i>No signal</span>
+      <span><b class="k-buy">BUY</b><b class="k-sellt">SELL</b>solid tag = the actionable call</span>
+    </div>
     <span style="color:var(--ink-soft)">This is a genuinely different trade philosophy from Swing — that view is trend-following (buy strength, ride weeks); this one bets on a snap-back after price gets stretched, in either direction (oversold dip = BUY, overbought top = SELL). Lower hit-rate by design, so earnings is a hard gate, and Liquidity/ADR dampen both Buy and Sell scores rather than just docking points on one side.</span>
   </div>
 </div>
@@ -3816,9 +3848,11 @@ function qsRowHtml(r, idx){
         : (r.earnings?.dataMissing
             ? `<span style="color:var(--warn-fg,#b8860b);font-size:10px;cursor:help" data-tip="${escHtml('Earnings calendar data unavailable for this name — the 5-day earnings blackout could NOT be evaluated. Treat with caution: a print could be near without the gate catching it.')}">n/a</span>`
             : '—'));
+  // Inline (not stacked under the price) — the Price column has horizontal room,
+  // so keep it to one line rather than forcing a second row.
   const priceTag = r.priceIsLive
-    ? `<br><span data-tip="${escHtml('Live intraday price from FMP. RSI(2), %B, and RS vs SPY are computed using this live price too. Vol Climax, Reversal, Vol Dry-Up, Vol Expansion, ADR%, and Liquidity still use the completed session as of '+fmtQsAsOf(r.dataAsOf)+' — those need a finished day to mean anything.')}" style="color:var(--good-fg,#2f7d4f);font-size:9px;font-weight:600;cursor:default">● live</span>`
-    : (r.dataAsOf ? `<br><span style="color:var(--ink-faint);font-size:9px;font-weight:400">as of ${fmtQsAsOf(r.dataAsOf)}</span>` : '');
+    ? ` <span data-tip="${escHtml('Live intraday price from FMP. RSI(2), %B, and RS vs SPY are computed using this live price too. Vol Climax, Reversal, Vol Dry-Up, Vol Expansion, ADR%, and Liquidity still use the completed session as of '+fmtQsAsOf(r.dataAsOf)+' — those need a finished day to mean anything.')}" style="color:var(--good-fg,#2f7d4f);font-size:9px;font-weight:600;cursor:default;white-space:nowrap">● live</span>`
+    : (r.dataAsOf ? ` <span style="color:var(--ink-faint);font-size:9px;font-weight:400;white-space:nowrap">as of ${fmtQsAsOf(r.dataAsOf)}</span>` : '');
   const symCell = r.scoring
     ? `<td class="co-cell"><span class="sym" style="opacity:0.3">${escHtml(r.sym)}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
     : `<td class="co-cell"><b>${escHtml(r.sym)}</b></td>`;
@@ -3839,20 +3873,22 @@ function qsRowHtml(r, idx){
   // showing "2/6 lean BUY" on a NEUTRAL row (not yet a real signal) would read
   // as a signal that isn't there.
   const isActionable = r.verdict === 'BUY' || r.verdict === 'SELL';
-  const agreementLine = isActionable && r.agreement?.count > 0
-    ? `<span class="qs-subscore" data-tip="${escHtml('Of the 6 directional factors (RSI, %B, Vol Climax, Reversal, RS vs SPY, AH Move), '+r.agreement.count+' independently lean '+r.agreement.direction+' — breadth of agreement, separate from the weighted score above. Broad agreement across several modest factors is often more trustworthy than one factor screaming alone.')}">${r.agreement.count}/${r.agreement.of} factors agree</span>`
+  // Compact detail items — flowed onto ONE line under the verdict header (the
+  // column widens rather than wrapping); full wording stays in each item's tooltip.
+  const agreeItem = isActionable && r.agreement?.count > 0
+    ? `<span data-tip="${escHtml('Of the 6 directional factors (RSI, %B, Vol Climax, Reversal, RS vs SPY, AH Move), '+r.agreement.count+' independently lean '+r.agreement.direction+' — breadth of agreement, separate from the weighted score above. Broad agreement across several modest factors is often more trustworthy than one factor screaming alone.')}">${r.agreement.count}/${r.agreement.of} agree</span>`
     : '';
-  const stopLine = r.stop
-    ? `<span class="qs-subscore" data-tip="${escHtml('Suggested stop ('+r.stop.basis+'), '+(r.stop.side==='short'?'for a short entry on this SELL signal':'for a long entry on this BUY signal')+' — not a guarantee, just a mechanical risk line based on recent volatility.')}">Stop ${r.stop.side==='short'?'above':'below'} $${r.stop.price.toFixed(2)} (${r.stop.pctFromEntry>=0?'+':''}${r.stop.pctFromEntry.toFixed(1)}%)</span>`
+  const stopItem = r.stop
+    ? `<span data-tip="${escHtml('Suggested stop ('+r.stop.basis+'), '+(r.stop.side==='short'?'for a short entry on this SELL signal':'for a long entry on this BUY signal')+' — not a guarantee, just a mechanical risk line based on recent volatility.')}">stop $${r.stop.price.toFixed(2)} (${r.stop.pctFromEntry>=0?'+':''}${r.stop.pctFromEntry.toFixed(1)}%)</span>`
     : '';
-  // Flag gappy names at a glance — surfaced whenever the overnight profile exists,
-  // so you can size for the overnight risk even when the damper isn't biting yet.
-  const gapLine = (isActionable && r.overnightGap)
-    ? `<span class="qs-subscore" data-tip="${escHtml('Averages a ±'+r.overnightGap.avgAbsOvn+'% move overnight (close→open), and gapped >3% on '+r.overnightGap.nights3Pct+'% of nights over the last ~60 sessions. That is risk that lands while the market is shut — you cannot trade around it, so size accordingly.'+(gapMult!=null&&gapMult<1?' Both the Buy and Sell scores are damped x'+gapMult.toFixed(2)+' because of it.':''))}">±${r.overnightGap.avgAbsOvn}% overnight${gapMult!=null&&gapMult<1?' · Score ×'+gapMult.toFixed(2):''}</span>`
+  const gapItem = (isActionable && r.overnightGap)
+    ? `<span data-tip="${escHtml('Averages a ±'+r.overnightGap.avgAbsOvn+'% move overnight (close→open), and gapped >3% on '+r.overnightGap.nights3Pct+'% of nights over the last ~60 sessions. That is risk that lands while the market is shut — you cannot trade around it, so size accordingly.'+(gapMult!=null&&gapMult<1?' Both the Buy and Sell scores are damped x'+gapMult.toFixed(2)+' because of it.':''))}">±${r.overnightGap.avgAbsOvn}% ovn${gapMult!=null&&gapMult<1?' ×'+gapMult.toFixed(2):''}</span>`
     : '';
+  const detailItems = [agreeItem, stopItem, gapItem].filter(Boolean).join('<span class="qs-vsep">·</span>');
+  const detailLine = detailItems ? `<div class="qs-vdetail">${detailItems}</div>` : '';
   // Buy/Sell strength meter — parse the "15/24" score strings to bar widths.
   const bNum = parseInt(r.buyScore) || 0, sNum = parseInt(r.sellScore) || 0;
-  const meter = `<div class="qs-meter"><span class="b" style="width:${Math.round(bNum/24*100)}%"></span><span class="s" style="width:${Math.round(sNum/24*100)}%"></span></div>`;
+  const meterInline = `<span class="qs-meter qs-meter-inline"><span class="b" style="width:${Math.round(bNum/24*100)}%"></span><span class="s" style="width:${Math.round(sNum/24*100)}%"></span></span>`;
   const tierLbl = (r.tier && (r.verdict === 'BUY' || r.verdict === 'SELL')) ? `<span class="qs-tier-lbl">${escHtml(r.tier)}</span>` : '';
   const rowDir = r.verdict === 'BUY' ? ' qs-row-buy' : r.verdict === 'SELL' ? ' qs-row-sell' : '';
   return `<tr class="${r.scoring?'scoring':(r.blocked?'qs-row-blocked':'')}${rowDir}" data-sym="${r.sym}">
@@ -3860,12 +3896,8 @@ function qsRowHtml(r, idx){
     ${symCell}
     <td class="num" data-label="Price">${r.price!=null?'$'+r.price.toFixed(2):'—'}${priceTag}</td>
     <td class="num" data-col="verdict" data-label="Verdict" style="cursor:pointer" data-tip="${verdictTip}">
-      <span class="qs-verdict qs-verdict-${r.verdict.toLowerCase()} qs-tier-${r.tier||'none'}">${verdictLabel}</span>${tierLbl}${r.held ? '<span class="qs-held" data-tip="'+escHtml('Held: the live read cooled to NEUTRAL, but the call is kept sticky until it fully fades or flips — prevents intraday whipsaw.')+'">held</span>' : ''}
-      <span class="qs-subscore-inline">B ${escHtml(r.buyScore||'—')} · S ${escHtml(r.sellScore||'—')}</span>
-      ${meter}
-      ${agreementLine}
-      ${stopLine}
-      ${gapLine}
+      <div class="qs-vhead"><span class="qs-verdict qs-verdict-${r.verdict.toLowerCase()} qs-tier-${r.tier||'none'}">${verdictLabel}</span>${tierLbl}${r.held ? '<span class="qs-held" data-tip="'+escHtml('Held: the live read cooled to NEUTRAL, but the call is kept sticky until it fully fades or flips — prevents intraday whipsaw.')+'">held</span>' : ''}${meterInline}<span class="qs-subscore-inline">B ${escHtml(r.buyScore||'—')} · S ${escHtml(r.sellScore||'—')}</span></div>
+      ${detailLine}
     </td>
     <td class="num ${qsVCls(r,0)}" data-col="rsi" data-label="RSI" style="cursor:pointer" data-tip="${tipFor(0)}">${typeof rsiVal==='number'?rsiVal.toFixed(1):'—'}</td>
     <td class="num ${qsVCls(r,1)}" data-col="pctB" data-label="%B" style="cursor:pointer" data-tip="${tipFor(1)}">${bb?.pctB!=null?bb.pctB.toFixed(2):'—'}</td>
