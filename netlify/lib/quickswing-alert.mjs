@@ -98,7 +98,7 @@ export function formatAlert(row, kind, session = "regular") {
       const pct = row.stop.pctFromEntry != null ? ` (${row.stop.pctFromEntry > 0 ? "+" : ""}${row.stop.pctFromEntry}%)` : "";
       lines.push(`Stop ${fmtPrice(row.stop.price)}${pct} · ${esc(row.stop.basis ?? "")}`);
     }
-    if (row?.agreement?.label) lines.push(esc(row.agreement.label));
+    if (row?.agreement?.of) lines.push(`${row.agreement.count}/${row.agreement.of} agree`);
   } else {
     // EXIT
     const why = row?.verdict === "BLOCKED"
@@ -109,4 +109,119 @@ export function formatAlert(row, kind, session = "regular") {
     lines.push(`Price ${price}${row?.priceIsLive ? " (live)" : ""}`);
   }
   return lines.join("\n");
+}
+
+/* ---------- Market Open snapshot ----------
+   Once per trading day, on the first regular-session scan, the worker sends ONE
+   consolidated snapshot of every active BUY/SELL setup instead of relying on the
+   transition dedup (which stays silent on a name that was already BUY at the
+   prior close — the reason a carried-over KLAC never texted). After the snapshot
+   the worker re-baselines the per-ticker dedup to the open state, so the rest of
+   the day runs on normal transition alerts. All pure/formatting here; the worker
+   wires it to the blob state + Telegram. */
+
+export function etDateStr(now = new Date()) {
+  // en-CA renders YYYY-MM-DD — the ET trading-day key we de-dupe the snapshot on.
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(now);
+}
+
+export function etClockLabel(now = new Date()) {
+  const { hour, minute } = etParts(now);
+  const ampm = hour >= 12 ? "PM" : "AM";
+  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${h12}:${String(minute).padStart(2, "0")} ${ampm} ET`;
+}
+
+function sideOf(v) { return v === "BUY" ? "BUY" : v === "SELL" ? "SELL" : "FLAT"; }
+function scoreNum(s) { const n = parseInt(String(s ?? "").split("/")[0], 10); return isFinite(n) ? n : 0; }
+
+/* Overnight changes: diff each ticker's current verdict-side against the side we
+   last alerted on (prior close, from qs-alert-state). Only side changes among
+   {BUY, SELL, FLAT} count — NEUTRAL↔BLOCKED churn is both FLAT, so it's ignored. */
+export function openSnapshotChanges(prevMap = {}, rows = []) {
+  const changes = [];
+  for (const row of rows) {
+    const from = sideOf(prevMap[row.sym] ?? null);
+    const to = sideOf(row.verdict);
+    if (from !== to) changes.push({ sym: row.sym, from, to });
+  }
+  return changes;
+}
+
+function changeLine(ch) {
+  const sym = esc(ch.sym);
+  if (ch.from === "FLAT" && ch.to === "BUY") return `🟢 ${sym} entered BUY`;
+  if (ch.from === "FLAT" && ch.to === "SELL") return `🔴 ${sym} entered SELL`;
+  if (ch.from === "BUY" && ch.to === "FLAT") return `⚪️ ${sym} exited BUY`;
+  if (ch.from === "SELL" && ch.to === "FLAT") return `⚪️ ${sym} exited SELL`;
+  return `🔄 ${sym} ${esc(ch.from)}→${esc(ch.to)}`; // direction flip
+}
+
+function detailBlock(row, side) {
+  const emoji = side === "BUY" ? "🟢" : "🔴";
+  const tier = row?.tier ? ` · ${esc(row.tier)}` : "";
+  const agree = row?.agreement?.of ? ` · ${row.agreement.count}/${row.agreement.of} agree` : "";
+  const live = row?.priceIsLive ? " (live)" : "";
+  let stop = "";
+  if (row?.stop?.price != null) {
+    const pct = row.stop.pctFromEntry != null ? ` (${row.stop.pctFromEntry > 0 ? "+" : ""}${row.stop.pctFromEntry}%)` : "";
+    stop = ` · stop ${fmtPrice(row.stop.price)}${pct} · ${esc(row.stop.basis ?? "")}`;
+  }
+  return [
+    "",
+    `${emoji} <b>${esc(row?.sym ?? "?")}</b>${tier}`,
+    `Buy ${esc(row?.buyScore ?? "?")} · Sell ${esc(row?.sellScore ?? "?")}${agree}`,
+    `${fmtPrice(row?.price)}${live}${stop}`,
+  ];
+}
+
+export function formatOpenSnapshot({ rows = [], prevMap = {}, regime = null, label = "" } = {}) {
+  const buys = rows.filter(r => r?.verdict === "BUY").sort((a, b) => scoreNum(b.buyScore) - scoreNum(a.buyScore));
+  const sells = rows.filter(r => r?.verdict === "SELL").sort((a, b) => scoreNum(b.sellScore) - scoreNum(a.sellScore));
+  const changes = openSnapshotChanges(prevMap, rows);
+
+  const L = [`🔔 <b>Market Open — ${esc(label)}</b>`];
+
+  if (regime?.ok) {
+    const fav = regime.favorable ? "🟢 REGIME FAVORABLE" : "🔴 REGIME UNFAVORABLE";
+    const dist = regime.distributionDays != null ? ` · DIST ${regime.distributionDays}/25` : "";
+    const vix = regime.vix && regime.vix.level != null
+      ? ` · VIX ${Number(regime.vix.level).toFixed(1)} ${String(regime.vix.label ?? "").toUpperCase()}`.trimEnd()
+      : "";
+    L.push(`${fav}${dist}${vix}`);
+  }
+  L.push(`🟢 <b>${buys.length} BUY</b> · 🔴 <b>${sells.length} SELL</b>`);
+
+  // Changes since prior close (top, per user request).
+  L.push("");
+  if (changes.length) {
+    L.push("<b>Changes since prior close:</b>");
+    for (const ch of changes) L.push(changeLine(ch));
+  } else {
+    L.push("<i>No signal changes since prior close.</i>");
+  }
+
+  // One-line roster for the quick glance.
+  L.push("");
+  L.push(`<b>BUYS:</b> ${buys.length ? buys.map(r => esc(r.sym)).join(" ") : "—"}`);
+  L.push(`<b>SELLS:</b> ${sells.length ? sells.map(r => esc(r.sym)).join(" ") : "—"}`);
+
+  // Detail blocks, sorted by conviction (Buy score for BUYS, Sell score for SELLS).
+  if (buys.length) {
+    L.push("");
+    L.push("━━ 🟢 <b>BUYS</b> ━━");
+    for (const r of buys) L.push(...detailBlock(r, "BUY"));
+  }
+  if (sells.length) {
+    L.push("");
+    L.push("━━ 🔴 <b>SELLS</b> ━━");
+    for (const r of sells) L.push(...detailBlock(r, "SELL"));
+  }
+  if (!buys.length && !sells.length) {
+    L.push("");
+    L.push("<i>No active BUY or SELL setups at the open.</i>");
+  }
+  return L.join("\n");
 }

@@ -313,6 +313,35 @@ export async function deleteQsAlertState(ticker) {
   await qsAlertStore().delete(ticker.toUpperCase()).catch(() => {});
 }
 
+/* ---------- Quick Swing: Market Open snapshot dedup ----------
+   The ET trading day we last sent the once-daily Market Open snapshot for. The
+   alert worker sends the snapshot (and re-baselines the per-ticker alert dedup to
+   the open state) on the first regular-session scan whose ET date differs from
+   this — so a setup that was already BUY/SELL at the prior close is surfaced each
+   morning instead of being swallowed by transition dedup. Removable with the
+   QUICK SWING FEATURE block. */
+export async function getQsOpenDigestDate() {
+  const v = await settingsStore().get("qs-open-digest", { type: "json" }).catch(() => null);
+  return v?.date ?? null;
+}
+export async function putQsOpenDigestDate(date) {
+  await settingsStore().setJSON("qs-open-digest", { date, at: new Date().toISOString() });
+}
+
+/* ---------- Quick Swing: hourly summary snapshot ----------
+   One blob ("latest") holding the market + per-ticker state captured by the most
+   recent hourly summary run. The next hour's summary diffs against it to report
+   "what changed in the last hour" (market direction + individual signal/price
+   moves). Stamped with the ET trading day so a stale prior-day snapshot is never
+   diffed against. Removable with the QUICK SWING FEATURE block. */
+const qsSummaryStore = () => getStore("qs-summary-snap");
+export async function getQsSummarySnapshot() {
+  return qsSummaryStore().get("latest", { type: "json" }).catch(() => null);
+}
+export async function putQsSummarySnapshot(snap) {
+  await qsSummaryStore().setJSON("latest", snap);
+}
+
 /* ---------- Quick Swing: raw FMP fan-out cache (separate from Short Term) ---------- */
 const QS_FMP_TTL_MS = 24 * 60 * 60 * 1000;
 export async function getQuickswingFmpCache(ticker) {

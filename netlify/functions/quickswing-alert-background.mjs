@@ -13,10 +13,14 @@ import { scoreTickerQuickSwing, getMarketRegime } from "../lib/quickswing-pipeli
 import {
   listQuickswingRows, putQuickswingRow,
   getQsAlertState, putQsAlertState,
+  getQsOpenDigestDate, putQsOpenDigestDate,
   acquireRescanLock, releaseRescanLock,
 } from "../lib/store.mjs";
 import { sendTelegram } from "../lib/telegram.mjs";
-import { alertTransition, formatAlert } from "../lib/quickswing-alert.mjs";
+import {
+  alertTransition, formatAlert,
+  etDateStr, etClockLabel, formatOpenSnapshot,
+} from "../lib/quickswing-alert.mjs";
 
 export default async (req) => {
   const { session = "regular" } = await req.json().catch(() => ({}));
@@ -31,10 +35,21 @@ export default async (req) => {
     return new Response("", { status: 202 });
   }
 
+  // First regular-session scan of a new ET trading day → send the once-daily
+  // Market Open snapshot (all active setups, incl. carry-overs) instead of the
+  // transition-only alerts, then re-baseline the dedup so the rest of the day
+  // runs on normal transition alerts. Guarded so it fires at most once per day.
+  const today = etDateStr(new Date());
+  const lastDigest = await getQsOpenDigestDate().catch(() => null);
+  const isOpenScan = session === "regular" && lastDigest !== today;
+
   let scored = 0, alerted = 0;
   try {
     const regime = await getMarketRegime().catch(() => null);
     const watchlist = await listQuickswingRows();
+
+    const scoredRows = [];
+    const prevMap = {};
 
     for (const { sym } of watchlist) {
       try {
@@ -43,20 +58,43 @@ export default async (req) => {
         scored++;
 
         const prev = await getQsAlertState(sym).then((s) => s?.verdict ?? null).catch(() => null);
-        const { fire, kind, changed } = alertTransition(prev, row.verdict);
-        if (fire) {
-          await sendTelegram(formatAlert(row, kind, session));
-          alerted++;
+        prevMap[sym] = prev;
+        scoredRows.push(row);
+
+        if (!isOpenScan) {
+          // Normal path: individual transition alerts (entry / exit / flip).
+          const { fire, kind, changed } = alertTransition(prev, row.verdict);
+          if (fire) {
+            await sendTelegram(formatAlert(row, kind, session));
+            alerted++;
+          }
+          if (changed) await putQsAlertState(sym, row.verdict).catch(() => {});
         }
-        if (changed) await putQsAlertState(sym, row.verdict).catch(() => {});
       } catch (e) {
         console.error(`[qs-alert] ${sym} failed:`, e?.message || e);
       }
+    }
+
+    if (isOpenScan) {
+      // One consolidated Market Open message (uses prior-close state for the
+      // "changes since prior close" section, so it must be built BEFORE we
+      // overwrite the dedup below).
+      const res = await sendTelegram(
+        formatOpenSnapshot({ rows: scoredRows, prevMap, regime, label: etClockLabel(new Date()) })
+      );
+      if (res?.ok) alerted = scoredRows.filter((r) => r.verdict === "BUY" || r.verdict === "SELL").length;
+      // Re-baseline dedup to the open state so intraday transitions alert from here.
+      for (const row of scoredRows) {
+        await putQsAlertState(row.sym, row.verdict).catch(() => {});
+      }
+      // Stamp last so a mid-snapshot crash simply re-sends next tick rather than
+      // silently skipping the day's open snapshot.
+      await putQsOpenDigestDate(today).catch(() => {});
     }
   } finally {
     await releaseRescanLock(jobId);
   }
 
-  console.log(`[qs-alert] session=${session} scored=${scored} alerted=${alerted}`);
+  console.log(`[qs-alert] session=${session} openScan=${isOpenScan} scored=${scored} alerted=${alerted}`);
   return new Response("", { status: 202 });
 };

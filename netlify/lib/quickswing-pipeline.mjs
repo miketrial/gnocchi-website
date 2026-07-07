@@ -62,7 +62,10 @@
      3c. Telegram alert layer (notifications):
          netlify/functions/quickswing-alert-cron.mjs
          netlify/functions/quickswing-alert-background.mjs
+         netlify/functions/quickswing-summary-cron.mjs
+         netlify/functions/quickswing-summary-background.mjs
          netlify/lib/quickswing-alert.mjs
+         netlify/lib/quickswing-summary.mjs
          netlify/lib/telegram.mjs
          (also unset the TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID Netlify env vars)
      4. netlify.toml — remove the block between the
@@ -74,8 +77,8 @@
         delimited by its own header comment)
      6. index.html — grep for QUICK SWING and remove every marked HTML/JS/CSS
         block (start and end markers are paired, one feature per pair)
-     7. Optional cleanup: delete the "qs-rows", "qs-alert-state", "qs-fmp", and
-        "spy-hist" Netlify Blobs stores (Netlify dashboard → Blobs) — stale data,
+     7. Optional cleanup: delete the "qs-rows", "qs-alert-state", "qs-summary-snap",
+        "qs-fmp", and "spy-hist" Netlify Blobs stores (Netlify dashboard → Blobs) — stale data,
         not referenced by anything else once the above is gone.
    NOT removable without also touching short-pipeline.mjs (shared, keep):
      netlify/lib/ta-helpers.mjs, netlify/lib/fmp-client.mjs — short-pipeline.mjs
@@ -139,7 +142,19 @@ function injectLiveBar(hist, quote) {
   if (!(price > 0) || !quote.timestamp) return hist;
   const quoteMs = quote.timestamp * 1000;
   const quoteDate = new Date(quoteMs).toISOString().slice(0, 10);
-  if (quoteDate <= hist[0].date) return hist;
+  if (quoteDate < hist[0].date) return hist; // quote older than newest bar → stale, ignore
+  if (quoteDate === hist[0].date) {
+    // FMP's EOD feed (historical-price-eod/full) already carries TODAY's
+    // in-progress bar during market hours — same date as the live quote — so the
+    // old `quoteDate <= hist[0].date` guard made this a no-op and `priceIsLive`
+    // was permanently false intraday. Stamp the existing today-bar as live and
+    // refresh its close to the latest tick. We keep open/high/low/volume from the
+    // EOD bar (identical to the quote's day range) so scoring is unchanged; only
+    // the live flag + freshest close are corrected.
+    if (!(quote.price > 0)) return hist;
+    return [{ ...hist[0], close: quote.price, live: true }, ...hist.slice(1)];
+  }
+  // quoteDate > hist[0].date: EOD feed lags → synthesize today's bar from the quote.
   // Never synthesize a bar dated on a weekend. US markets are closed Sat/Sun,
   // so a quote timestamp landing on one means it's stale weekend data (e.g.
   // Friday's close still showing on Sunday), not a genuine in-progress session
