@@ -436,14 +436,20 @@ export async function replaceQsDaily(rows) {
    screener call instead of re-fetching the universe. `day` is the ET trading day
    it was resolved for, so a stale prior-day list is treated as a miss. */
 const QS_UNIVERSE_TTL_MS = 20 * 60 * 60 * 1000;
+// Returns { symbols:[...], sectors:{SYM:sector} } or null. `sectors` powers the
+// per-sector cap on the kept list without an extra fetch (the screener already
+// carries sector).
 export async function getQsUniverse(day = null) {
   const entry = await qsUniverseStore().get("latest", { type: "json" }).catch(() => null);
   if (!entry || !entry.ts || Date.now() - entry.ts > QS_UNIVERSE_TTL_MS) return null;
   if (day && entry.day && entry.day !== day) return null;
-  return Array.isArray(entry.symbols) ? entry.symbols : null;
+  return Array.isArray(entry.symbols) ? { symbols: entry.symbols, sectors: entry.sectors || {} } : null;
 }
-export async function putQsUniverse(symbols, day = null) {
-  await qsUniverseStore().setJSON("latest", { ts: Date.now(), day, symbols });
+// Accepts either a bare symbol array (back-compat) or { symbols, sectors }.
+export async function putQsUniverse(data, day = null) {
+  const symbols = Array.isArray(data) ? data : (data?.symbols || []);
+  const sectors = Array.isArray(data) ? {} : (data?.sectors || {});
+  await qsUniverseStore().setJSON("latest", { ts: Date.now(), day, symbols, sectors });
 }
 
 /* ---------- Shared SPY history cache ----------

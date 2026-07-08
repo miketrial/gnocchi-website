@@ -42,15 +42,37 @@ const SCREENER_QUERY =
 // drop anything with whitespace or odd characters the FMP symbol= param chokes on.
 const TICKER_RE = /^[A-Z][A-Z.\-]*$/;
 
-/* Return up to `n` most-active symbols (by dollar-volume) from the quality-
-   filtered pool, newest cache first. `day` = ET trading day (YYYY-MM-DD); a
-   cached list from a different day is a miss so the universe rolls forward each
-   morning. On a screener failure we fall back to the last cached list (even if
-   stale) rather than run an empty scan. */
+// Today's biggest LOSERS, quality-filtered — the oversold-down names that are
+// prime 1-2 day BUY-bounce candidates. FMP's biggest-losers list is 50 raw rows
+// dominated by leveraged ETFs / penny SPACs, so we keep only symbols that also
+// clear the quality screen (intersection). Gainers are deliberately NOT pulled:
+// they're overbought SELL setups that wouldn't surface in a buy-ranked list.
+async function fetchQualityLosers(key, qualitySet) {
+  try {
+    await rateLimit();
+    const r = await fetch(`${FMP}/biggest-losers?apikey=${key}`);
+    if (!r.ok) { console.error(`[qs-universe] biggest-losers → ${r.status}`); return []; }
+    const losers = await r.json();
+    if (!Array.isArray(losers)) return [];
+    return losers
+      .map(l => String(l?.symbol || "").toUpperCase())
+      .filter(s => qualitySet.has(s));
+  } catch (e) {
+    console.error("[qs-universe] biggest-losers fetch failed:", e?.message || e);
+    return [];
+  }
+}
+
+/* Resolve the daily universe → { symbols:[...up to n], sectors:{SYM:sector} }.
+   Names are the quality-filtered pool ranked by dollar-volume, but today's
+   quality-filtered biggest LOSERS are prioritized into the front so stretched-
+   down names get a slot even if they're not top-by-volume. `day` = ET trading
+   day; a cached list from another day is a miss so the universe rolls forward.
+   On a screener failure we fall back to the last cached list over an empty scan. */
 export async function getBounceUniverse({ n = DEFAULT_UNIVERSE_N, forceRefresh = false, day = null } = {}) {
   if (!forceRefresh) {
     const cached = await getQsUniverse(day).catch(() => null);
-    if (cached && cached.length) return cached.slice(0, n);
+    if (cached && cached.symbols?.length) return { symbols: cached.symbols.slice(0, n), sectors: cached.sectors || {} };
   }
 
   const key = process.env.FMP_API_KEY;
@@ -67,28 +89,36 @@ export async function getBounceUniverse({ n = DEFAULT_UNIVERSE_N, forceRefresh =
   if (!Array.isArray(rows) || !rows.length) {
     // Screener down — reuse whatever we last resolved (any day) over an empty scan.
     const stale = await getQsUniverse().catch(() => null);
-    return (stale || []).slice(0, n);
+    return { symbols: (stale?.symbols || []).slice(0, n), sectors: stale?.sectors || {} };
   }
 
-  const ranked = rows
+  const quality = rows
     .filter(x => x && x.symbol && typeof x.price === "number" && typeof x.volume === "number"
                  && x.price > 0 && x.volume > 0)
-    .map(x => ({ sym: String(x.symbol).toUpperCase(), dv: x.price * x.volume }))
-    .filter(x => TICKER_RE.test(x.sym))
-    .sort((a, b) => b.dv - a.dv);
+    .map(x => ({ sym: String(x.symbol).toUpperCase(), dv: x.price * x.volume, sector: x.sector || null }))
+    .filter(x => TICKER_RE.test(x.sym));
+
+  const qualitySet = new Map(quality.map(q => [q.sym, q]));
+  const sectors = {};
+  for (const q of quality) sectors[q.sym] = q.sector;
+
+  // Movers tilt: quality biggest-losers FIRST (guaranteed a slot), then fill the
+  // remaining slots by dollar-volume, deduped, capped at n.
+  const loserSyms = await fetchQualityLosers(key, qualitySet);
+  const byDollarVol = quality.slice().sort((a, b) => b.dv - a.dv).map(q => q.sym);
 
   const seen = new Set();
   const symbols = [];
-  for (const x of ranked) {
-    if (seen.has(x.sym)) continue;
-    seen.add(x.sym);
-    symbols.push(x.sym);
+  for (const s of [...loserSyms, ...byDollarVol]) {
+    if (seen.has(s)) continue;
+    seen.add(s);
+    symbols.push(s);
     if (symbols.length >= n) break;
   }
 
   // Only persist a FULL-size resolution. A small test/manual run (e.g. n=8) must
   // never overwrite the day's real universe cache — otherwise a later full run
   // would read back the truncated list and scan only those few names.
-  if (symbols.length && n >= DEFAULT_UNIVERSE_N) await putQsUniverse(symbols, day).catch(() => {});
-  return symbols;
+  if (symbols.length && n >= DEFAULT_UNIVERSE_N) await putQsUniverse({ symbols, sectors }, day).catch(() => {});
+  return { symbols, sectors };
 }
