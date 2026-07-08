@@ -17,7 +17,15 @@
 
    The kept top-N then ride the existing 5-min alert loop (see
    quickswing-alert-background.mjs) for live rescoring + verdict alerts until the
-   next morning's scan replaces them. Removable with the QUICK SWING FEATURE block. */
+   next morning's scan replaces them.
+
+   DELIBERATELY NOT recorded into the paper-trade BACKTEST LOG (qs-trades): the
+   backtest is scoped to the hand-curated watchlist only (written solely by
+   quickswing-rescan-background.mjs + quickswing-backtest-seed.mjs, both iterating
+   listQuickswingRows). This worker must NEVER call recordQuickswingTransition /
+   putQuickswingTrades — folding 500 names in would swamp the Backtest Log. If you
+   ever add backtest recording to a Bounce scan, gate it to the manual list.
+   Removable with the QUICK SWING FEATURE block. */
 import { scoreTickerQuickSwing, getMarketRegime } from "../lib/quickswing-pipeline.mjs";
 import { getTop500MostActive } from "../lib/qs-universe.mjs";
 import { replaceQsDaily, acquireLock, releaseLock } from "../lib/store.mjs";
