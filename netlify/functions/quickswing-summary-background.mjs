@@ -30,8 +30,13 @@ export default async (req) => {
     ]);
     const spyQuote = spyQuoteRaw?.[0] || null;
 
-    // The hourly diff stays scoped to the MANUAL watchlist (separation preserved).
-    const cur = buildSnapshot({ rows: manualRows, regime, spyQuote });
+    // The hourly diff covers BOTH the manual watchlist and the daily Most-Active
+    // Top-15 so the recap's signal-changes/movers reflect every name the Bounce
+    // tab tracks. Manual rows take precedence on the rare dual-listed symbol
+    // (buildSnapshot keys by symbol, so the later write wins — put daily first).
+    const bySym = {};
+    for (const r of [...dailyRows, ...manualRows]) if (r?.sym) bySym[String(r.sym).toUpperCase()] = r;
+    const cur = buildSnapshot({ rows: Object.values(bySym), regime, spyQuote });
     const prevRaw = await getQsSummarySnapshot().catch(() => null);
     // Only diff against a snapshot from the SAME ET trading day — a leftover
     // prior-day snapshot must never be treated as "one hour ago".

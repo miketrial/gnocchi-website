@@ -4704,18 +4704,37 @@ async function rescanQuickSwing(e){
     const jobId = crypto.randomUUID();
     // Quick Swing's own tracked tickers — NOT Basic/Short Term's watchlist.
     const targetSyms = Object.keys(qsRowsBySym);
+    // Also re-measure the current Daily Top-15 names IN PLACE (fresh prices/scores,
+    // same names — this is NOT a re-discovery; that's the "Scan now" button). The
+    // server writes these back to the daily store and tags them `_list:"daily"`.
+    const dailyTargets = qsDailyRows.map(r => r && r.sym && r.sym.toUpperCase()).filter(Boolean);
     targetSyms.forEach(sym => { qsRowsBySym[sym].scoring = true; });
-    renderQuickSwing();
-    targetSyms.forEach(sym => startCheckAnim(sym));
+    qsDailyRows.forEach(r => { if (r) r.scoring = true; });
+    renderQuickSwing(); renderQsDaily();
+    [...targetSyms, ...dailyTargets].forEach(sym => startCheckAnim(sym));
     await api.send('/api/quickswing/rescan', 'POST', {
       jobId, force,
       clientTickers: targetSyms,
+      dailyTickers: dailyTargets,
     }).catch(() => {});
+    const applyRow = (row) => {
+      if (!row || !row.sym || row.error) return;
+      const up = row.sym.toUpperCase();
+      if (row._list === 'daily') {
+        const clean = { ...row, scoring: false }; delete clean._list;
+        const idx = qsDailyRows.findIndex(r => r && r.sym && r.sym.toUpperCase() === up);
+        if (idx >= 0) qsDailyRows[idx] = clean; else qsDailyRows.push(clean);
+        saveQsHistory(up, clean); stopCheckAnim(up);
+      } else {
+        qsRowsBySym[up] = row; saveQsHistory(up, row); stopCheckAnim(up);
+      }
+    };
     let pollCount = 0;
     const t = setInterval(async () => {
       if (++pollCount > 200) {
         clearInterval(t);
-        targetSyms.forEach(sym => stopCheckAnim(sym));
+        [...targetSyms, ...dailyTargets].forEach(sym => stopCheckAnim(sym));
+        qsDailyRows.forEach(r => { if (r) r.scoring = false; });
         btn.disabled = false; btn.innerHTML = 'Rescan';
         showToast('Bounce rescan timed out — some rows may be incomplete. Try again.');
         return;
@@ -4723,19 +4742,19 @@ async function rescanQuickSwing(e){
       const j = await api.get('/api/jobs/' + jobId).catch(() => null);
       if (!j) return;
       if (j.rows && j.rows.length) {
-        j.rows.forEach(row => {
-          if (row && row.sym && !row.error) { qsRowsBySym[row.sym.toUpperCase()] = row; saveQsHistory(row.sym.toUpperCase(), row); stopCheckAnim(row.sym.toUpperCase()); }
-        });
-        renderQuickSwing();
+        j.rows.forEach(applyRow);
+        renderQuickSwing(); renderQsDaily();
       }
       if (j.status === 'done' || j.status === 'error') {
         clearInterval(t);
         targetSyms.forEach(sym => { stopCheckAnim(sym); if (qsRowsBySym[sym]) qsRowsBySym[sym].scoring = false; });
-        renderQuickSwing();
+        dailyTargets.forEach(sym => stopCheckAnim(sym));
+        qsDailyRows.forEach(r => { if (r) r.scoring = false; });
+        renderQuickSwing(); renderQsDaily();
         btn.disabled = false;
         btn.innerHTML = 'Rescan';
         if (j.status === 'error') showToast(j.error || 'Bounce rescan failed.');
-        else if (j.rows) { showToast(`Bounce: rescored ${j.rows.filter(r => !r.error && r.verdict).length} ticker(s).`); loadQsBacktest(); }
+        else if (j.rows) { showToast(`Bounce: rescored ${j.rows.filter(r => !r.error && r.verdict).length} name(s) across both lists.`); loadQsBacktest(); }
       }
     }, 3000);
   } catch (err) {

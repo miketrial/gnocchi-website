@@ -225,7 +225,7 @@ export function formatSummary(diff, cur, label, health = null, openPositions = n
    grammar (emoji + HTML) so it reads consistently with the rest of the Bounce
    texts, but its own header and content: the day's best buy-scored names out of
    the most-active quality-filtered universe. `rows` MUST already be ranked best-first. */
-export function formatDailyTop({ rows = [], regime = null, label = "", scanned = 0, stale = false, asOfDay = null } = {}) {
+export function formatDailyTop({ rows = [], regime = null, label = "", scanned = 0, universe = 0, degraded = false, stale = false, asOfDay = null } = {}) {
   const L = [`🎯 <b>Top ${rows.length} Bounce Picks — Most Active</b>`];
   if (label) L.push(`<i>${esc(label)}</i>`);
   if (stale) L.push(`⚠️ <i>Universe stale${asOfDay ? ` (from ${esc(asOfDay)})` : ""} — screener may be down; today's movers may be missing.</i>`);
@@ -235,7 +235,14 @@ export function formatDailyTop({ rows = [], regime = null, label = "", scanned =
   if (regime?.label) mBits.push(esc(regime.label));
   if (typeof regime?.vix?.level === "number") mBits.push(`VIX ${regime.vix.level.toFixed(2)}`);
   if (mBits.length) L.push(mBits.join(" · "));
-  if (scanned) L.push(`Scanned ${scanned} most-active names.`);
+  // Report scored-of-universe so a degraded run (many names failed to return
+  // data) is visible instead of masquerading as a full scan. Only show the
+  // denominator when it's known and larger than what actually scored.
+  if (scanned) {
+    L.push(universe > scanned
+      ? `Scanned ${scanned} of ${universe} most-active names${degraded ? " ⚠️" : ""}.`
+      : `Scanned ${scanned} most-active names.`);
+  }
 
   L.push("");
   if (!rows.length) {

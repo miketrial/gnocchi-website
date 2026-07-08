@@ -114,15 +114,24 @@ export default async (req) => {
       return new Response("", { status: 202 });
     }
 
-    const rows = await pooled(
-      universe,
-      async (sym) => {
-        const r = await scoreTickerQuickSwing(sym, { skipCache: true, marketRegime: regime }).catch(() => null);
-        if (r) r.sector = sectorBySym[sym] || null; // for the per-sector cap below
-        return r;
-      },
-      POOL,
-    );
+    const scoreOne = async (sym) => {
+      const r = await scoreTickerQuickSwing(sym, { skipCache: true, marketRegime: regime }).catch(() => null);
+      if (r) r.sector = sectorBySym[sym] || null; // for the per-sector cap below
+      return r;
+    };
+    const rows = await pooled(universe, scoreOne, POOL);
+
+    // Retry pass: a chunk of the fan-out routinely fails on transient FMP
+    // throttling/timeouts (dropped to null), which silently shrinks the scanned
+    // set and can hide real oversold setups. Re-run just the failures once — cheap
+    // relative to the full scan, recovers most of them, still inside the bg ceiling.
+    const failedIdx = [];
+    rows.forEach((r, i) => { if (!r) failedIdx.push(i); });
+    if (failedIdx.length) {
+      const retried = await pooled(failedIdx.map(i => universe[i]), scoreOne, POOL);
+      retried.forEach((r, j) => { if (r) rows[failedIdx[j]] = r; });
+      console.log(`[qs-daily] retry pass: ${failedIdx.length} failed → ${retried.filter(Boolean).length} recovered`);
+    }
 
     const scored = rows.filter(Boolean);
     // Rank by buy score (desc); tie-break by lower sell score so a cleaner
@@ -165,6 +174,7 @@ export default async (req) => {
     try {
       await sendTelegram(formatDailyTop({
         rows: top, regime, label: etClockLabel(new Date()), scanned: scored.length,
+        universe: universe.length, degraded,
         stale: !!uni.stale, asOfDay: uni.day,
       }));
     } catch (e) { console.error("[qs-daily] telegram failed:", e?.message || e); }

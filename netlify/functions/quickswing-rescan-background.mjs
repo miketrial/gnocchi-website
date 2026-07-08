@@ -3,10 +3,10 @@
    see the removal checklist in netlify/lib/quickswing-pipeline.mjs. */
 import { scoreTickerQuickSwing, getMarketRegime } from "../lib/quickswing-pipeline.mjs";
 import { recordQuickswingTransition, pruneTradeWindow, annotateBenchmarks } from "../lib/quickswing-backtest.mjs";
-import { listQuickswingRows, putQuickswingRow, getQuickswingTrades, putQuickswingTrades, putJob, acquireRescanLock, releaseRescanLock } from "../lib/store.mjs";
+import { listQuickswingRows, putQuickswingRow, putQsDailyRow, getQuickswingTrades, putQuickswingTrades, putJob, acquireRescanLock, releaseRescanLock } from "../lib/store.mjs";
 
 export default async (req) => {
-  const { jobId, force, tickers: onlyTickers, clientTickers } = await req.json().catch(() => ({}));
+  const { jobId, force, tickers: onlyTickers, clientTickers, dailyTickers } = await req.json().catch(() => ({}));
   if (!jobId) return new Response("Missing jobId", { status: 400 });
 
   // Single-ticker adds bypass the lock — same reasoning as short-rescan-background.
@@ -23,13 +23,13 @@ export default async (req) => {
   }
 
   try {
-    return await runQuickSwingScan({ jobId, force, onlyTickers, clientTickers });
+    return await runQuickSwingScan({ jobId, force, onlyTickers, clientTickers, dailyTickers });
   } finally {
     if (!isSingleTicker) await releaseRescanLock(jobId);
   }
 };
 
-async function runQuickSwingScan({ jobId, force, onlyTickers, clientTickers }) {
+async function runQuickSwingScan({ jobId, force, onlyTickers, clientTickers, dailyTickers }) {
   // Quick Swing tracks its OWN ticker list, independent of Basic/Short Term's
   // shared watchlist — a good 2-12wk trend hold and a good 1-2 day mean-
   // reversion candidate are often different companies entirely. "Existing"
@@ -41,8 +41,16 @@ async function runQuickSwingScan({ jobId, force, onlyTickers, clientTickers }) {
   const allSyms = [...existing.map(r => r.sym), ...extraSyms];
 
   const targets = (onlyTickers && onlyTickers.length) ? onlyTickers : allSyms;
-  const total = allSyms.length;
+  // Daily Most-Active names to re-measure IN PLACE alongside the manual list: same
+  // pipeline, but written back to the daily store (never the manual list) and never
+  // folded into the backtest log. This is a refresh of the CURRENT Top-15 names, not
+  // a re-discovery (that's the "Scan now" button → quickswing-daily-background).
+  // Skipped for a targeted single-/few-ticker rescan (onlyTickers) — that path is
+  // scoped to exactly the requested names.
+  const dailySyms = (onlyTickers && onlyTickers.length) ? [] : [...new Set((dailyTickers || []).map(s => String(s).toUpperCase()))];
+  const total = allSyms.length + dailySyms.length;
   const rows = [];
+  const scoredBySym = {};
   await putJob(jobId, { status: "running", total, completed: 0, rows });
 
   // Market regime (SPY vs its own trend + distribution-day count) is a
@@ -57,6 +65,7 @@ async function runQuickSwingScan({ jobId, force, onlyTickers, clientTickers }) {
       const skipCache = !!force || !!(onlyTickers && onlyTickers.length);
       const row = await scoreTickerQuickSwing(sym, { skipCache, marketRegime: regime });
       await putQuickswingRow(sym, row).catch(() => {});
+      scoredBySym[sym] = row; // reused below if this name is also on the daily list
       // Fold this scan into the ticker's "as-if" paper-trade log — opens a
       // paper long on a BUY verdict, closes it the moment the verdict stops
       // being BUY. This uses the row we JUST scored, so it costs no extra FMP
@@ -74,6 +83,22 @@ async function runQuickSwingScan({ jobId, force, onlyTickers, clientTickers }) {
       rows.push(row);
     } catch (e) {
       rows.push({ sym, error: String(e?.message || e) });
+    }
+    await putJob(jobId, { status: "running", total, completed: rows.length, rows });
+  }
+
+  // Daily Top-15 in-place refresh. Reuse a row already scored in the manual pass
+  // (dual-listed name) to avoid a second FMP hit; otherwise score it fresh. Written
+  // ONLY to the daily store, and tagged `_list:"daily"` so the client routes it to
+  // the daily table instead of the manual watchlist. No backtest recording here —
+  // the paper-trade log is scoped to the manual list by design.
+  for (const sym of dailySyms) {
+    try {
+      const row = scoredBySym[sym] || await scoreTickerQuickSwing(sym, { skipCache: true, marketRegime: regime });
+      await putQsDailyRow(sym, row).catch(() => {});
+      rows.push({ ...row, _list: "daily" });
+    } catch (e) {
+      rows.push({ sym, error: String(e?.message || e), _list: "daily" });
     }
     await putJob(jobId, { status: "running", total, completed: rows.length, rows });
   }
