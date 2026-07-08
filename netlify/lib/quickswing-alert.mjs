@@ -137,7 +137,7 @@ export function formatExitAlert(row, reason, pos, session = "regular", source = 
 }
 
 // `source` = "manual" (your watchlist) | "daily" (an auto pick from the 9:45
-// Most-Active 500 scan). A 🎯 tag on the header lets you tell them apart at a
+// Most-Active scan). A 🎯 tag on the header lets you tell them apart at a
 // glance without splitting the alert stream. Defaults preserve existing calls.
 export function formatAlert(row, kind, session = "regular", source = "manual") {
   const prefix = session === "afterhours" ? "🌙 AH " : "";

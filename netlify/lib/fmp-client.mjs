@@ -7,7 +7,7 @@ export const FMP = "https://financialmodelingprep.com/stable";
 export const delay = ms => new Promise(r => setTimeout(r, ms));
 
 /* ---------- Global rate limiter (token bucket) ----------
-   FMP's plan allows 300 calls/min. The daily Most-Active 500 scan fires ~2,000
+   FMP's plan allows 300 calls/min. The daily Most-Active scan fires ~1,000
    calls through a concurrency pool; without pacing those would burst far past
    300/min and get 429-throttled (or silently return empty data). This shared
    bucket caps EVERY fmp() call — across all tabs and the daily scan — at

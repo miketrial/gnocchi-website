@@ -1,6 +1,6 @@
 /* ===== QUICK SWING FEATURE ===== (removable — see checklist in
    netlify/lib/quickswing-pipeline.mjs)
-   GET the day's auto Top-N (Most-Active 500 scan) rows for the Bounce tab's
+   GET the day's auto Top-N (Most-Active scan) rows for the Bounce tab's
    bottom section. Read-only — the list is written only by the 9:45 scan
    (quickswing-daily-background.mjs) and kept fresh by the 5-min alert loop. */
 import { listQsDaily } from "../lib/store.mjs";

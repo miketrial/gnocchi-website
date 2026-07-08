@@ -1423,13 +1423,13 @@
     </table>
   </div>
 
-  <!-- ===== QUICK SWING FEATURE ===== Daily Top-N (Most-Active 500 scan) -->
+  <!-- ===== QUICK SWING FEATURE ===== Daily Top-N (Most-Active scan) -->
   <div id="qsDailySection" style="margin-top:26px">
     <div class="wp-head">
       <span class="wp-title" style="border-bottom:1px dashed currentColor">Daily Top 15 — Most Active</span>
-      <span class="wp-sub">Auto-picked each morning (~9:45 ET) from the 500 most-active U.S. companies, ranked by Bounce buy score · replaced fresh every trading day · rescans live alongside your watchlist · read-only (this list manages itself)</span>
+      <span class="wp-sub">Auto-picked each morning (~9:45 ET) from the most-active liquid U.S. movers (mid-cap+, price ≥ $10, top ~250 by dollar-volume), ranked by Bounce buy score · replaced fresh every trading day · rescans live alongside your watchlist · read-only (this list manages itself)</span>
       <span id="qsDailyStamp" style="margin-left:auto;font-size:10px;color:var(--ink-soft);white-space:nowrap"></span>
-      <button id="qsDailyScanBtn" type="button" style="margin-left:12px;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);background:none;white-space:nowrap" data-tip="Run the Most-Active 500 scan now instead of waiting for 9:45 ET. Takes several minutes; the list updates when it finishes.">↻ Scan now</button>
+      <button id="qsDailyScanBtn" type="button" style="margin-left:12px;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);background:none;white-space:nowrap" data-tip="Run the Most-Active scan now instead of waiting for 9:45 ET. Takes a few minutes; the list updates when it finishes.">↻ Scan now</button>
     </div>
     <div class="card">
       <table>
@@ -4170,7 +4170,7 @@ document.getElementById('qsView')?.addEventListener('click', e => {
   renderQuickSwing();
 });
 
-/* ===== QUICK SWING FEATURE ===== Daily Top-N (Most-Active 500 scan) — client.
+/* ===== QUICK SWING FEATURE ===== Daily Top-N (Most-Active scan) — client.
    A SEPARATE, read-only list from the manual watchlist above: its own store
    (qs-daily), its own fetch, its own render. Reuses qsRowHtml so the rows look
    identical; the daily <tbody> is never wired to selection/context-menu/delete
@@ -4232,18 +4232,18 @@ document.getElementById('qsDailyBody')?.addEventListener('click', e => {
   openQsFactHist(tr.dataset.sym, factorIdx, td);
 });
 
-// "Scan now" → fire the Most-Active 500 background scan, then poll qs-daily for
+// "Scan now" → fire the Most-Active background scan, then poll qs-daily for
 // the refreshed list (the worker replaces it wholesale only when it finishes,
-// ~7 min, so the OLD list stays visible until the new one lands).
+// ~4 min, so the OLD list stays visible until the new one lands).
 document.getElementById('qsDailyScanBtn')?.addEventListener('click', async () => {
   const btn = document.getElementById('qsDailyScanBtn');
   if (!API_LIVE) { showToast('Live API only — the Most-Active scan runs on the server.'); return; }
-  if (!confirm('Run the Most-Active 500 scan now? It takes several minutes and replaces today’s Top 15 when it finishes.')) return;
+  if (!confirm('Run the Most-Active scan now? It takes a few minutes and replaces today’s Top 15 when it finishes.')) return;
   const startMax = qsDailyFreshest();
   try {
     await api.send('/api/quickswing/daily/rescan', 'POST', { force: true, source: 'manual' });
   } catch(e) { showToast('Could not start the scan — try again in a moment.'); return; }
-  showToast('Most-Active 500 scan started (~7 min). The list refreshes automatically when it completes.');
+  showToast('Most-Active scan started (~4 min). The list refreshes automatically when it completes.');
   if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; btn.textContent = '⟳ Scanning…'; }
   clearInterval(qsDailyPollTimer);
   let tries = 0;

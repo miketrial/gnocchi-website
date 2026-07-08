@@ -17,7 +17,7 @@ const qsRowStore       = () => getStore("qs-rows");      // key = TICKER, per-ti
 const qsTradesStore    = () => getStore("qs-trades");    // key = TICKER, per-ticker paper-trade backtest log
 const qsFmpStore       = () => getStore("qs-fmp");       // key = TICKER, per-ticker raw FMP fan-out cache (24h TTL)
 const qsAlertStore     = () => getStore("qs-alert-state");// key = TICKER, last verdict a Telegram alert was sent for (dedup)
-const qsDailyStore     = () => getStore("qs-daily");     // key = TICKER, the day's auto Top-N (Most-Active 500 scan), replaced wholesale at 9:45 ET
+const qsDailyStore     = () => getStore("qs-daily");     // key = TICKER, the day's auto Top-N (Most-Active scan), replaced wholesale at 9:45 ET
 const qsUniverseStore  = () => getStore("qs-universe");  // key = "latest", cached resolved most-active symbol list ({ts, day, symbols})
 const spyHistStore     = () => getStore("spy-hist");     // key = index/ETF symbol ("SPY", "VIX", "XLK", "SMH", ...), one shared blob per symbol per scan batch
 
@@ -70,7 +70,7 @@ export async function releaseRescanLock(jobId) {
 
 /* ---------- Generic named lock ----------
    Same check-then-set as the rescan lock, but with a caller-chosen name + TTL.
-   Used by the daily Most-Active 500 scan (name "qs-daily-scan"), which can run
+   Used by the daily Most-Active scan (name "qs-daily-scan"), which can run
    ~7-8 min — longer than the 6-min rescan lock — so it needs its own longer
    lease to keep the 9:45 cron and a manual "Scan now" click from stacking a
    second 2,000-call fan-out on top of a run already in flight. */
@@ -400,7 +400,7 @@ export async function deleteQuickswingFmpCache(ticker) {
   await qsFmpStore().delete(ticker.toUpperCase()).catch(() => {});
 }
 
-/* ---------- Quick Swing: Daily Top-N auto list (Most-Active 500 scan) ----------
+/* ---------- Quick Swing: Daily Top-N auto list (Most-Active scan) ----------
    Separate blob namespace from the manual `qs-rows` watchlist so the two lists
    stay independent: the manual list is edited only by the user; this one is
    replaced wholesale each morning by the 9:45 ET scan's top buy-scored picks.
@@ -431,7 +431,7 @@ export async function replaceQsDaily(rows) {
 }
 
 /* ---------- Quick Swing: cached most-active universe ----------
-   The resolved list of ~500 most-active symbols the daily scan iterates. Cached
+   The resolved list of most-active symbols the daily scan iterates. Cached
    ~20h (one blob, "latest") so a same-day re-run (manual "Scan now") reuses one
    screener call instead of re-fetching the universe. `day` is the ET trading day
    it was resolved for, so a stale prior-day list is treated as a miss. */

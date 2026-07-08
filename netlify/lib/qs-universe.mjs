@@ -18,22 +18,36 @@
 import { FMP, rateLimit } from "./fmp-client.mjs";
 import { getQsUniverse, putQsUniverse } from "./store.mjs";
 
-// US common stocks, actively trading, on the two major exchanges, above $1 and
-// with real volume. limit=3000 comfortably covers the top-500-by-dollar-volume
-// cut (only ~2,600 names clear the volume floor, and we only need the top 500).
+// Default size of the daily Bounce universe (names actually scanned). 250 liquid
+// mid-cap+ movers ≈ 1,000 FMP calls (~4 min) — about half the old top-500 cost,
+// and a cleaner group. Override via QS_DAILY_UNIVERSE_N in the worker.
+export const DEFAULT_UNIVERSE_N = 250;
+
+// Quality pre-filters, ALL satisfied by the single screener call (free), chosen
+// to mirror the Bounce pipeline's own Liquidity + ADR gates so we don't spend 4
+// calls each on names that would fail those gates anyway:
+//   priceMoreThan=10        — drop penny / low-price noise
+//   marketCapMoreThan=2e9   — liquid, clean-technical mid-caps and up
+//   betaMoreThan=1.0        — actually moves enough for a 1-2 day snap-back
+//                             (beta is the cheap proxy; the pipeline still
+//                             computes real ADR% per name as the accurate gate)
+//   volumeMoreThan=1e6      — real turnover
+// ~540 US common stocks clear this; we keep the top N by dollar-volume.
 const SCREENER_QUERY =
-  "isEtf=false&isFund=false&isActivelyTrading=true" +
-  "&exchange=NASDAQ,NYSE&priceMoreThan=1&volumeMoreThan=500000&limit=3000";
+  "isEtf=false&isFund=false&isActivelyTrading=true&exchange=NASDAQ,NYSE" +
+  "&priceMoreThan=10&marketCapMoreThan=2000000000&betaMoreThan=1.0" +
+  "&volumeMoreThan=1000000&limit=3000";
 
 // Permissive ticker shape — allow dotted/hyphenated classes (BRK.B, RDS-A) but
 // drop anything with whitespace or odd characters the FMP symbol= param chokes on.
 const TICKER_RE = /^[A-Z][A-Z.\-]*$/;
 
-/* Return up to `n` most-active symbols (by dollar-volume), newest cache first.
-   `day` = ET trading day (YYYY-MM-DD); a cached list from a different day is a
-   miss so the universe rolls forward each morning. On a screener failure we fall
-   back to the last cached list (even if stale) rather than run an empty scan. */
-export async function getTop500MostActive({ n = 500, forceRefresh = false, day = null } = {}) {
+/* Return up to `n` most-active symbols (by dollar-volume) from the quality-
+   filtered pool, newest cache first. `day` = ET trading day (YYYY-MM-DD); a
+   cached list from a different day is a miss so the universe rolls forward each
+   morning. On a screener failure we fall back to the last cached list (even if
+   stale) rather than run an empty scan. */
+export async function getBounceUniverse({ n = DEFAULT_UNIVERSE_N, forceRefresh = false, day = null } = {}) {
   if (!forceRefresh) {
     const cached = await getQsUniverse(day).catch(() => null);
     if (cached && cached.length) return cached.slice(0, n);
@@ -72,9 +86,9 @@ export async function getTop500MostActive({ n = 500, forceRefresh = false, day =
     if (symbols.length >= n) break;
   }
 
-  // Only persist a FULL-size resolution (n >= 500). A small test/manual run
-  // (e.g. n=8) must never overwrite the day's real universe cache — otherwise a
-  // later full run would read back the truncated list and scan only 8 names.
-  if (symbols.length && n >= 500) await putQsUniverse(symbols, day).catch(() => {});
+  // Only persist a FULL-size resolution. A small test/manual run (e.g. n=8) must
+  // never overwrite the day's real universe cache — otherwise a later full run
+  // would read back the truncated list and scan only those few names.
+  if (symbols.length && n >= DEFAULT_UNIVERSE_N) await putQsUniverse(symbols, day).catch(() => {});
   return symbols;
 }

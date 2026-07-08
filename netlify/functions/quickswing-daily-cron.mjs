@@ -1,5 +1,5 @@
 /* ===== QUICK SWING FEATURE =====
-   Scheduled dispatcher for the daily Most-Active 500 Bounce scan. Netlify cron
+   Scheduled dispatcher for the daily Most-Active Bounce scan. Netlify cron
    runs in UTC with no DST awareness, so we schedule at BOTH 13:45 and 14:45 UTC
    (the two wall-clock times that map to 09:45 ET across DST) and gate in code:
    only the fire whose ET clock reads 09:45 on a weekday dispatches the worker;

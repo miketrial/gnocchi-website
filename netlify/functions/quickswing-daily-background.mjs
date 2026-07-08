@@ -2,13 +2,14 @@
    Daily "Top 500 Most-Active" morning scan → auto Top-N for the Bounce tab.
 
    Once each morning (fired ~9:45 ET by quickswing-daily-cron.mjs, or on demand
-   from the "Scan Top N now" button), this:
-     1. Resolves the ~500 most-active US companies (getTop500MostActive → one
-        company-screener call ranked by dollar-volume).
+   from the "Scan now" button), this:
+     1. Resolves the most-active quality-filtered universe (getBounceUniverse →
+        one company-screener call: price≥$10, cap≥$2B, beta≥1.0, ranked by
+        dollar-volume, top ~250).
      2. Fetches the market regime once (SPY/VIX, cached 6h) and scores every name
         through the SAME Bounce pipeline the manual watchlist uses, under a bounded
         concurrency pool. FMP pacing is enforced globally by the token bucket in
-        fmp-client.mjs (~270/min), so ~2,000 calls land in ~7-8 min, inside the
+        fmp-client.mjs (~270/min), so ~1,000 calls land in ~4 min, inside the
         15-min background-fn ceiling.
      3. Ranks by buy score, keeps the top N, and REPLACES the qs-daily list
         wholesale (yesterday's picks are dropped).
@@ -27,7 +28,7 @@
    ever add backtest recording to a Bounce scan, gate it to the manual list.
    Removable with the QUICK SWING FEATURE block. */
 import { scoreTickerQuickSwing, getMarketRegime } from "../lib/quickswing-pipeline.mjs";
-import { getTop500MostActive } from "../lib/qs-universe.mjs";
+import { getBounceUniverse } from "../lib/qs-universe.mjs";
 import { replaceQsDaily, acquireLock, releaseLock } from "../lib/store.mjs";
 import { fmpCallCount } from "../lib/fmp-client.mjs";
 import { sendTelegram } from "../lib/telegram.mjs";
@@ -35,6 +36,7 @@ import { formatDailyTop } from "../lib/quickswing-summary.mjs";
 import { etDateStr, etClockLabel } from "../lib/quickswing-alert.mjs";
 
 const TOP_N = Number(process.env.QS_DAILY_TOP_N || 15);   // picks kept + alerted
+const UNIVERSE_N = Number(process.env.QS_DAILY_UNIVERSE_N || 250); // names scanned (quality-filtered most-active)
 const POOL = Number(process.env.QS_DAILY_POOL || 10);     // symbols in flight (FMP paced globally)
 const LOCK_MS = 16 * 60 * 1000;                           // > 15-min bg ceiling, so no stacked fan-out
 
@@ -68,9 +70,9 @@ export default async (req) => {
   const body = await req.json().catch(() => ({}));
   const force = !!body.force;
   const topN = Number(body.n) > 0 ? Number(body.n) : TOP_N;
-  // Universe size — defaults to the full 500. A small value (e.g. {universe:8})
-  // lets a manual/test run exercise the whole path without a ~2,000-call fan-out.
-  const universeN = Number(body.universe) > 0 ? Number(body.universe) : 500;
+  // Universe size — defaults to UNIVERSE_N (250). A small value (e.g. {universe:8})
+  // lets a manual/test run exercise the whole path without the full fan-out.
+  const universeN = Number(body.universe) > 0 ? Number(body.universe) : UNIVERSE_N;
 
   const jobId = `qs-daily-${Date.now()}`;
   const gotLock = await acquireLock("qs-daily-scan", jobId, LOCK_MS);
@@ -84,7 +86,7 @@ export default async (req) => {
   try {
     const day = etDateStr(new Date());
     const [universe, regime] = await Promise.all([
-      getTop500MostActive({ n: universeN, day, forceRefresh: force }).catch(() => []),
+      getBounceUniverse({ n: universeN, day, forceRefresh: force }).catch(() => []),
       getMarketRegime().catch(() => null),
     ]);
 
