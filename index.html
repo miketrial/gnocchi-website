@@ -1593,15 +1593,6 @@
 <div id="ruleCard" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.55;padding:14px 16px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:300px;max-width:360px;pointer-events:none;white-space:normal;border:0.5px solid rgba(255,255,255,.08)"></div>
 
 <!-- Per-ticker watchlist history popover -->
-<!-- Backtest popover: aggregate hit rate / avg return on 3/3 entry signals -->
-<div id="backtestPop" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10.5px;line-height:1.45;padding:14px 16px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:380px;max-width:480px;max-height:70vh;overflow-y:auto;pointer-events:auto;border:0.5px solid rgba(255,255,255,.08);top:80px;left:50%;transform:translateX(-50%)">
-  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-    <span style="font-size:12px;font-weight:700;letter-spacing:.3px">Backtest · 3/3 Entry Signals</span>
-    <span id="backtestClose" style="cursor:pointer;color:#8a95a8;font-size:13px;padding:0 2px">✕</span>
-  </div>
-  <div id="backtestBody"></div>
-</div>
-
 <!-- ===== QUICK SWING FEATURE ===== Bounce backtest ("as-if") paper-trade log popover -->
 <div id="qsBtPop" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10.5px;line-height:1.45;padding:16px 18px;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.45);width:min(880px,94vw);max-height:82vh;overflow-y:auto;pointer-events:auto;border:0.5px solid rgba(255,255,255,.08);top:64px;left:50%;transform:translateX(-50%)">
   <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
@@ -1635,6 +1626,40 @@
   <div class="qs-bt-note">This is a rolling 15-day window of <em>recent activity</em>, not a full track record — too few trades to judge the strategy, and deliberately capped at 15 days. The seed is a historical replay of the EOD factors decided at each daily close (the after-hours leg can't be reconstructed — there's no historical after-hours data — so those days may differ slightly from what the live tool showed intraday; the VIX leg <em>is</em> now reconstructed from ^VIX EOD history). Forward datapoints are recorded each time you open the app or rescan, at the price that scan saw. The 2.5×ATR stop assumes a fill at the stop price (or the day's open on a gap-through). SPY buy-and-hold is the benchmark for both longs and shorts (opportunity cost of just holding the market those days). No slippage or commissions. Cumulative $ assumes a fixed $10,000 per trade.</div>
 </div>
 <!-- ===== END QUICK SWING FEATURE ===== -->
+
+<!-- ===== SWING BACKTEST FEATURE ===== Swing as-if paper-trade log popover (long-only trend-follow; mirrors the Bounce log) -->
+<div id="stBtPop" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10.5px;line-height:1.45;padding:16px 18px;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.45);width:min(880px,94vw);max-height:82vh;overflow-y:auto;pointer-events:auto;border:0.5px solid rgba(255,255,255,.08);top:64px;left:50%;transform:translateX(-50%)">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+    <span style="font-size:12px;font-weight:700;letter-spacing:.3px">Swing backtest · as-if trade log</span>
+    <span id="stBtClose" style="cursor:pointer;color:#8a95a8;font-size:13px;padding:0 2px">✕</span>
+  </div>
+  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px">Go long each time the swing trend signal turns strong (uptrend + 12/18 on the price-based factors) — each exits on a 50/200 death-cross, a 4×ATR stop, or a 63-day cap · rolling ~6.5-month window (an EOD reconstruction of the trend/momentum core of the score, not a live track record) · backfilled the first time you open this</div>
+  <div id="stBtStatus" style="display:none;font-size:10px;color:#fbbf24;margin-bottom:10px">⟳ Backfilling history…</div>
+  <div class="qs-bt-layout">
+    <aside class="qs-bt-key">
+      <div class="qs-bt-key-title">What the numbers mean</div>
+      <dl>
+        <dt>Win rate</dt><dd>Share of closed trades that made money. Trend-following runs a <em>low</em> win rate by design — a few big winners carry it.</dd>
+        <dt>Avg P/L</dt><dd>Average % gain/loss per closed trade.</dd>
+        <dt>Median hold</dt><dd>Typical days a trade stayed open (swing trades run weeks).</dd>
+        <dt>Best / Worst</dt><dd>Biggest single winner and loser.</dd>
+        <dt>Cumulative</dt><dd>Total $ if you'd put a fixed $10,000 into every trade.</dd>
+        <dt>Edge vs SPY</dt><dd>Your avg P/L minus what <em>SPY</em> returned over the same trade dates — did riding these trends beat just holding the market? Positive = the signal added value.</dd>
+        <dt>Equity curve</dt><dd>Running cumulative $ after each closed trade, in exit order, with <em>SPY</em> buy-and-hold overlaid. Above the dashed SPY line = the strategy is adding value.</dd>
+        <dt>Open</dt><dd>A <em>LONG</em> still running. <em>Now</em> is the live price, <em>Stop</em> the 4×ATR auto-exit line, <em>Unrealized</em> the paper gain so far. A red <em>● STOP</em> means price is at/through the stop.</dd>
+        <dt>Closed</dt><dd>Finished trades, grouped by ticker (best cumulative first). Click a ticker to expand. <em>Exit on</em> is why it closed — <em>TREND</em> (50DMA crossed below 200DMA), <em>STOP</em> (broke its 4×ATR stop), or <em>TIME</em> (hit the 63-day cap).</dd>
+      </dl>
+    </aside>
+    <div class="qs-bt-main">
+      <div id="stBtStats" class="qs-bt-stats"></div>
+      <div id="stBtChart"></div>
+      <div id="stBtOpen"></div>
+      <div id="stBtClosed"></div>
+    </div>
+  </div>
+  <div class="qs-bt-note">This is a rolling ~6.5-month window of <em>recent activity</em> — a small sample, not a full track record. The entry signal is the <em>reconstructable</em> price/volume/sector core of the 33-point swing score (Trend, 3-Month Momentum, Near-High, Liquidity, Volume-Surge, Sector-RS); the five fundamental factors (analyst revisions, valuation, quality, leverage, catalyst) can't be reconstructed at a past date, so — like the live tool's own philosophy of buying confirmed strength — the log times entries off the trend core. The seed is a historical replay of those factors at each daily close. Forward datapoints are recorded on each rescan, at the price that scan saw. The 4×ATR stop assumes a fill at the stop (or the day's open on a gap-through). SPY buy-and-hold is the benchmark (opportunity cost of just holding the market those days). No slippage or commissions. Cumulative $ assumes a fixed $10,000 per trade. Long-only: a 2-year study found shorting weak names loses on this universe and blows out the worst-case drawdown — see scripts/run-short-study.mjs.</div>
+</div>
+<!-- ===== END SWING BACKTEST FEATURE ===== -->
 
 <div id="tickerHist" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.5;padding:12px 14px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:340px;max-width:600px;pointer-events:auto;white-space:normal;border:0.5px solid rgba(255,255,255,.08)">
   <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
@@ -4369,6 +4394,166 @@ document.addEventListener('click', e => {
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeQsBacktest(); });
 /* ===== END QUICK SWING FEATURE ===== */
 
+/* ===== SWING BACKTEST FEATURE ===== Swing as-if paper-trade log (client).
+   Long-only trend-follow sibling of the Bounce log — same server-driven shape,
+   reusing the qs-bt-* CSS and the qsBt* formatting/equity-curve helpers. */
+let stBacktestLogs = [];
+
+async function loadStBacktest(){
+  if (!API_LIVE) return;
+  try {
+    const logs = await api.get('/api/short/backtest');
+    if (Array.isArray(logs)) { stBacktestLogs = logs; renderStBacktest(); }
+  } catch(e) { /* non-critical */ }
+}
+
+function renderStBacktest(){
+  const stats = document.getElementById('stBtStats');
+  const chartEl = document.getElementById('stBtChart');
+  const openEl = document.getElementById('stBtOpen');
+  const closedEl = document.getElementById('stBtClosed');
+  if (!stats || !openEl || !closedEl) return;
+
+  const openTrades = stBacktestLogs.filter(l => l && l.open).map(l => l.open);
+  const closed = [].concat(...stBacktestLogs.map(l => (l && Array.isArray(l.closed)) ? l.closed : []))
+                   .sort((a, b) => (Date.parse(b.exitScoredAt || b.exitAt) || 0) - (Date.parse(a.exitScoredAt || a.exitAt) || 0));
+
+  const n = closed.length;
+  if (!n) {
+    stats.innerHTML = `<div class="qs-bt-empty">No closed trades in the window yet. If this is your first time opening the log, history is backfilling now — otherwise none of your tickers had a strong swing setup that entered and closed in the last ~6.5 months.</div>`;
+  } else {
+    const wins = closed.filter(t => t.pnlPct > 0).length;
+    const winRate = (wins / n) * 100;
+    const avgPnl = closed.reduce((s, t) => s + t.pnlPct, 0) / n;
+    const holds = closed.map(t => t.holdDays).filter(h => h != null).sort((a, b) => a - b);
+    const medHold = holds.length ? holds[Math.floor((holds.length - 1) / 2)] : null;
+    const best = closed.reduce((m, t) => t.pnlPct > m.pnlPct ? t : m, closed[0]);
+    const worst = closed.reduce((m, t) => t.pnlPct < m.pnlPct ? t : m, closed[0]);
+    const cumDollars = closed.reduce((s, t) => s + QS_BT_NOTIONAL * (t.pnlPct / 100), 0);
+    const bench = closed.filter(t => typeof t.spyPct === 'number');
+    const hasBench = bench.length > 0;
+    const avgSpy = hasBench ? bench.reduce((s, t) => s + t.spyPct, 0) / bench.length : null;
+    const edge = hasBench ? avgPnl - avgSpy : null;
+    const cumSpy = hasBench ? bench.reduce((s, t) => s + QS_BT_NOTIONAL * (t.spyPct / 100), 0) : null;
+    const dollars = d => (d >= 0 ? '+' : '−') + '$' + Math.abs(d).toLocaleString(undefined,{maximumFractionDigits:0});
+    const stat = (k, v, cls, sub) => `<div class="qs-bt-stat"><span class="k">${k}</span><span class="v ${cls||''}">${v}</span>${sub?`<span class="sub">${sub}</span>`:''}</div>`;
+    stats.innerHTML =
+      stat('Closed trades', n) +
+      stat('Win rate', winRate.toFixed(0) + '%', '', 'low by design — trend-follow') +
+      stat('Avg P/L', qsBtPct(avgPnl), qsBtPnlClass(avgPnl), hasBench ? `SPY same days ${qsBtPct(avgSpy)}` : '') +
+      stat('Edge vs SPY', hasBench ? qsBtPct(edge) : '—', hasBench ? qsBtPnlClass(edge) : '', hasBench ? 'per trade, timing alone' : 'no benchmark yet') +
+      stat('Median hold', medHold == null ? '—' : medHold + 'd') +
+      stat('Best', qsBtPct(best.pnlPct) + ' ' + escHtml(best.sym), qsBtPnlClass(best.pnlPct)) +
+      stat('Worst', qsBtPct(worst.pnlPct) + ' ' + escHtml(worst.sym), qsBtPnlClass(worst.pnlPct)) +
+      stat('Cumulative', dollars(cumDollars), qsBtPnlClass(cumDollars), hasBench ? `SPY same days ${dollars(cumSpy)}` : '');
+  }
+
+  // Open positions (all LONG) — unrealized vs the live row price.
+  if (!openTrades.length) {
+    openEl.innerHTML = '';
+  } else {
+    const rows = openTrades.map(o => {
+      const live = shortRowsBySym[o.sym?.toUpperCase()]?.price;
+      const unreal = (live > 0 && o.entryPrice > 0) ? ((live - o.entryPrice) / o.entryPrice) * 100 : null;
+      const stop = o.stopPrice;
+      const breached = (stop > 0 && live > 0 && live <= stop);
+      const stopCell = stop > 0
+        ? `<td data-tip="${escHtml('Stop = entry − 4×ATR(14), pinned at entry. The as-if trade auto-exits if price breaks this line.')}">${qsBtPrice(stop)}</td>`
+        : `<td>—</td>`;
+      const flag = breached ? ` <span style="color:#f87171;font-weight:700">● STOP</span>` : '';
+      return `<tr${breached?' style="background:rgba(248,113,113,.08)"':''}><td>${escHtml(o.sym)} <span class="qs-bt-side qs-bt-side-long">LONG</span></td><td>${qsBtDate(o.entryScoredAt || o.entryAt)}</td>` +
+        `<td>${qsBtPrice(o.entryPrice)}</td><td>${qsBtPrice(live)}</td>${stopCell}` +
+        `<td class="${unreal==null?'':qsBtPnlClass(unreal)}">${unreal==null?'—':qsBtPct(unreal)}${flag}</td></tr>`;
+    }).join('');
+    openEl.innerHTML = `<div class="qs-bt-sec-head">Open as-if positions (${openTrades.length})</div>` +
+      `<table class="qs-bt-table"><thead><tr><th>Ticker</th><th>Entry</th><th>Entry $</th><th>Now $</th><th>Stop $</th><th>Unrealized</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  if (chartEl) chartEl.innerHTML = n ? qsBtEquityCurveSVG(closed) : '';
+
+  // Closed trades, grouped by ticker.
+  if (!n) {
+    closedEl.innerHTML = '';
+  } else {
+    const groups = new Map();
+    for (const t of closed) {
+      const k = (t.sym || '?').toUpperCase();
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(t);
+    }
+    const ordered = [...groups.entries()]
+      .map(([sym, trades]) => ({ sym, trades, agg: qsBtTickerAgg(trades) }))
+      .sort((a, b) => b.agg.cum - a.agg.cum);
+    const sections = ordered.map(({ sym, trades, agg }) => {
+      const rows = trades.map(t => {
+        const reason = t.exitReason ? `<span class="qs-bt-reason">${escHtml(t.exitReason)}</span>` : '';
+        return `<tr>` +
+          `<td>${qsBtDate(t.entryScoredAt || t.entryAt)}</td><td>${qsBtPrice(t.entryPrice)}</td>` +
+          `<td>${qsBtDate(t.exitScoredAt || t.exitAt)}</td><td>${qsBtPrice(t.exitPrice)}</td>` +
+          `<td>${t.holdDays==null?'—':t.holdDays+'d'}</td>` +
+          `<td class="${qsBtPnlClass(t.pnlPct)}">${qsBtPct(t.pnlPct)}</td>` +
+          `<td>${reason}</td></tr>`;
+      }).join('');
+      return `<details class="qs-bt-tk">
+        <summary>
+          <span class="qs-bt-tk-chev">▶</span>
+          <span class="qs-bt-tk-sym">${escHtml(sym)}</span>
+          <span class="qs-bt-tk-m">${agg.n} trade${agg.n===1?'':'s'}</span>
+          <span class="qs-bt-tk-m">${agg.winRate.toFixed(0)}% win</span>
+          <span class="qs-bt-tk-m ${qsBtPnlClass(agg.avg)}">${qsBtPct(agg.avg)} avg</span>
+          <span class="qs-bt-tk-spacer"></span>
+          <span class="qs-bt-tk-cum ${qsBtPnlClass(agg.cum)}">${qsBtDollars(agg.cum)}</span>
+        </summary>
+        <div class="qs-bt-tk-body">
+          <table class="qs-bt-table"><thead><tr><th>Entry</th><th>Entry $</th><th>Exit</th><th>Exit $</th><th>Hold</th><th>P/L</th><th>Exit on</th></tr></thead><tbody>${rows}</tbody></table>
+        </div>
+      </details>`;
+    }).join('');
+    closedEl.innerHTML = `<div class="qs-bt-sec-head">Closed as-if trades · by ticker (${n} across ${ordered.length})</div>${sections}`;
+  }
+}
+
+let stBtSeedInFlight = false;
+function openStBacktest(){
+  const pop = document.getElementById('stBtPop');
+  if (!pop) return;
+  pop.style.display = 'block';
+  renderStBacktest();  // paint from cache
+  loadStBacktest();    // refresh from server
+  seedStBacktest();    // lazily backfill history for un-seeded tickers
+}
+async function seedStBacktest(){
+  if (!API_LIVE || stBtSeedInFlight) return;
+  stBtSeedInFlight = true;
+  const status = document.getElementById('stBtStatus');
+  let guard = 0;
+  try {
+    while (guard++ < 60) {
+      let res;
+      try { res = await api.send('/api/short/backtest-seed', 'POST', {}); }
+      catch(e){ break; }
+      await loadStBacktest();
+      const remaining = res && typeof res.remaining === 'number' ? res.remaining : 0;
+      if (status) status.style.display = remaining > 0 ? 'block' : 'none';
+      if (remaining <= 0) break;
+    }
+  } finally {
+    stBtSeedInFlight = false;
+    if (status) status.style.display = 'none';
+  }
+}
+function closeStBacktest(){
+  const pop = document.getElementById('stBtPop');
+  if (pop) pop.style.display = 'none';
+}
+document.getElementById('stBtClose')?.addEventListener('click', closeStBacktest);
+document.addEventListener('click', e => {
+  const pop = document.getElementById('stBtPop');
+  if (pop && pop.style.display === 'block' && !pop.contains(e.target) && e.target.id !== 'backtestBtn') closeStBacktest();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeStBacktest(); });
+/* ===== END SWING BACKTEST FEATURE ===== */
+
 async function rescanQuickSwing(e){
   const force = true; // Rescan always force-fetches fresh FMP, same as Short Term.
   localStorage.setItem('gn_qs_last_rescan', Date.now()); updateRescanTimer();
@@ -5056,7 +5241,7 @@ function renderWatchPanel(){
     <div class="wp-head">
       <span class="wp-title" id="wlHelpTrigger" style="cursor:help;border-bottom:1px dashed currentColor">Watchlist ?</span>
       <span class="wp-sub">Click a ticker to see its history · × to clear</span>
-      <span id="backtestBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none" data-tip="Hit rate + avg return on 3/3 entry signals">▢ Backtest</span>
+      <span id="backtestBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="As-if you went long each time the swing trend signal turned strong, exiting on a 50/200 death-cross, a 4×ATR stop, or a 63-day cap — rolling ~6.5-month window with a SPY benchmark. An EOD reconstruction, not a live track record.">▢ Backtest log</span>
     </div>
     <div class="wp-cards">
       ${section('ready',    '✓ Ready',    ready,    'No stocks ready to trade yet', 'ready')}
@@ -5341,111 +5526,11 @@ document.getElementById('tickerHistJump').addEventListener('click', () => {
 // popover. Time on X (left = oldest, right = newest); rows = T / V / P; each
 // cell colored green (on) / grey (off) / yellow (off but green within 24h of
 // that scan). One cell per recorded scan, sized to fit the popover width.
-// Backtest: walks sigHistory for every ticker, finds "entry events" — scans
-// where TVP first hits 3/3 after being below — pairs each with an "exit"
-// (the next scan where green count drops below 3, or the latest scan if it
-// stayed 3/3). Returns per-event rows and aggregate stats.
-//
-// Caveat: prices were only added recently. Events whose entry scan predates
-// that change have no price and get filtered out — the sample size grows
-// over time as more scans accumulate.
-function computeBacktest(){
-  const events = [];
-  const greens = e => (e.T?1:0)+(e.V?1:0)+(e.P?1:0);
-  for (const sym of Object.keys(sigHistory)) {
-    const arr = sigHistory[sym] || [];
-    let prevG = 0;
-    for (let i = 0; i < arr.length; i++) {
-      const g = greens(arr[i]);
-      if (g === 3 && prevG < 3) {
-        // Found an entry — look for the exit (first non-3/3 after this)
-        let exitIdx = -1;
-        for (let j = i + 1; j < arr.length; j++) {
-          if (greens(arr[j]) < 3) { exitIdx = j; break; }
-        }
-        const entry = arr[i];
-        const exit  = exitIdx >= 0 ? arr[exitIdx] : arr[arr.length - 1];
-        const isOpen = exitIdx < 0;
-        // If the trade is still "open" (signal still 3/3), use the live price
-        // from shortRowsBySym for the exit so unrealized P&L shows.
-        let exitPrice = exit?.price;
-        if (isOpen) {
-          const live = shortRowsBySym[sym]?.raw?.[0]?.price;
-          if (typeof live === 'number') exitPrice = live;
-        }
-        if (typeof entry.price === 'number' && typeof exitPrice === 'number' && entry.price > 0) {
-          events.push({
-            sym, isOpen,
-            entryTs: entry.ts, exitTs: exit.ts,
-            entryPrice: entry.price, exitPrice,
-            returnPct: (exitPrice - entry.price) / entry.price * 100,
-            holdDays: Math.max(0, Math.round((exit.ts - entry.ts) / 86400000)),
-          });
-        }
-      }
-      prevG = g;
-    }
-  }
-  events.sort((a,b) => b.returnPct - a.returnPct);
-  const n = events.length;
-  if (!n) return { events, stats: null };
-  const wins = events.filter(e => e.returnPct > 0).length;
-  const avg  = events.reduce((s,e) => s + e.returnPct, 0) / n;
-  const best = events[0];
-  const worst = events[n-1];
-  return {
-    events,
-    stats: { n, wins, hitRate: wins/n*100, avg, best, worst,
-             openCount: events.filter(e=>e.isOpen).length },
-  };
-}
-function showBacktest(){
-  const { events, stats } = computeBacktest();
-  const el = document.getElementById('backtestBody');
-  if (!stats) {
-    el.innerHTML = `<div style="padding:20px 4px;color:#8a95a8;font-size:11px">
-      No 3/3 entry signals with price data yet. Price snapshots started recording
-      this release — rescan a few times across days to build the sample.</div>`;
-    document.getElementById('backtestPop').style.display = 'block';
-    return;
-  }
-  const pct = v => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
-  const color = v => v > 0 ? '#34d399' : v < 0 ? '#f87171' : '#cbd5e1';
-  const date = ts => new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric'});
-  const summary = `
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;padding:10px;background:rgba(255,255,255,.04);border-radius:8px">
-      <div><div style="font-size:8.5px;color:#8a95a8;text-transform:uppercase;letter-spacing:.4px">Signals</div><div style="font-size:16px;font-weight:700">${stats.n}</div></div>
-      <div><div style="font-size:8.5px;color:#8a95a8;text-transform:uppercase;letter-spacing:.4px">Hit rate</div><div style="font-size:16px;font-weight:700;color:${color(stats.hitRate-50)}">${stats.hitRate.toFixed(0)}%</div></div>
-      <div><div style="font-size:8.5px;color:#8a95a8;text-transform:uppercase;letter-spacing:.4px">Avg return</div><div style="font-size:16px;font-weight:700;color:${color(stats.avg)}">${pct(stats.avg)}</div></div>
-      <div><div style="font-size:8.5px;color:#8a95a8;text-transform:uppercase;letter-spacing:.4px">Open</div><div style="font-size:16px;font-weight:700">${stats.openCount}</div></div>
-    </div>`;
-  const row = e => `
-    <tr>
-      <td style="padding:4px 6px;font-weight:600">${e.sym}${e.isOpen?'<span style="font-size:8px;color:#fbbf24;margin-left:4px">●OPEN</span>':''}</td>
-      <td style="padding:4px 6px;color:#8a95a8;font-size:9.5px">${date(e.entryTs)} → ${date(e.exitTs)}</td>
-      <td style="padding:4px 6px;text-align:right;color:#cbd5e1">$${e.entryPrice.toFixed(2)} → $${e.exitPrice.toFixed(2)}</td>
-      <td style="padding:4px 6px;text-align:right;color:#8a95a8">${e.holdDays}d</td>
-      <td style="padding:4px 6px;text-align:right;font-weight:700;color:${color(e.returnPct)}">${pct(e.returnPct)}</td>
-    </tr>`;
-  el.innerHTML = summary + `
-    <div style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#8a95a8;margin-bottom:4px">All signals · sorted by return</div>
-    <table style="width:100%;border-collapse:collapse;font-size:10px">
-      <thead><tr style="color:#8a95a8;font-size:8.5px;text-transform:uppercase;letter-spacing:.4px">
-        <th style="text-align:left;padding:2px 6px;font-weight:600">Sym</th>
-        <th style="text-align:left;padding:2px 6px;font-weight:600">Hold</th>
-        <th style="text-align:right;padding:2px 6px;font-weight:600">Entry → Exit</th>
-        <th style="text-align:right;padding:2px 6px;font-weight:600">Days</th>
-        <th style="text-align:right;padding:2px 6px;font-weight:600">Return</th>
-      </tr></thead>
-      <tbody>${events.map(row).join('')}</tbody>
-    </table>`;
-  document.getElementById('backtestPop').style.display = 'block';
-}
-document.getElementById('backtestClose').addEventListener('click', () => {
-  document.getElementById('backtestPop').style.display = 'none';
-});
+// SWING BACKTEST FEATURE — the ▢ Backtest button in the Swing watch panel opens
+// the server-driven as-if paper-trade log (openStBacktest, defined above). The
+// old client-only "3/3 TVP" hit-rate calculator was replaced by it.
 document.addEventListener('click', e => {
-  if (e.target.id === 'backtestBtn') showBacktest();
+  if (e.target.id === 'backtestBtn') openStBacktest();
 });
 // Inline mini-history for demoted chips: returns an SVG sparkline string
 // (last ~12 scans) showing T/V/P state at each scan so you can see at a

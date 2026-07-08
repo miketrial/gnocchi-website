@@ -17,6 +17,7 @@ import { getShortFmpCache, putShortFmpCache, deleteShortFmpCache, getSpyHistCach
 import { round2, na, scored, trueRange, atrFrom } from "./ta-helpers.mjs";
 import { fmp, safe, delay } from "./fmp-client.mjs";
 import { cleanHist, strengthFactor } from "./quickswing-pipeline.mjs";
+import { computeShortSignal } from "./short-backtest.mjs"; // SWING BACKTEST FEATURE
 
 /* ---------- Sanity range gates — reject implausible FMP values before they
    reach a chip. A swing trader acts on these numbers fast, so a garbage
@@ -762,6 +763,16 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   //      lockstep.
   const priceHist = buildPriceHist(hist);
 
+  // SWING BACKTEST FEATURE — reconstruct the EOD-computable swing signal (the
+  // trend/momentum core of the score) for the as-if trade log. Uses the same
+  // fetched hist + already-cached SPY/sector history, so no extra FMP call. The
+  // rescan loop folds row.bt into the ticker's trade log via recordShortTransition.
+  const cleanedHist = cleanHist(hist);
+  const btSignal = computeShortSignal(cleanedHist, {
+    spyStrength: spyHist ? strengthFactor(spyHist) : null,
+    sectorStrength: sectorHist ? strengthFactor(sectorHist) : null,
+  });
+
   const row = {
     sym,
     name,
@@ -774,6 +785,7 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     raw: checks.map(c => c.value),
     verdicts: checks.map(c => c.verdict), // "good"|"ok"|"weak"|"bad"|"na" for chip colors
     priceHist,
+    bt: btSignal, // SWING BACKTEST FEATURE — signal detail for the paper-trade log
     warnings,
     scored_at: new Date().toISOString(),
   };

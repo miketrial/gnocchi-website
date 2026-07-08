@@ -1,5 +1,7 @@
 import { scoreTickerShort } from "../lib/short-pipeline.mjs";
-import { listWatchlist, putShortRow, putJob, acquireRescanLock, releaseRescanLock } from "../lib/store.mjs";
+import { listWatchlist, putShortRow, putJob, acquireRescanLock, releaseRescanLock,
+         getShortTrades, putShortTrades } from "../lib/store.mjs";
+import { recordShortTransition, pruneShortWindow } from "../lib/short-backtest.mjs"; // SWING BACKTEST FEATURE
 
 const STALE_HOURS = 12;
 
@@ -54,6 +56,16 @@ async function runShortScan({ jobId, force, onlyTickers, clientTickers }) {
       const skipCache = !!force || !!(onlyTickers && onlyTickers.length);
       const row = await scoreTickerShort(sym, { skipCache });
       await putShortRow(sym, row).catch(() => {});
+      // SWING BACKTEST FEATURE — fold this scored bar into the ticker's as-if
+      // trade log (forward recording). row.bt is the reconstructed swing signal;
+      // pruneShortWindow keeps the rolling ~6.5-month window. Never blocks the scan.
+      if (row && row.bt) {
+        try {
+          const prev = await getShortTrades(sym).catch(() => null);
+          const next = pruneShortWindow(recordShortTransition(sym, row.bt, prev));
+          await putShortTrades(sym, next).catch(() => {});
+        } catch (e) { /* backtest log is non-critical — never fail the scan over it */ }
+      }
       rows.push(row);
     } catch (e) {
       rows.push({ sym, error: String(e?.message || e) });

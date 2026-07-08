@@ -11,6 +11,7 @@ const usageStore       = () => getStore("usage");        // key = haiku-<YYYY-MM
 const settingsStore    = () => getStore("settings");     // key = setting name
 const shortRowStore    = () => getStore("short-rows");   // key = TICKER, per-ticker short-pipeline score blob
 const shortFmpStore    = () => getStore("short-fmp");    // key = TICKER, per-ticker raw FMP fan-out cache (24h TTL)
+const shortTradesStore = () => getStore("short-trades"); // key = TICKER, per-ticker swing paper-trade backtest log
 const epsSnapStore     = () => getStore("eps-snapshots");// key = TICKER (object: {YYYY-MM-DD: fwdEps})
 const qsRowStore       = () => getStore("qs-rows");      // key = TICKER, per-ticker quickswing-pipeline score blob
 const qsTradesStore    = () => getStore("qs-trades");    // key = TICKER, per-ticker paper-trade backtest log
@@ -258,6 +259,27 @@ export async function putShortFmpCache(ticker, data) {
 }
 export async function deleteShortFmpCache(ticker) {
   await shortFmpStore().delete(ticker.toUpperCase()).catch(() => {});
+}
+
+/* ---------- Swing: paper-trade backtest log ----------
+   One blob per ticker: { open: {...}|null, closed: [...newest-first], seeded,
+   seedVersion }. The as-if long-only trade that acting on the swing signal would
+   produce. Written from the short rescan loop; read by the short-backtest
+   endpoint. Removable with the SWING BACKTEST FEATURE block. */
+export async function listShortTrades() {
+  const s = shortTradesStore();
+  const { blobs } = await s.list();
+  const logs = await Promise.all(blobs.map(b => s.get(b.key, { type: "json" }).catch(() => null)));
+  return logs.filter(Boolean);
+}
+export async function getShortTrades(ticker) {
+  return shortTradesStore().get(ticker.toUpperCase(), { type: "json" }).catch(() => null);
+}
+export async function putShortTrades(ticker, log) {
+  await shortTradesStore().setJSON(ticker.toUpperCase(), log);
+}
+export async function deleteShortTrades(ticker) {
+  await shortTradesStore().delete(ticker.toUpperCase()).catch(() => {});
 }
 
 /* ---------- Quick Swing: per-ticker score blobs ---------- */
