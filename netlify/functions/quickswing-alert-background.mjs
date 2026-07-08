@@ -1,28 +1,29 @@
 /* ===== QUICK SWING FEATURE =====
-   Real-time alert worker. Re-scores the Quick Swing watchlist and pushes Telegram
-   messages on two things:
+   Real-time alert worker. Re-scores the Bounce watchlist ∪ daily Top-N every 5
+   min and pushes Telegram messages on:
      - ENTRY: a fresh BUY/SELL verdict transition (or a flip to the opposite side).
-     - EXIT: the entry it told you to take hits its take-profit (first green tick
-       above entry), 2.5×ATR stop, or 3-session time stop — the SAME exit rule the
-       paper-trade backtest books (quickswing-backtest.mjs v11), so the alerts and
-       the Backtest Log tell one consistent story.
+     - EXIT: the tracked entry hits its take-profit (first green tick above entry),
+       2.5×ATR stop, 3-session time stop, or flips — the SAME rule the paper-trade
+       backtest books, so alerts and the Backtest Log stay consistent.
+     - HOLD nudges (Section B): a one-shot "read cooling", "approaching stop", and
+       "time-stop next session" heads-up while a position is open.
 
-   It tracks the open "alert position" (entry price / side / stop / sessions-held)
-   on the qs-alert-state blob. NEUTRAL/BLOCKED are held through, not exited — a
-   position leaves only via take-profit, stop, flip, or time stop. Once a position
-   exits, the same-side verdict is NOT re-entered until a genuinely fresh setup
-   (verdict leaves the side and returns), so a stopped/booked name doesn't re-ping
-   every 5 minutes.
+   Delivery discipline (Section A):
+     - confirm-before-dedup: a position/verdict only advances after its Telegram
+       send is CONFIRMED, so a dropped alert re-fires next tick instead of being
+       lost while the dedup silently moves on.
+     - loud vs silent: only a fresh STRONG BUY entry, a STOP exit, and a flip-to-
+       SELL buzz the phone; everything else arrives silently.
+     - flood batching: many fresh entries in one tick collapse into one digest.
 
    Invoked (fire-and-forget) by quickswing-alert-cron.mjs during market hours.
-   Reuses the exact scoring call the manual rescan uses, so the verdict can't
-   drift from the app table. Removable with the rest of the QUICK SWING FEATURE
-   block. */
+   Removable with the rest of the QUICK SWING FEATURE block. */
 import { scoreTickerQuickSwing, getMarketRegime } from "../lib/quickswing-pipeline.mjs";
 import {
   listQuickswingRows, listQsDaily, putQuickswingRow, putQsDailyRow,
   getQsAlertState, putQsAlertState,
   getQsOpenDigestDate, putQsOpenDigestDate,
+  getQsPreCloseDate, putQsPreCloseDate, putQsStopMark,
   getQsHeartbeat, putQsHeartbeat,
   acquireRescanLock, releaseRescanLock,
 } from "../lib/store.mjs";
@@ -32,20 +33,99 @@ import { sendTelegram } from "../lib/telegram.mjs";
 import {
   alertTransition, formatAlert, formatExitAlert,
   makeAlertPosition, positionExitDecision,
-  etDateStr, etClockLabel, formatOpenSnapshot, formatOutageRoster,
+  etDateStr, etClockLabel, etParts, formatOpenSnapshot, formatOutageRoster,
+  formatEntryDigest, formatCoolingNote, formatApproachingStop,
+  formatTimeStopNudge, formatPreCloseRoster,
 } from "../lib/quickswing-alert.mjs";
 
 const sideForVerdict = (v) => (v === "BUY" ? "long" : v === "SELL" ? "short" : null);
+// A send counts as "delivered" for dedup purposes if it succeeded OR was a
+// deliberate no-op (Telegram not configured). Only a real DELIVERY FAILURE
+// (429/5xx exhausted, network error) holds the state back so it re-fires next
+// tick — otherwise a user without Telegram would freeze the whole state machine.
+const delivered = (res) => !!res && (res.ok || res.skipped);
 // A silent gap longer than this (~3 missed 5-min cycles) counts as an outage:
-// on recovery we send a catch-up roster. Also the staleness bar the cron uses.
+// on recovery we send a catch-up roster.
 const OUTAGE_MS = 16 * 60 * 1000;
+// More than this many fresh entries in one tick → one digest instead of a flood.
+const ENTRY_FLOOD_CAP = Number(process.env.QS_ENTRY_FLOOD_CAP || 4);
+// Approaching-stop danger band, in fractions of R (entry→stop distance).
+const NEAR_STOP_R = 0.3;
+
+// Loud only for the three the user opted into: a fresh STRONG BUY entry, a STOP
+// exit, and a flip-to-SELL. Everything else is delivered silently.
+const loudEntry = (row, kind) => kind === "BUY" && row?.tier === "strong";
+
+/* One-shot, silent HOLD nudges (B1 cooling / B5 approaching-stop / B6 time-stop).
+   Returns { pos, sent } — a dedup flag is only set once its send confirms, so a
+   dropped nudge re-fires next tick. */
+async function holdNudges(pos, row) {
+  let sent = 0;
+  const long = pos.side === "long";
+
+  // B1 — verdict drained off the position's side before any hard exit.
+  const supportsSide = long ? row.verdict === "BUY" : row.verdict === "SELL";
+  if (!supportsSide && !pos.cooledNotified) {
+    const res = await sendTelegram(formatCoolingNote(row, pos), { silent: true });
+    if (delivered(res)) { pos = { ...pos, cooledNotified: true }; sent++; }
+  } else if (supportsSide && pos.cooledNotified) {
+    pos = { ...pos, cooledNotified: false }; // recovered — allow a future cool to re-notify
+  }
+
+  // B5 — price entered the ~0.3R danger band before the hard stop.
+  if (pos.stopPrice != null && pos.entryPrice != null && row.price != null) {
+    const R = Math.abs(pos.entryPrice - pos.stopPrice);
+    const dist = long ? (row.price - pos.stopPrice) : (pos.stopPrice - row.price);
+    const inBand = R > 0 && dist > 0 && dist <= NEAR_STOP_R * R;
+    if (inBand && !pos.nearStopWarned) {
+      const res = await sendTelegram(formatApproachingStop(row, pos), { silent: true });
+      if (delivered(res)) { pos = { ...pos, nearStopWarned: true }; sent++; }
+    } else if (!inBand && pos.nearStopWarned) {
+      pos = { ...pos, nearStopWarned: false };
+    }
+  }
+
+  // B6 — the session before the time-stop trips.
+  if ((pos.barsHeld ?? 0) === (QS_TIME_STOP_DAYS - 1) && !pos.timeWarned) {
+    const res = await sendTelegram(formatTimeStopNudge(row, pos, QS_TIME_STOP_DAYS), { silent: true });
+    if (delivered(res)) { pos = { ...pos, timeWarned: true }; sent++; }
+  }
+
+  return { pos, sent };
+}
+
+/* Flush deferred fresh entries (A4). ≤ cap → individual alerts (strong BUYs loud);
+   > cap → one silent digest. In both cases a position opens ONLY after the send
+   confirms (A1), so a dropped alert re-fires next tick. Returns the sent count. */
+async function flushEntries(pending, session) {
+  let sent = 0;
+  if (pending.length > ENTRY_FLOOD_CAP) {
+    const res = await sendTelegram(formatEntryDigest(pending), { silent: true });
+    if (delivered(res)) {
+      for (const e of pending) {
+        const pos = makeAlertPosition(e.row, sideForVerdict(e.kind), e.sessionDate);
+        await putQsAlertState(e.sym, e.row.verdict, pos).catch(() => {});
+        sent++;
+      }
+    }
+  } else {
+    for (const e of pending) {
+      const res = await sendTelegram(formatAlert(e.row, e.kind, session, e.source), { silent: !loudEntry(e.row, e.kind) });
+      if (delivered(res)) {
+        const pos = makeAlertPosition(e.row, sideForVerdict(e.kind), e.sessionDate);
+        await putQsAlertState(e.sym, e.row.verdict, pos).catch(() => {});
+        sent++;
+      }
+    }
+  }
+  return sent;
+}
 
 export default async (req) => {
   const { session = "regular" } = await req.json().catch(() => ({}));
 
   // Share the global rescan lock: if a manual rescan (or a previous alert cycle
-  // that overran) is in flight, skip this tick rather than double the FMP
-  // fan-out. The next 5-min fire will pick up any transition we missed.
+  // that overran) is in flight, skip this tick rather than double the FMP fan-out.
   const jobId = `qs-alert-${Date.now()}`;
   const gotLock = await acquireRescanLock(jobId);
   if (!gotLock) {
@@ -53,29 +133,28 @@ export default async (req) => {
     return new Response("", { status: 202 });
   }
 
-  // First regular-session scan of a new ET trading day → send the once-daily
-  // Market Open snapshot (all active setups, incl. carry-overs) instead of the
-  // transition alerts, then re-baseline the dedup + open positions to the open
-  // state. Guarded so it fires at most once per day.
-  const today = etDateStr(new Date());
+  const now = new Date();
+  const today = etDateStr(now);
   const lastDigest = await getQsOpenDigestDate().catch(() => null);
   const isOpenScan = session === "regular" && lastDigest !== today;
 
-  // Silent-loop recovery: if our last successful run was long enough ago that the
-  // loop effectively went dark, we'll send a one-time catch-up roster after this
-  // scan (unless it's the open scan, which already sends the full snapshot).
+  // Silent-loop recovery (F3): a long gap since our last successful run → send a
+  // one-time catch-up roster after this scan.
   const hb = await getQsHeartbeat().catch(() => null);
   const gapMs = hb?.ts ? (Date.now() - hb.ts) : 0;
   const wasOutage = !!hb?.ts && gapMs > OUTAGE_MS;
 
+  // Pre-close review (B4): once/day around 15:50 ET.
+  const { hour: etHour, minute: etMin } = etParts(now);
+  const preCloseDone = await getQsPreCloseDate().catch(() => null);
+  const isPreClose = session === "regular" && etHour === 15 && etMin >= 48 && etMin <= 54 && preCloseDone !== today;
+
   let scored = 0, alerted = 0, staleSkipped = 0;
-  const openPositions = []; // positions open at the START of this tick (for the recovery roster)
+  const openPositions = [];   // positions open at the START of this tick (recovery + pre-close rosters)
+  const priorStateBySym = {}; // for the open-scan carried-position fix (B3)
+  const pendingEntries = [];  // deferred fresh entries for flood batching (A4)
   try {
     const regime = await getMarketRegime().catch(() => null);
-    // Scan the UNION of your manual watchlist (qs-rows) + the day's auto Top-N
-    // from the 9:45 Most-Active scan (qs-daily), deduped by symbol with the
-    // manual list winning the tag. This is what folds the auto picks into the
-    // 5-min live rescore + verdict alerts. The manual side stays first-class.
     const [manual, daily] = await Promise.all([
       listQuickswingRows(),
       listQsDaily().catch(() => []),
@@ -93,10 +172,8 @@ export default async (req) => {
     for (const { sym, source } of watchlist) {
       try {
         const row = await scoreTickerQuickSwing(sym, { skipCache: true, marketRegime: regime });
-        // Write each fresh row back to the store(s) it belongs to, so the auto
-        // list refreshes in place WITHOUT leaking auto names into the manual
-        // watchlist. A name in both stays first-class in qs-rows and mirrors to
-        // qs-daily so the bottom section shows the same live read.
+        // Write each fresh row back to the store(s) it belongs to (no leakage of
+        // auto names into the manual watchlist; a name in both mirrors to daily).
         if (manualSet.has(sym)) await putQuickswingRow(sym, row).catch(() => {});
         if (dailySet.has(sym)) await putQsDailyRow(sym, row).catch(() => {});
         scored++;
@@ -105,19 +182,18 @@ export default async (req) => {
         const prevVerdict = prevState?.verdict ?? null;
         prevMap[sym] = prevVerdict;
         scoredRows.push(row);
-        // Snapshot positions open at the start of this tick — the recovery roster
-        // (below) reviews these with live prices after a silent gap.
+        priorStateBySym[sym] = prevState;
         if (prevState?.pos) {
           openPositions.push({
-            sym, side: prevState.pos.side,
+            sym, source, side: prevState.pos.side,
             entryPrice: prevState.pos.entryPrice, stopPrice: prevState.pos.stopPrice,
-            price: row.price,
+            barsHeld: prevState.pos.barsHeld, price: row.price, overnightGap: row.overnightGap,
           });
         }
         if (isOpenScan) continue; // the open snapshot (after the loop) handles alerts + positions
 
-        // The session (bar) date this scan represents — advances once per trading
-        // day, so intraday rescans don't inflate the time-stop counter.
+        // Session (bar) date — advances once per trading day so intraday rescans
+        // don't inflate the time-stop counter.
         const sessionDate = row.dataAsOf || today;
         let pos = prevState?.pos ?? null;
         if (pos && pos.lastSessionDate && sessionDate > pos.lastSessionDate) {
@@ -126,36 +202,41 @@ export default async (req) => {
 
         let newVerdict = prevVerdict;
         if (pos) {
-          // Holding: check for a position exit (STOP → TARGET → FLIP → TIME).
+          // Holding: STOP → TARGET → FLIP → TIME. Only advance state on a CONFIRMED send.
           const { reason } = positionExitDecision(pos, row, QS_TIME_STOP_DAYS);
           if (reason === "FLIP") {
-            await sendTelegram(formatAlert(row, row.verdict, session, source)); // opposite-side entry
-            pos = makeAlertPosition(row, sideForVerdict(row.verdict), sessionDate);
-            newVerdict = row.verdict;
-            alerted++;
+            const res = await sendTelegram(formatAlert(row, row.verdict, session, source), { silent: false }); // flip-to-SELL is loud
+            if (delivered(res)) { pos = makeAlertPosition(row, sideForVerdict(row.verdict), sessionDate); newVerdict = row.verdict; alerted++; }
           } else if (reason) { // STOP / TARGET / TIME
-            await sendTelegram(formatExitAlert(row, reason, pos, session, source));
-            pos = null;
-            newVerdict = row.verdict; // keep the side so we don't immediately re-enter it
-            alerted++;
+            const loud = reason === "STOP";
+            const res = await sendTelegram(formatExitAlert(row, reason, pos, session, source), { silent: !loud });
+            if (delivered(res)) {
+              if (reason === "STOP") await putQsStopMark(sym, today).catch(() => {}); // A6 — withhold from daily for a few sessions
+              pos = null;
+              newVerdict = row.verdict; // keep the side so we don't immediately re-enter it
+              alerted++;
+            }
+            // send failed → keep pos → retry next tick
+          } else {
+            // Hold — one-shot silent nudges (B1/B5/B6).
+            const nudged = await holdNudges(pos, row);
+            pos = nudged.pos;
+            alerted += nudged.sent;
           }
-          // else: hold — no message, keep the position
         } else {
-          // Flat: fire on a fresh BUY/SELL entry, and open a position to track it.
           const { fire, kind } = alertTransition(prevVerdict, row.verdict);
           if (fire && (kind === "BUY" || kind === "SELL")) {
             if (barIsStale(row.dataAsOf, today)) {
               // FMP's daily bar is >=1 full session behind — the technicals are
-              // frozen. Suppress the ENTRY and DON'T advance the dedup verdict, so
-              // it fires for real once the feed catches up. (Exits are left alone —
-              // better to act on a maybe-stale stop than to miss it.)
+              // frozen. Suppress the ENTRY and leave the dedup verdict untouched
+              // (don't write) so it fires for real once the feed catches up.
               staleSkipped++;
-              await putQsAlertState(sym, prevVerdict, pos).catch(() => {});
               continue;
             }
-            await sendTelegram(formatAlert(row, kind, session, source));
-            pos = makeAlertPosition(row, sideForVerdict(kind), sessionDate);
-            alerted++;
+            // Defer to the post-loop batch decision (A4). State/position advance
+            // there, after the send confirms — so leave this sym's state untouched.
+            pendingEntries.push({ sym, row, kind, source, sessionDate });
+            continue;
           }
           newVerdict = row.verdict;
         }
@@ -166,42 +247,59 @@ export default async (req) => {
       }
     }
 
+    // Flush deferred fresh entries (A4) — individual (tiered) or one digest.
+    if (!isOpenScan && pendingEntries.length) {
+      alerted += await flushEntries(pendingEntries, session);
+    }
+
     if (isOpenScan) {
-      // One consolidated Market Open message — scoped to your MANUAL watchlist
-      // only, so it stays separate from the 9:45 Most-Active scan's own message.
-      // (Uses prior-close verdicts for the "changes since prior close" section,
-      // so it's built BEFORE we overwrite the state below.)
+      // Consolidated Market Open snapshot — MANUAL watchlist only (kept separate
+      // from the 9:45 Most-Active message), delivered silently.
       const manualRows = scoredRows.filter((r) => manualSet.has(r.sym));
       const res = await sendTelegram(
-        formatOpenSnapshot({ rows: manualRows, prevMap, regime, label: etClockLabel(new Date()) })
+        formatOpenSnapshot({ rows: manualRows, prevMap, regime, label: etClockLabel(now) }),
+        { silent: true }
       );
       if (res?.ok) alerted = manualRows.filter((r) => r.verdict === "BUY" || r.verdict === "SELL").length;
-      // Re-baseline dedup AND open a fresh alert-position for every active setup,
-      // so intraday take-profit/stop/time exits alert from the open.
+      // Re-baseline dedup + positions to the open. B3 fix: CARRY a same-side
+      // position's real entry/stop/bars across the day instead of resetting it to
+      // today's open (which zeroed barsHeld so the time-stop never tripped and
+      // reset the cost basis each morning).
       for (const row of scoredRows) {
         const side = sideForVerdict(row.verdict);
-        const pos = side ? makeAlertPosition(row, side, row.dataAsOf || today) : null;
+        const prior = priorStateBySym[row.sym]?.pos;
+        let pos;
+        if (side && prior && prior.side === side) {
+          const nd = row.dataAsOf || today;
+          const advanced = prior.lastSessionDate && nd > prior.lastSessionDate;
+          pos = { ...prior, barsHeld: (prior.barsHeld || 0) + (advanced ? 1 : 0), lastSessionDate: nd };
+        } else {
+          pos = side ? makeAlertPosition(row, side, row.dataAsOf || today) : null;
+        }
         await putQsAlertState(row.sym, row.verdict, pos).catch(() => {});
       }
-      // Stamp last so a mid-snapshot crash simply re-sends next tick rather than
-      // silently skipping the day's open snapshot.
       await putQsOpenDigestDate(today).catch(() => {});
     }
 
-    // Silent-loop recovery roster — once, after a real outage, on a normal tick
-    // (the open scan already sends the full snapshot, so skip it there).
-    if (wasOutage && !isOpenScan) {
-      await sendTelegram(formatOutageRoster(openPositions, gapMs / 60000)).catch(() => {});
+    // Pre-close review (B4) — once/day, silent.
+    if (isPreClose && !isOpenScan) {
+      const res = await sendTelegram(formatPreCloseRoster(openPositions, etClockLabel(now), QS_TIME_STOP_DAYS), { silent: true });
+      if (delivered(res)) await putQsPreCloseDate(today).catch(() => {});
     }
 
-    // Heartbeat — stamp only on a successful finish so the cron watchdog can tell
-    // whether this fire-and-forget worker is actually running.
+    // Silent-loop recovery roster (F3) — once, after a real outage, silent.
+    if (wasOutage && !isOpenScan) {
+      await sendTelegram(formatOutageRoster(openPositions, gapMs / 60000), { silent: true }).catch(() => {});
+    }
+
+    // Heartbeat — stamp only on a successful finish (F1 watchdog reads it).
     await putQsHeartbeat({ session, scored }).catch(() => {});
   } finally {
     await releaseRescanLock(jobId);
   }
 
   console.log(`[qs-alert] session=${session} openScan=${isOpenScan} scored=${scored} `
-    + `alerted=${alerted} staleSkipped=${staleSkipped} outageRecover=${wasOutage && !isOpenScan}`);
+    + `alerted=${alerted} entries=${pendingEntries.length} staleSkipped=${staleSkipped} `
+    + `preClose=${isPreClose && !isOpenScan} outageRecover=${wasOutage && !isOpenScan}`);
   return new Response("", { status: 202 });
 };

@@ -35,6 +35,18 @@ export function summaryWindow(now = new Date()) {
   return { run: false };
 }
 
+// A3 — nothing worth pinging: no verdict changes, no movers, no regime change,
+// and the market barely moved this hour. The worker still advances the diff
+// baseline; it just skips the send (unless first-of-day / close / holding).
+export function isQuietSummary(diff) {
+  if (!diff?.hasPrev) return false;
+  const m = diff.market || {};
+  const spyQuiet = m.spyHourPct == null || Math.abs(m.spyHourPct) < 0.4;
+  const vixQuiet = m.vixHourDelta == null || Math.abs(m.vixHourDelta) < 1.0;
+  return diff.verdictChanges.length === 0 && diff.movers.length === 0
+    && !m.regimeChanged && spyQuiet && vixQuiet;
+}
+
 export function summaryLabel(hour) {
   const ampm = hour >= 12 ? "PM" : "AM";
   const h12 = hour % 12 === 0 ? 12 : hour % 12;
@@ -134,10 +146,9 @@ function verdictEmoji(v) {
   return v === "BUY" ? "🟢" : v === "SELL" ? "🔴" : v === "BLOCKED" ? "⛔️" : v === "NEUTRAL" ? "⚪️" : "▫️";
 }
 
-// `health` (optional) appends a close-of-day system line: normally a "✅ Bounce
-// OK" heartbeat, or a "⚠️ FMP degraded" flag when the day's scan mostly returned
-// no data. Only the summary worker's close-of-day run passes it.
-export function formatSummary(diff, cur, label, health = null) {
+// `openPositions` (optional, B2) renders a live pulse of held positions; `health`
+// (optional, F5) appends a close-of-day "✅ Bounce OK" / "⚠️ FMP degraded" line.
+export function formatSummary(diff, cur, label, health = null, openPositions = null) {
   const m = diff.market;
   const L = [`📊 <b>Hourly Summary — ${esc(label)}</b>`];
 
@@ -175,6 +186,23 @@ export function formatSummary(diff, cur, label, health = null) {
     L.push("<b>Movers (last hr):</b>");
     for (const mv of diff.movers.slice(0, 8)) {
       L.push(`${verdictEmoji(mv.verdict)} ${esc(mv.sym)} ${arrow(mv.pct)}${signedPct(mv.pct)}  ${fmtPrice(mv.price)}`);
+    }
+  }
+
+  // Open-position pulse (B2) — live P&L% and R-to-stop for each held name, so a
+  // multi-day hold gets an hourly "how close to stopped" read.
+  if (openPositions && openPositions.length) {
+    L.push("");
+    L.push("<b>Open positions:</b>");
+    for (const p of openPositions) {
+      const long = p.side === "long";
+      const pl = (p.entryPrice != null && p.price != null)
+        ? ((p.price - p.entryPrice) / p.entryPrice) * 100 * (long ? 1 : -1) : null;
+      const R = (p.entryPrice != null && p.stopPrice != null) ? Math.abs(p.entryPrice - p.stopPrice) : null;
+      const distR = (R && R > 0) ? ((long ? (p.price - p.stopPrice) : (p.stopPrice - p.price)) / R) : null;
+      const plBit = pl != null ? `${pl >= 0 ? "+" : ""}${pl.toFixed(2)}%` : "n/a";
+      const rBit = distR != null ? ` · ${distR.toFixed(1)}R to stop` : "";
+      L.push(`${long ? "🟢" : "🔴"} ${esc(p.sym)} ${plBit}${rBit}`);
     }
   }
 

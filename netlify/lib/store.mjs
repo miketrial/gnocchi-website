@@ -485,6 +485,37 @@ export async function putQsLastScan(data) {
   await qsHealthStore().setJSON("lastScan", { ts: Date.now(), ...data }).catch(() => {});
 }
 
+/* ---------- Quick Swing: pre-close review dedup (Section B4) ----------
+   The ET trading day we last sent the once-daily ~15:50 pre-close position
+   review, so it fires at most once per day. */
+export async function getQsPreCloseDate() {
+  const v = await settingsStore().get("qs-preclose", { type: "json" }).catch(() => null);
+  return v?.date ?? null;
+}
+export async function putQsPreCloseDate(date) {
+  await settingsStore().setJSON("qs-preclose", { date, at: new Date().toISOString() });
+}
+
+/* ---------- Quick Swing: recently-stopped marks (Section A6) ----------
+   One tiny blob per ticker holding the last date a STOP fired. The daily
+   discovery scan withholds a name it just stopped out of for a few sessions so
+   the list doesn't keep re-buying a falling knife. Separate from qs-alert-state
+   so normal state writes can't clobber it. */
+const qsCooldownStore = () => getStore("qs-cooldown");
+export async function putQsStopMark(ticker, date) {
+  await qsCooldownStore().setJSON(ticker.toUpperCase(), { lastStopDate: date, at: new Date().toISOString() }).catch(() => {});
+}
+export async function listQsStopMarks() {
+  const s = qsCooldownStore();
+  const { blobs } = await s.list().catch(() => ({ blobs: [] }));
+  const out = {};
+  await Promise.all(blobs.map(async (b) => {
+    const v = await s.get(b.key, { type: "json" }).catch(() => null);
+    if (v?.lastStopDate) out[b.key.toUpperCase()] = v.lastStopDate;
+  }));
+  return out;
+}
+
 /* ---------- Shared SPY history cache ----------
    Every ticker in a Quick Swing scan needs the same SPY series (for RS-vs-
    market and the market-regime gate) — fetched and cached ONCE per batch

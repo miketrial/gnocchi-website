@@ -31,7 +31,8 @@
    Removable with the QUICK SWING FEATURE block. */
 import { scoreTickerQuickSwing, getMarketRegime } from "../lib/quickswing-pipeline.mjs";
 import { getBounceUniverse } from "../lib/qs-universe.mjs";
-import { replaceQsDaily, acquireLock, releaseLock, listQuickswingRows, putQsLastScan } from "../lib/store.mjs";
+import { replaceQsDaily, acquireLock, releaseLock, listQuickswingRows, putQsLastScan, listQsStopMarks } from "../lib/store.mjs";
+import { previousTradingDay } from "../lib/market-calendar.mjs";
 import { fmpCallCount } from "../lib/fmp-client.mjs";
 import { sendTelegram } from "../lib/telegram.mjs";
 import { formatDailyTop } from "../lib/quickswing-summary.mjs";
@@ -88,16 +89,23 @@ export default async (req) => {
   const callsBefore = fmpCallCount();
   try {
     const day = etDateStr(new Date());
-    const [uni, regime, manualRows] = await Promise.all([
+    const [uni, regime, manualRows, stopMarks] = await Promise.all([
       getBounceUniverse({ n: universeN, day, forceRefresh: force }).catch(() => ({ symbols: [], sectors: {} })),
       getMarketRegime().catch(() => null),
       listQuickswingRows().catch(() => []),
+      listQsStopMarks().catch(() => ({})),
     ]);
     const universe = uni.symbols || [];
     const sectorBySym = uni.sectors || {};
     // Names already on the manual watchlist — excluded from the kept list so the
     // daily section surfaces NEW ideas, not echoes of what you already track.
     const manualSet = new Set(manualRows.map(r => String(r?.sym || "").toUpperCase()).filter(Boolean));
+    // A6 — withhold names the live loop stopped out of within the last ~3 sessions
+    // so the list doesn't keep re-buying a falling knife.
+    let cutoff = day; for (let i = 0; i < 3; i++) cutoff = previousTradingDay(cutoff);
+    const recentlyStopped = new Set(
+      Object.entries(stopMarks).filter(([, d]) => d && d > cutoff).map(([s]) => s.toUpperCase())
+    );
 
     if (!universe.length) {
       console.error("[qs-daily] empty universe — aborting (screener returned nothing)");
@@ -120,7 +128,7 @@ export default async (req) => {
     // discovery), then greedily keep the top N under a per-sector cap so the
     // list isn't all one hot sector.
     const ranked = scored
-      .filter(r => !manualSet.has(String(r.sym).toUpperCase()))
+      .filter(r => !manualSet.has(String(r.sym).toUpperCase()) && !recentlyStopped.has(String(r.sym).toUpperCase()))
       .sort((a, b) => numBuy(b) - numBuy(a) || numSell(a) - numSell(b));
 
     const perSector = {};

@@ -318,3 +318,79 @@ export function formatOutageRoster(positions = [], gapMin = 0) {
   }
   return L.join("\n");
 }
+
+/* ---------- Fresh-entry flood digest (A4) ----------
+   On a market-wide washout many names cross into a fresh BUY in the same tick.
+   Instead of 8-12 individual buzzes, coalesce them into ONE ranked digest.
+   `entries` = [{ sym, kind:'BUY'|'SELL', row }]. */
+export function formatEntryDigest(entries = []) {
+  const rank = (e) => scoreNum(e.kind === "BUY" ? e.row?.buyScore : e.row?.sellScore);
+  const sorted = entries.slice().sort((a, b) => rank(b) - rank(a));
+  const buys = sorted.filter(e => e.kind === "BUY");
+  const sells = sorted.filter(e => e.kind === "SELL");
+  const L = [`🌊 <b>${entries.length} new setups this scan</b>`];
+  const block = (arr, emoji, label) => {
+    if (!arr.length) return;
+    const head = arr.slice(0, 8).map(e => `${esc(e.sym)} ${rank(e)}`).join(" · ");
+    const more = arr.length > 8 ? ` …and ${arr.length - 8} more` : "";
+    L.push(`${emoji} <b>${arr.length} ${label}:</b> ${head}${more}`);
+  };
+  block(buys, "🟢", "BUY");
+  block(sells, "🔴", "SELL");
+  return L.join("\n");
+}
+
+/* ---------- Open-position management nudges (Section B) ----------
+   One-shot, silent heads-ups while a position is HELD (before any hard exit). */
+
+// B1 — the verdict has drained off the position's side (BUY→NEUTRAL/BLOCKED) but
+// no hard exit fired yet. The user's manual exit cue is exactly this roll-over.
+export function formatCoolingNote(row, pos) {
+  const long = pos.side === "long";
+  return [
+    `🟡 <b>${esc(row?.sym ?? "?")} — read cooling</b>`,
+    `Still holding ${long ? "long" : "short"} ${fmtPrice(pos.entryPrice)} → ${fmtPrice(row?.price)}. Verdict now ${esc(row?.verdict ?? "—")} (buy ${esc(row?.buyScore ?? "?")} · sell ${esc(row?.sellScore ?? "?")}).`,
+    `Conviction draining — watch for the roll to the exit.`,
+  ].join("\n");
+}
+
+// B5 — price has entered the ~0.3R danger band before the hard 2.5×ATR stop.
+export function formatApproachingStop(row, pos) {
+  const long = pos.side === "long";
+  return [
+    `🟠 <b>${esc(row?.sym ?? "?")} — approaching stop</b>`,
+    `${long ? "Long" : "Short"} ${fmtPrice(pos.entryPrice)} → ${fmtPrice(row?.price)} · stop ${fmtPrice(pos.stopPrice)}.`,
+    `In the danger band — last look to tighten or bail before the hard stop.`,
+  ].join("\n");
+}
+
+// B6 — the session BEFORE the time-stop trips, so a bounce that needs one more
+// day is the user's call, not a silent mechanical exit.
+export function formatTimeStopNudge(row, pos, timeStopDays = 3) {
+  const long = pos.side === "long";
+  return [
+    `⏳ <b>${esc(row?.sym ?? "?")} — time-stop next session</b>`,
+    `${long ? "Long" : "Short"} ${fmtPrice(pos.entryPrice)} → ${fmtPrice(row?.price)}, held ${(pos.barsHeld ?? 0) + 1}/${timeStopDays} sessions.`,
+    `It exits on the time-stop next session unless it resolves — your call to give it one more day.`,
+  ].join("\n");
+}
+
+// B4 — once/day pre-close roster: decide hold-overnight vs flatten, with P&L,
+// distance-to-stop in R, sessions held, and each name's overnight-gap profile.
+export function formatPreCloseRoster(positions = [], label = "", timeStopDays = 3) {
+  const open = positions.filter(p => p && p.side && p.price != null && p.entryPrice != null);
+  const L = [`🕒 <b>Pre-close review</b>${label ? ` — ${esc(label)}` : ""}`];
+  if (!open.length) { L.push("Flat into the close — no open positions."); return L.join("\n"); }
+  L.push("<i>Hold overnight or flatten before the bell:</i>");
+  for (const p of open) {
+    const long = p.side === "long";
+    const pl = ((p.price - p.entryPrice) / p.entryPrice) * 100 * (long ? 1 : -1);
+    const R = p.stopPrice != null ? Math.abs(p.entryPrice - p.stopPrice) : null;
+    const distR = (R && R > 0) ? ((long ? (p.price - p.stopPrice) : (p.stopPrice - p.price)) / R) : null;
+    const stopBit = distR != null ? ` · ${distR.toFixed(1)}R to stop` : "";
+    const bars = p.barsHeld != null ? ` · day ${(p.barsHeld ?? 0) + 1}/${timeStopDays}` : "";
+    const gap = p.overnightGap ? ` · ovn ±${p.overnightGap.avgAbsOvn}%` : "";
+    L.push(`${long ? "🟢" : "🔴"} ${esc(p.sym)} ${(pl >= 0 ? "+" : "")}${pl.toFixed(2)}%${stopBit}${bars}${gap}`);
+  }
+  return L.join("\n");
+}

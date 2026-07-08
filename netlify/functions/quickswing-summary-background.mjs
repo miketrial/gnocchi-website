@@ -12,32 +12,48 @@
    Removable with the rest of the QUICK SWING FEATURE block. */
 import { getMarketRegime } from "../lib/quickswing-pipeline.mjs";
 import { safe } from "../lib/fmp-client.mjs";
-import { listQuickswingRows, getQsSummarySnapshot, putQsSummarySnapshot,
+import { listQuickswingRows, listQsDaily, getQsAlertState,
+         getQsSummarySnapshot, putQsSummarySnapshot,
          getQsLastScan, getQsWatchdog } from "../lib/store.mjs";
 import { sendTelegram } from "../lib/telegram.mjs";
-import { buildSnapshot, diffSnapshots, formatSummary, summaryLabel, summaryWindow } from "../lib/quickswing-summary.mjs";
+import { buildSnapshot, diffSnapshots, formatSummary, summaryLabel, summaryWindow, isQuietSummary } from "../lib/quickswing-summary.mjs";
 
 export default async (req) => {
   const { label = "" } = await req.json().catch(() => ({}));
 
   try {
-    const [regime, rows, spyQuoteRaw] = await Promise.all([
+    const [regime, manualRows, dailyRows, spyQuoteRaw] = await Promise.all([
       getMarketRegime().catch(() => null),
       listQuickswingRows().catch(() => []),
+      listQsDaily().catch(() => []),
       safe("quote", "SPY").catch(() => []),
     ]);
     const spyQuote = spyQuoteRaw?.[0] || null;
 
-    const cur = buildSnapshot({ rows, regime, spyQuote });
+    // The hourly diff stays scoped to the MANUAL watchlist (separation preserved).
+    const cur = buildSnapshot({ rows: manualRows, regime, spyQuote });
     const prevRaw = await getQsSummarySnapshot().catch(() => null);
     // Only diff against a snapshot from the SAME ET trading day — a leftover
     // prior-day snapshot must never be treated as "one hour ago".
     const prev = prevRaw && prevRaw.day === cur.day ? prevRaw : null;
+    const diff = diffSnapshots(prev, cur);
 
-    // Close-of-day only: append the "system OK / FMP degraded" health footer,
-    // built from the morning scan's outcome + the watchdog's worst gap today.
+    // Open-position pulse (B2) — across manual + daily, using the freshest price
+    // the alert loop wrote to each list. No FMP: reads blobs only.
+    const priceBySym = {};
+    for (const r of [...manualRows, ...dailyRows]) if (r?.sym) priceBySym[r.sym.toUpperCase()] = r.price;
+    const openPositions = [];
+    for (const sym of Object.keys(priceBySym)) {
+      const st = await getQsAlertState(sym).catch(() => null);
+      if (st?.pos?.side) {
+        openPositions.push({ sym, side: st.pos.side, entryPrice: st.pos.entryPrice, stopPrice: st.pos.stopPrice, price: priceBySym[sym] });
+      }
+    }
+
+    // Close-of-day only: the "system OK / FMP degraded" health footer (F5).
+    const win = summaryWindow(new Date());
     let health = null;
-    if (summaryWindow(new Date()).isClose) {
+    if (win.isClose) {
       const [lastScan, wd] = await Promise.all([
         getQsLastScan().catch(() => null),
         getQsWatchdog().catch(() => null),
@@ -50,12 +66,25 @@ export default async (req) => {
       }
     }
 
-    const diff = diffSnapshots(prev, cur);
-    const res = await sendTelegram(formatSummary(diff, cur, label || summaryLabel(cur.etHour), health));
+    // A3 mute: skip a dead-quiet hour (still advancing the baseline), but always
+    // send the first-of-day, the close, and any hour we're holding a position (so
+    // the pulse keeps you on top). The summary is silent either way.
+    const quiet = isQuietSummary(diff);
+    const forceSend = !diff.hasPrev || win.isClose || openPositions.length > 0;
+    if (quiet && !forceSend) {
+      await putQsSummarySnapshot(cur).catch(() => {});
+      console.log(`[qs-summary] quiet — suppressed (${label || summaryLabel(cur.etHour)})`);
+      return new Response("", { status: 202 });
+    }
+
+    const res = await sendTelegram(
+      formatSummary(diff, cur, label || summaryLabel(cur.etHour), health, openPositions),
+      { silent: true }
+    );
     await putQsSummarySnapshot(cur).catch(() => {});
 
     console.log(`[qs-summary] label=${label || summaryLabel(cur.etHour)} tickers=${Object.keys(cur.rows).length} `
-      + `verdictChanges=${diff.verdictChanges.length} movers=${diff.movers.length} sent=${res?.ok === true}`);
+      + `verdictChanges=${diff.verdictChanges.length} movers=${diff.movers.length} open=${openPositions.length} sent=${res?.ok === true}`);
   } catch (e) {
     console.error("[qs-summary] failed:", e?.message || e);
   }
