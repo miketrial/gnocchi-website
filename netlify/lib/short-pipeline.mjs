@@ -1,5 +1,5 @@
 /* ---------- Short Term (1wk-3mo swing trading) pipeline ----------
-   Pure FMP — zero Anthropic calls. Scores each ticker on a 10-factor
+   Pure FMP — zero Anthropic calls. Scores each ticker on an 11-factor
    momentum/quality/catalyst stack tuned for 2-12 week holds.
 
    Each check returns { points: 0-3 | null, verdict, summary, value }.
@@ -9,12 +9,15 @@
    - points 0 → "bad"   (red chip)
    - points null → "na" (purple chip — data unavailable)
 
-   Score = sum of points across all 10 checks, out of 30.
-   Thresholds: 20+ strong, 12-19 mixed, <12 weak.
+   Score = sum of points across all 11 checks, out of 33.
+   Thresholds: 22+ strong, 13-21 mixed, <13 weak (same 67%/40% split as the
+   prior 10-factor/30-point scale, rescaled).
 */
-import { getShortFmpCache, putShortFmpCache, deleteShortFmpCache } from "./store.mjs";
+import { getShortFmpCache, putShortFmpCache, deleteShortFmpCache, getSpyHistCache, putSpyHistCache, getSectorHistCache, putSectorHistCache } from "./store.mjs";
 import { round2, na, scored, trueRange, atrFrom } from "./ta-helpers.mjs";
 import { fmp, safe, delay } from "./fmp-client.mjs";
+import { cleanHist, strengthFactor } from "./quickswing-pipeline.mjs";
+import { computeShortSignal } from "./short-backtest.mjs"; // SWING BACKTEST FEATURE
 
 /* ---------- Sanity range gates — reject implausible FMP values before they
    reach a chip. A swing trader acts on these numbers fast, so a garbage
@@ -159,10 +162,49 @@ function sectorPe75th(industry) {
   return SECTOR_PE_75TH[industry] ?? 30;
 }
 
+/* ---------- Sector -> ETF map (Sector Relative Strength factor) ----------
+   Industry-level override for Semiconductors, checked first — SMH is a
+   tighter proxy than the broad Technology sector ETF, and this factor exists
+   specifically because of the June-July 2026 semiconductor rotation (see
+   scripts/study-short-factors.mjs). Everything else falls back to its GICS
+   SPDR sector ETF, keyed off FMP's `sector` field (confirmed strings, same
+   as SECTOR_PE_MAP's broad-sector fallback keys in pipeline.mjs). */
+const INDUSTRY_ETF = { "Semiconductors": "SMH" };
+const SECTOR_ETF = {
+  "Technology": "XLK", "Healthcare": "XLV", "Utilities": "XLU", "Industrials": "XLI",
+  "Consumer Cyclical": "XLY", "Consumer Defensive": "XLP", "Financial Services": "XLF",
+  "Communication Services": "XLC", "Basic Materials": "XLB", "Energy": "XLE", "Real Estate": "XLRE",
+};
+function sectorEtfFor(sector, industry) {
+  return INDUSTRY_ETF[industry] || SECTOR_ETF[sector] || null;
+}
+
+/* ---------- Shared index/ETF history fetch ----------
+   SPY and sector ETF history are cached ONCE per symbol via store.mjs
+   (getSpyHistCache/getSectorHistCache), not refetched per ticker — a Swing
+   rescan of many tickers touches only a handful of distinct sector ETFs, so
+   after the first ticker in a batch populates the cache the rest reuse it.
+   Mirrors getMarketRegime()'s SPY-fetch pattern in quickswing-pipeline.mjs. */
+async function getCachedIndexHist(symbol, getCache, putCache) {
+  let hist = await getCache().catch(() => null);
+  if (!hist) {
+    const raw = await safe("historical-price-eod/full", symbol, "&limit=320");
+    hist = cleanHist(raw);
+    if (hist.length >= 200) await putCache(hist).catch(() => {});
+  }
+  return hist;
+}
+function getSpyHist() {
+  return getCachedIndexHist("SPY", getSpyHistCache, putSpyHistCache);
+}
+function getSectorHist(etfSymbol) {
+  return getCachedIndexHist(etfSymbol, () => getSectorHistCache(etfSymbol), h => putSectorHistCache(etfSymbol, h));
+}
+
 /* ---------- Per-check scoring functions ----------
    Each returns { points: 0-3 | null, verdict, summary, value }.
    points null = "na" (data unavailable); 0 = bad, 1 = weak, 2 = ok, 3 = good.
-   Score = sum of points across all 10 checks, out of 30. */
+   Score = sum of points across all 11 checks, out of 33. */
 
 // na/scored/round2/trueRange/atrFrom live in ta-helpers.mjs — shared with
 // quickswing-pipeline.mjs so the ATR math can't drift between the two.
@@ -286,12 +328,22 @@ function checkNearHigh(hist) {
   const high = Math.max(...closes);
   const now = closes[0];
   const pctOff = (high - now) / high;
+  // Re-tuned (2026-07): a 2-year FMP study (scripts/run-short-study.mjs +
+  // scratchpad/analyze-factors.mjs) found forward swing returns PEAK 5-18% off the
+  // 52w high — the constructive "pullback to strength" — and are weaker for names
+  // pinned right at the high, which are extended and mean-revert on a multi-week
+  // horizon (8-12%-off names averaged +2.95% fwd-21d vs +1.99% at the high). This
+  // reshaped the factor's information coefficient from -0.03 to +0.06. Right at the
+  // high is still constructive (2 pts) but the top mark now goes to the pullback
+  // zone rather than rewarding chasing an extended breakout.
   let points;
-  if (pctOff <= 0.05)       points = 3;
-  else if (pctOff <= 0.15)  points = 2;
-  else if (pctOff <= 0.30)  points = 1;
-  else                      points = 0;
-  const label = points === 3 ? "at/near 52w high" : points === 2 ? "near high" : points === 1 ? "recovering" : "far from high";
+  if (pctOff > 0.05 && pctOff <= 0.18) points = 3;   // near the high with room to run — the sweet spot
+  else if (pctOff <= 0.05)             points = 2;   // pinned at the 52w high — extended
+  else if (pctOff <= 0.30)             points = 1;
+  else                                 points = 0;
+  const label = points === 3 ? "constructive pullback below the 52w high"
+    : points === 2 ? "pinned at the 52w high (extended)"
+    : points === 1 ? "well off the high" : "far from high";
   return scored(points, `${(pctOff * 100).toFixed(1)}% off 52w high ($${high.toFixed(2)}) — ${label}`, { high, pctOff });
 }
 
@@ -560,6 +612,36 @@ function checkVolumeSurge(quote, hist) {
   });
 }
 
+// 11. Sector Relative Strength — is the ticker's SECTOR beating the market?
+//
+// Calibrated in scripts/study-short-factors.mjs against real forward 10d/21d
+// returns across ~90 tickers: sector-ETF-vs-SPY delta (same IBD-style
+// weighted-ROC math as Bounce's RS-vs-SPY leader gate, strengthFactor() in
+// quickswing-pipeline.mjs) has a modest POSITIVE correlation with forward
+// return (IC +0.066 / +0.059) — strong sectors keep outperforming.
+//
+// This is a MOMENTUM-CONFIRMATION factor, not a rotation-early-warning one.
+// Its 3-12mo weighted window barely moved during the actual June-July 2026
+// semiconductor rotation (AVGO's delta sat at +50 to +86% through the entire
+// drawdown) — a high score here means "this sector has been a market
+// leader," not "this sector is safe from a rotation."
+//
+// Thresholds are the study's quintile breakpoints (Q5 starts ~0.15, Q4
+// ~0.08, Q1 ends ~-0.03).
+function checkSectorStrength(sectorHist, spyHist) {
+  const sectorStrength = sectorHist ? strengthFactor(sectorHist) : null;
+  const spyStrength = spyHist ? strengthFactor(spyHist) : null;
+  if (sectorStrength == null || spyStrength == null) return na("Need 3+ months of sector ETF and SPY price history");
+  const delta = sectorStrength - spyStrength;
+  let points;
+  if (delta >= 0.15)       points = 3;
+  else if (delta >= 0.08)  points = 2;
+  else if (delta >= -0.03) points = 1;
+  else                     points = 0;
+  const label = points === 3 ? "sector strongly leading the market" : points === 2 ? "sector beating the market" : points === 1 ? "sector roughly in line with the market" : "sector lagging the market";
+  return scored(points, `Sector ${delta >= 0 ? "+" : ""}${(delta * 100).toFixed(1)}pp vs SPY — ${label}`, { sectorStrength, spyStrength, delta });
+}
+
 /* ---------- Main scorer ---------- */
 export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   const sym = ticker.toUpperCase();
@@ -567,7 +649,7 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   // Cache check
   if (!skipCache) {
     const cached = await getShortFmpCache(sym);
-    if (cached && cached._v === 14) {
+    if (cached && cached._v === 15) {
       return cached.row;
     }
   } else {
@@ -646,7 +728,15 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
                                   .sort((a, b) => a.date.localeCompare(b.date));
   const fwdEps = future[0]?.epsAvg ?? null;
 
-  // Run all 10 checks
+  // Sector RS delta needs the ticker's sector ETF + SPY history — fetched
+  // (and cached per-symbol, see getSectorHist/getSpyHist) only once we know
+  // the sector/industry from the profile fetch above.
+  const etfSymbol = sectorEtfFor(sector, industry);
+  const [sectorHist, spyHist] = etfSymbol
+    ? await Promise.all([getSectorHist(etfSymbol), getSpyHist()])
+    : [null, null];
+
+  // Run all 11 checks
   const checks = [
     checkTrend(hist),                              // 1
     check3MMomentum(hist),                         // 2
@@ -658,12 +748,13 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     checkLeverage(bs, inc),                        // 8
     checkCatalyst(earningsHist),                   // 9
     checkVolumeSurge(quote, hist),                 // 10 (was Short Squeeze — no data on plan)
+    checkSectorStrength(sectorHist, spyHist),      // 11
   ];
 
-  // Graduated score: sum of points (0-3 per check) out of 30.
+  // Graduated score: sum of points (0-3 per check) out of 33.
   // na checks contribute 0 points (data unavailable, not a pass or fail).
   const score = checks.reduce((s, c) => s + (c.points ?? 0), 0);
-  const total = 30;
+  const total = 33;
 
   // Last PRICE_HIST_DAYS (50) trading days, oldest→newest, for the trade-card
   // price path + moving-average curves. hist is already fetched for scoring
@@ -682,6 +773,16 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   //      lockstep.
   const priceHist = buildPriceHist(hist);
 
+  // SWING BACKTEST FEATURE — reconstruct the EOD-computable swing signal (the
+  // trend/momentum core of the score) for the as-if trade log. Uses the same
+  // fetched hist + already-cached SPY/sector history, so no extra FMP call. The
+  // rescan loop folds row.bt into the ticker's trade log via recordShortTransition.
+  const cleanedHist = cleanHist(hist);
+  const btSignal = computeShortSignal(cleanedHist, {
+    spyStrength: spyHist ? strengthFactor(spyHist) : null,
+    sectorStrength: sectorHist ? strengthFactor(sectorHist) : null,
+  });
+
   const row = {
     sym,
     name,
@@ -694,10 +795,11 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     raw: checks.map(c => c.value),
     verdicts: checks.map(c => c.verdict), // "good"|"ok"|"weak"|"bad"|"na" for chip colors
     priceHist,
+    bt: btSignal, // SWING BACKTEST FEATURE — signal detail for the paper-trade log
     warnings,
     scored_at: new Date().toISOString(),
   };
 
-  await putShortFmpCache(sym, { _v: 14, row }).catch(() => {});
+  await putShortFmpCache(sym, { _v: 15, row }).catch(() => {});
   return row;
 }

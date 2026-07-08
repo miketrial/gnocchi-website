@@ -7,10 +7,11 @@
 
      - Flat: a BUY opens a paper LONG; a SELL opens a paper SHORT.
      - Hold through NEUTRAL / BLOCKED (they are not exits, same as the live model).
-     - Exit a long on its 2.5×ATR stop or a SELL flip; exit a short on its stop or
-       a BUY flip. A signal flip closes the open trade and, at the same price,
-       opens the opposite side (a SELL flips a long into a short and vice-versa);
-       a stop-out closes to flat with no same-bar reversal.
+     - Exit priority (v11): 2.5×ATR stop → take-profit on the first favorable close
+       → verdict flip → 3-session time stop. A signal flip closes the open trade
+       and, at the same price, opens the opposite side (a SELL flips a long into a
+       short and vice-versa); a stop-out or take-profit closes to flat with no
+       same-bar reversal.
      - Book each closed trade with side-aware P/L ((exit−entry) long, (entry−exit)
        short).
 
@@ -38,7 +39,16 @@ export const BT_SEED_DAYS = 15;   // history backfilled the first time a ticker 
 // v10: bidirectional — a SELL opens a paper SHORT (was long-only, SELL = exit
 //      only); SELL side gains the RS-laggard gate + overnight-gap damper; the
 //      replay's VIX leg is reconstructed from ^VIX EOD instead of neutralized.
-export const BT_SEED_VERSION = 10;
+// v11: take-profit exit — close on the FIRST favorable close (a long's close back
+//      above entry, a short's below) plus a 3-session time stop, on top of the
+//      2.5×ATR stop and the flip. From a 90-name / 2-year study, exiting into
+//      strength ~doubled win rate (55%→76–85%) and cut hold time ~5× vs holding
+//      to the flip, robust across the broad universe AND the volatile watchlist.
+// v12: REV (reversal candle) descored — computed/shown but no longer votes on the
+//      buy/sell score. It rewarded strong closes, which fade next day on a mean-
+//      reversion horizon; removing it modestly beat keeping it and never hurt
+//      across the same study (scripts/investigate-rev.mjs, scripts/ab-rev.mjs).
+export const BT_SEED_VERSION = 12;
 
 // Stop-loss: a long is cut once price falls 2.5×ATR(5)-at-entry below the entry;
 // a short is cut once price rises 2.5×ATR(5)-at-entry above the entry (symmetric).
@@ -49,6 +59,10 @@ export const BT_SEED_VERSION = 10;
 // return; a −13%/day name like SNDK simply can't be stopped tightly without
 // cutting its winners too — size those down instead.) See the stop-loss study.
 export const QS_STOP_ATR_MULT = 2.5;
+// Take-profit + time-stop exit (v11). QS_TIME_STOP_DAYS counts SESSIONS held (one
+// per distinct bar date), so it means the same thing in the once-per-day replay
+// and the many-scans-per-day live path.
+export const QS_TIME_STOP_DAYS = 3;
 const round2 = x => Math.round(x * 100) / 100;
 
 export function emptyLog() {
@@ -160,6 +174,12 @@ export function recordQuickswingTransition(newRow, prevLog) {
   // price leaves any open position untouched (we simply skip this datapoint).
   if (!newRow || newRow.error || !(newRow.price > 0)) return log;
 
+  // The session (bar) date this row represents — used to count sessions held for
+  // the time stop. Replay rows carry it in scored_at (…T21:00Z → the date); live
+  // rows carry dataAsOf (the EOD bar date). Falls back to scored_at's date.
+  const sessionDate = newRow.dataAsOf
+    || (typeof newRow.scored_at === "string" ? newRow.scored_at.slice(0, 10) : null);
+
   // Open a fresh paper position on `side`, pinning the stop at entry: entry −
   // 2.5×ATR(5) for a long, entry + 2.5×ATR(5) for a short. atr5 rides on the row
   // (live scorer and the historical replay both supply it); if it's missing the
@@ -179,6 +199,10 @@ export function recordQuickswingTransition(newRow, prevLog) {
       entryPriceIsLive: !!newRow.priceIsLive,
       atr5,
       stopPrice,
+      // Session counter for the time stop: 0 at entry, +1 each new session date.
+      entrySessionDate: sessionDate,
+      lastSessionDate: sessionDate,
+      barsHeld: 0,
     };
   };
 
@@ -214,6 +238,14 @@ export function recordQuickswingTransition(newRow, prevLog) {
   }
 
   const o = log.open;
+
+  // Count a session once per new bar date (so intraday live rescans don't inflate
+  // the hold; the replay advances exactly one per bar). Back-compat: positions
+  // opened before v11 have no lastSessionDate — seed them from this row.
+  if (sessionDate) {
+    if (o.lastSessionDate == null) { o.lastSessionDate = sessionDate; o.barsHeld = o.barsHeld || 0; }
+    else if (sessionDate > o.lastSessionDate) { o.barsHeld = (o.barsHeld || 0) + 1; o.lastSessionDate = sessionDate; }
+  }
 
   // Exit priority:
   //  1. STOP — price broke the entry-time 2.5×ATR stop. Cut regardless of verdict
@@ -257,17 +289,37 @@ export function recordQuickswingTransition(newRow, prevLog) {
     }
   }
 
-  // No stop. A flip to the opposite side closes the trade and reverses into it at
-  // the same price; NEUTRAL / BLOCKED / same-side holds the position open.
-  if (o.side === "long") {
-    if (newRow.verdict !== "SELL") return log;   // hold the long
-    closePosition(o, newRow.price, "SELL");
-    log.open = openPosition("short");            // flip long → short
-  } else {
-    if (newRow.verdict !== "BUY") return log;    // hold the short
-    closePosition(o, newRow.price, "BUY");
-    log.open = openPosition("long");             // flip short → long
+  const long = o.side === "long";
+
+  // 2. TARGET — take profit into strength on the first favorable close (a long's
+  //    close back above entry, a short's below). The exit study (90 names / 2y)
+  //    found this "first green close" rule ~doubled win rate and cut hold time
+  //    ~5× vs holding to the flip, at a small cost in per-trade size — the right
+  //    trade for a 1–2 day mean-reversion tool. Not reachable on the entry bar:
+  //    that bar opened the position above (log.open was null) and returned.
+  if (long ? newRow.price > o.entryPrice : newRow.price < o.entryPrice) {
+    closePosition(o, newRow.price, "TARGET");
+    log.open = null;
+    return log;
   }
-  return log;
+
+  // 3. FLIP — the verdict crossed to the opposite side: close and, at the same
+  //    price, reverse into it (the flip signal is itself an entry).
+  if (long ? newRow.verdict === "SELL" : newRow.verdict === "BUY") {
+    closePosition(o, newRow.price, long ? "SELL" : "BUY");
+    log.open = openPosition(long ? "short" : "long");
+    return log;
+  }
+
+  // 4. TIME — a bounce that hasn't printed a favorable close in QS_TIME_STOP_DAYS
+  //    sessions is a stalled thesis; exit flat at the close rather than tie up
+  //    capital waiting for the wide ATR stop.
+  if (o.barsHeld >= QS_TIME_STOP_DAYS) {
+    closePosition(o, newRow.price, "TIME");
+    log.open = null;
+    return log;
+  }
+
+  return log; // NEUTRAL / BLOCKED / same-side, still red, under the time stop → hold
 }
 /* ===== END QUICK SWING FEATURE ===== */

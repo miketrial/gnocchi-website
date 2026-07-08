@@ -11,12 +11,13 @@ const usageStore       = () => getStore("usage");        // key = haiku-<YYYY-MM
 const settingsStore    = () => getStore("settings");     // key = setting name
 const shortRowStore    = () => getStore("short-rows");   // key = TICKER, per-ticker short-pipeline score blob
 const shortFmpStore    = () => getStore("short-fmp");    // key = TICKER, per-ticker raw FMP fan-out cache (24h TTL)
+const shortTradesStore = () => getStore("short-trades"); // key = TICKER, per-ticker swing paper-trade backtest log
 const epsSnapStore     = () => getStore("eps-snapshots");// key = TICKER (object: {YYYY-MM-DD: fwdEps})
 const qsRowStore       = () => getStore("qs-rows");      // key = TICKER, per-ticker quickswing-pipeline score blob
 const qsTradesStore    = () => getStore("qs-trades");    // key = TICKER, per-ticker paper-trade backtest log
 const qsFmpStore       = () => getStore("qs-fmp");       // key = TICKER, per-ticker raw FMP fan-out cache (24h TTL)
 const qsAlertStore     = () => getStore("qs-alert-state");// key = TICKER, last verdict a Telegram alert was sent for (dedup)
-const spyHistStore     = () => getStore("spy-hist");     // key = "SPY", one shared blob for the whole scan batch
+const spyHistStore     = () => getStore("spy-hist");     // key = index/ETF symbol ("SPY", "VIX", "XLK", "SMH", ...), one shared blob per symbol per scan batch
 
 /* ---------- FMP cache (24h TTL) ---------- */
 const FMP_TTL_MS = 24 * 60 * 60 * 1000;
@@ -260,6 +261,27 @@ export async function deleteShortFmpCache(ticker) {
   await shortFmpStore().delete(ticker.toUpperCase()).catch(() => {});
 }
 
+/* ---------- Swing: paper-trade backtest log ----------
+   One blob per ticker: { open: {...}|null, closed: [...newest-first], seeded,
+   seedVersion }. The as-if long-only trade that acting on the swing signal would
+   produce. Written from the short rescan loop; read by the short-backtest
+   endpoint. Removable with the SWING BACKTEST FEATURE block. */
+export async function listShortTrades() {
+  const s = shortTradesStore();
+  const { blobs } = await s.list();
+  const logs = await Promise.all(blobs.map(b => s.get(b.key, { type: "json" }).catch(() => null)));
+  return logs.filter(Boolean);
+}
+export async function getShortTrades(ticker) {
+  return shortTradesStore().get(ticker.toUpperCase(), { type: "json" }).catch(() => null);
+}
+export async function putShortTrades(ticker, log) {
+  await shortTradesStore().setJSON(ticker.toUpperCase(), log);
+}
+export async function deleteShortTrades(ticker) {
+  await shortTradesStore().delete(ticker.toUpperCase()).catch(() => {});
+}
+
 /* ---------- Quick Swing: per-ticker score blobs ---------- */
 export async function listQuickswingRows() {
   const s = qsRowStore();
@@ -306,11 +328,43 @@ export async function deleteQuickswingTrades(ticker) {
 export async function getQsAlertState(ticker) {
   return qsAlertStore().get(ticker.toUpperCase(), { type: "json" }).catch(() => null);
 }
-export async function putQsAlertState(ticker, verdict) {
-  await qsAlertStore().setJSON(ticker.toUpperCase(), { verdict, at: new Date().toISOString() });
+export async function putQsAlertState(ticker, verdict, pos = null) {
+  // `verdict` = last verdict we alerted on (entry dedup). `pos` = the open
+  // "alert position" (entry price/side/stop/sessions-held) the take-profit /
+  // time-stop exit alert tracks; null when flat. Older blobs have no `pos`.
+  await qsAlertStore().setJSON(ticker.toUpperCase(), { verdict, pos, at: new Date().toISOString() });
 }
 export async function deleteQsAlertState(ticker) {
   await qsAlertStore().delete(ticker.toUpperCase()).catch(() => {});
+}
+
+/* ---------- Quick Swing: Market Open snapshot dedup ----------
+   The ET trading day we last sent the once-daily Market Open snapshot for. The
+   alert worker sends the snapshot (and re-baselines the per-ticker alert dedup to
+   the open state) on the first regular-session scan whose ET date differs from
+   this — so a setup that was already BUY/SELL at the prior close is surfaced each
+   morning instead of being swallowed by transition dedup. Removable with the
+   QUICK SWING FEATURE block. */
+export async function getQsOpenDigestDate() {
+  const v = await settingsStore().get("qs-open-digest", { type: "json" }).catch(() => null);
+  return v?.date ?? null;
+}
+export async function putQsOpenDigestDate(date) {
+  await settingsStore().setJSON("qs-open-digest", { date, at: new Date().toISOString() });
+}
+
+/* ---------- Quick Swing: hourly summary snapshot ----------
+   One blob ("latest") holding the market + per-ticker state captured by the most
+   recent hourly summary run. The next hour's summary diffs against it to report
+   "what changed in the last hour" (market direction + individual signal/price
+   moves). Stamped with the ET trading day so a stale prior-day snapshot is never
+   diffed against. Removable with the QUICK SWING FEATURE block. */
+const qsSummaryStore = () => getStore("qs-summary-snap");
+export async function getQsSummarySnapshot() {
+  return qsSummaryStore().get("latest", { type: "json" }).catch(() => null);
+}
+export async function putQsSummarySnapshot(snap) {
+  await qsSummaryStore().setJSON("latest", snap);
 }
 
 /* ---------- Quick Swing: raw FMP fan-out cache (separate from Short Term) ---------- */
@@ -353,6 +407,21 @@ export async function getVixHistCache() {
 }
 export async function putVixHistCache(hist) {
   await spyHistStore().setJSON("VIX", { ts: Date.now(), data: hist });
+}
+
+/* ---------- Shared sector ETF history cache (Swing's Sector RS factor) ----------
+   Same pattern as SPY/VIX above, generalized to a symbol key (SMH, XLK, XLF,
+   ...) since a Swing scan batch only touches a handful of distinct sector
+   ETFs (one per sector represented in the watchlist), not one per ticker.
+   Reuses the spy-hist store — it's already a general "shared index history"
+   cache, not SPY-specific. */
+export async function getSectorHistCache(etfSymbol) {
+  const entry = await spyHistStore().get(etfSymbol.toUpperCase(), { type: "json" }).catch(() => null);
+  if (!entry || !entry.ts || Date.now() - entry.ts > SPY_HIST_TTL_MS) return null;
+  return entry.data;
+}
+export async function putSectorHistCache(etfSymbol, hist) {
+  await spyHistStore().setJSON(etfSymbol.toUpperCase(), { ts: Date.now(), data: hist });
 }
 
 /* ---------- EPS estimate snapshots (for 30-day revision detection) ----------

@@ -51,6 +51,19 @@
   to = "/.netlify/functions/short-watchlist"
   status = 200
 
+# ===== SWING BACKTEST FEATURE (removable as a block — see checklist in
+# netlify/lib/short-backtest.mjs) =====
+[[redirects]]
+  from = "/api/short/backtest"
+  to = "/.netlify/functions/short-backtest"
+  status = 200
+
+[[redirects]]
+  from = "/api/short/backtest-seed"
+  to = "/.netlify/functions/short-backtest-seed"
+  status = 200
+# ===== END SWING BACKTEST FEATURE =====
+
 # ===== QUICK SWING FEATURE (removable as a block — see checklist in
 # netlify/lib/quickswing-pipeline.mjs) =====
 [[redirects]]

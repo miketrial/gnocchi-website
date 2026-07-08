@@ -62,7 +62,10 @@
      3c. Telegram alert layer (notifications):
          netlify/functions/quickswing-alert-cron.mjs
          netlify/functions/quickswing-alert-background.mjs
+         netlify/functions/quickswing-summary-cron.mjs
+         netlify/functions/quickswing-summary-background.mjs
          netlify/lib/quickswing-alert.mjs
+         netlify/lib/quickswing-summary.mjs
          netlify/lib/telegram.mjs
          (also unset the TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID Netlify env vars)
      4. netlify.toml — remove the block between the
@@ -74,8 +77,8 @@
         delimited by its own header comment)
      6. index.html — grep for QUICK SWING and remove every marked HTML/JS/CSS
         block (start and end markers are paired, one feature per pair)
-     7. Optional cleanup: delete the "qs-rows", "qs-alert-state", "qs-fmp", and
-        "spy-hist" Netlify Blobs stores (Netlify dashboard → Blobs) — stale data,
+     7. Optional cleanup: delete the "qs-rows", "qs-alert-state", "qs-summary-snap",
+        "qs-fmp", and "spy-hist" Netlify Blobs stores (Netlify dashboard → Blobs) — stale data,
         not referenced by anything else once the above is gone.
    NOT removable without also touching short-pipeline.mjs (shared, keep):
      netlify/lib/ta-helpers.mjs, netlify/lib/fmp-client.mjs — short-pipeline.mjs
@@ -107,7 +110,7 @@ function validPricePoint(date, close) {
 
 /* Build a clean, deduped, newest-first OHLCV array from FMP's raw hist feed.
    Every downstream check reads from this, never from the raw fetch. */
-function cleanHist(hist) {
+export function cleanHist(hist) {
   const seen = new Set();
   const out = [];
   for (const d of hist || []) {
@@ -139,7 +142,19 @@ function injectLiveBar(hist, quote) {
   if (!(price > 0) || !quote.timestamp) return hist;
   const quoteMs = quote.timestamp * 1000;
   const quoteDate = new Date(quoteMs).toISOString().slice(0, 10);
-  if (quoteDate <= hist[0].date) return hist;
+  if (quoteDate < hist[0].date) return hist; // quote older than newest bar → stale, ignore
+  if (quoteDate === hist[0].date) {
+    // FMP's EOD feed (historical-price-eod/full) already carries TODAY's
+    // in-progress bar during market hours — same date as the live quote — so the
+    // old `quoteDate <= hist[0].date` guard made this a no-op and `priceIsLive`
+    // was permanently false intraday. Stamp the existing today-bar as live and
+    // refresh its close to the latest tick. We keep open/high/low/volume from the
+    // EOD bar (identical to the quote's day range) so scoring is unchanged; only
+    // the live flag + freshest close are corrected.
+    if (!(quote.price > 0)) return hist;
+    return [{ ...hist[0], close: quote.price, live: true }, ...hist.slice(1)];
+  }
+  // quoteDate > hist[0].date: EOD feed lags → synthesize today's bar from the quote.
   // Never synthesize a bar dated on a weekend. US markets are closed Sat/Sun,
   // so a quote timestamp landing on one means it's stale weekend data (e.g.
   // Friday's close still showing on Sunday), not a genuine in-progress session
@@ -647,6 +662,19 @@ export async function getMarketRegime() {
    scale both totals down/up via multipliers rather than hard-blocking —
    only the earnings gate is a hard block, applied to the final verdict. */
 const QS_MAX_SCORE = 24;
+
+// Factor order for the mirrored array (used to descore by key).
+const MIRRORED_KEYS = ["RSI", "%B", "CLX", "REV", "RS", "AH"];
+// Factors that are still computed and shown in the grid but DO NOT vote on the
+// BUY/SELL score. REV (reversal candle) was found inverted for a next-day
+// mean-reversion horizon — it credits a strong close, but weak closes bounce
+// more next day; removing it modestly beat keeping it across a 90-name / 2-year
+// A/B and never hurt (scripts/investigate-rev.mjs, scripts/ab-rev.mjs). Kept in
+// the grid as context. QS_MAX_SCORE stays 24 on purpose: descoring a factor
+// lowers reachable scores, which also raises the entry bar — part of the
+// measured improvement.
+const QS_DESCORED = new Set(["REV"]);
+
 function liqMultiplierFor(points) {
   if (points == null) return 1.0; // unknown — don't penalize
   return points === 3 ? 1.0 : points === 2 ? 0.85 : points === 1 ? 0.6 : 0.35;
@@ -852,8 +880,10 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
   const buyVerdicts = [...mirrored.map(c => c.buy.verdict), ...shared.map(c => c.verdict)];
   const sellVerdicts = [...mirrored.map(c => c.sell.verdict), ...shared.map(c => c.verdict)];
 
-  const rawBuyScore = mirrored.reduce((s, c) => s + (c.buy.points ?? 0), 0) + shared.reduce((s, c) => s + (c.points ?? 0), 0);
-  const rawSellScore = mirrored.reduce((s, c) => s + (c.sell.points ?? 0), 0) + shared.reduce((s, c) => s + (c.points ?? 0), 0);
+  // REV (and anything in QS_DESCORED) is computed for the grid but excluded from
+  // the score sums — see the QS_DESCORED note. Shared factors are never descored.
+  const rawBuyScore = mirrored.reduce((s, c, i) => s + (QS_DESCORED.has(MIRRORED_KEYS[i]) ? 0 : (c.buy.points ?? 0)), 0) + shared.reduce((s, c) => s + (c.points ?? 0), 0);
+  const rawSellScore = mirrored.reduce((s, c, i) => s + (QS_DESCORED.has(MIRRORED_KEYS[i]) ? 0 : (c.sell.points ?? 0)), 0) + shared.reduce((s, c) => s + (c.points ?? 0), 0);
 
   const liqMultiplier = liqMultiplierFor(liq.points);
   const adrMultiplier = adrMultiplierFor(adr.points);
@@ -947,7 +977,7 @@ export async function scoreTickerQuickSwing(ticker, { skipCache = false, marketR
    recording. */
 
 /* Newest-first slice of `hist` as of (and including) `asOfDate`. */
-function histAsOf(hist, asOfDate) {
+export function histAsOf(hist, asOfDate) {
   return hist.filter(d => d.date <= asOfDate);
 }
 
@@ -982,23 +1012,37 @@ function vixCloseAsOf(vixHist, dateStr) {
   return null;
 }
 
-/* Compute just the headline verdict for one historical close — the EOD subset
-   of scoreTickerQuickSwing, reusing the same factor functions and multipliers. */
-function historicalVerdict(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers = GAP_DAMPER_TIERS, vixHist = null) {
-  const mirrored = [
-    checkRsi2(hAsOf),
-    checkBollinger(hAsOf),
-    checkVolumeClimax(hAsOf),
-    checkReversalCandle(hAsOf),
-    checkRelativeStrength(hAsOf, spyAsOf),
-    naMirror("No historical after-hours data"), // AH leg — not reconstructable
-  ];
-  const shared = [checkVolumeDryUp(hAsOf), checkAtrExpansion(hAsOf)];
+/* Full EOD-subset score detail for one historical close — the reconstructable
+   part of scoreTickerQuickSwing, reusing the same factor functions and
+   multipliers. Returns the verdict PLUS the per-factor buy/sell points and value
+   (for the factor-attribution study) and the entry bar / atr5 (for the exit
+   study). historicalVerdict() below delegates here and returns just .verdict, so
+   the seed replay's behavior is unchanged. The AH leg is n/a historically (no
+   after-hours series), so it is excluded from the returned `factors`. */
+export function historicalScoreDetail(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers = GAP_DAMPER_TIERS, vixHist = null, opts = {}) {
+  const mRsi = checkRsi2(hAsOf);
+  const mBoll = checkBollinger(hAsOf);
+  const mClx = checkVolumeClimax(hAsOf);
+  const mRev = checkReversalCandle(hAsOf);
+  const mRs = checkRelativeStrength(hAsOf, spyAsOf);
+  const mAh = naMirror("No historical after-hours data"); // AH leg — not reconstructable
+  const mirrored = [mRsi, mBoll, mClx, mRev, mRs, mAh];
+  const dry = checkVolumeDryUp(hAsOf);
+  const exp = checkAtrExpansion(hAsOf);
+  const shared = [dry, exp];
   const adr = checkAdr(hAsOf);
   const liq = checkLiquidity(hAsOf);
 
-  const rawBuyScore = mirrored.reduce((s, c) => s + (c.buy.points ?? 0), 0) + shared.reduce((s, c) => s + (c.points ?? 0), 0);
-  const rawSellScore = mirrored.reduce((s, c) => s + (c.sell.points ?? 0), 0) + shared.reduce((s, c) => s + (c.points ?? 0), 0);
+  // Factor-attribution A/B hook: opts.maskFactors is a Set of factor keys whose
+  // points are zeroed before scoring, so a study can measure "what if we dropped
+  // factor X". No mask (the production path) = exact original behavior.
+  const mask = opts.maskFactors instanceof Set ? opts.maskFactors : null;
+  const keyed = [["RSI", mRsi], ["%B", mBoll], ["CLX", mClx], ["REV", mRev], ["RS", mRs], ["AH", mAh]];
+  const keyedShared = [["DRY", dry], ["EXP", exp]];
+  const rawBuyScore = keyed.reduce((s, [k, c]) => s + (mask?.has(k) ? 0 : (c.buy.points ?? 0)), 0)
+    + keyedShared.reduce((s, [k, c]) => s + (mask?.has(k) ? 0 : (c.points ?? 0)), 0);
+  const rawSellScore = keyed.reduce((s, [k, c]) => s + (mask?.has(k) ? 0 : (c.sell.points ?? 0)), 0)
+    + keyedShared.reduce((s, [k, c]) => s + (mask?.has(k) ? 0 : (c.points ?? 0)), 0);
 
   const liqMultiplier = liqMultiplierFor(liq.points);
   const adrMultiplier = adrMultiplierFor(adr.points);
@@ -1020,14 +1064,42 @@ function historicalVerdict(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers = GA
   const sellScore = Math.min(QS_MAX_SCORE, Math.round(rawSellScore * liqMultiplier * adrMultiplier * regimeMultiplierSell * vixMult * gapMult));
   const blocked = historicalEarningsBlocked(earningsHist, asOfDate);
   const { forceBuy, forceSell } = extremeReads(mirrored);
-  const { verdict } = deriveVerdict({ buyScore, sellScore, blocked, forceBuy, forceSell });
+  let { verdict } = deriveVerdict({ buyScore, sellScore, blocked, forceBuy, forceSell });
   // Same high-conviction gates as the live scorer — a BUY must be a market leader
   // (RS ≥ 0), a SELL must be a laggard (RS ≤ 0). (The replay gates every entry;
   // the live scorer only gates fresh ones, but a re-gate that returns NEUTRAL is
   // never itself an exit in the trade log, so the two converge on closed trades.)
-  if (verdict === "BUY" && !buyConvictionOk(mirrored)) return "NEUTRAL";
-  if (verdict === "SELL" && !sellConvictionOk(mirrored)) return "NEUTRAL";
-  return verdict;
+  if (verdict === "BUY" && !buyConvictionOk(mirrored)) verdict = "NEUTRAL";
+  if (verdict === "SELL" && !sellConvictionOk(mirrored)) verdict = "NEUTRAL";
+
+  const b0 = hAsOf[0];
+  return {
+    verdict, buyScore, sellScore, forceBuy, forceSell, blocked,
+    regimeFavorable,
+    bar: { date: b0.date, open: b0.open, high: b0.high, low: b0.low, close: b0.close },
+    atr5: atrFrom(hAsOf, 0, 5),
+    // Per-factor points on each side + raw value. Shared factors (DRY/EXP) feed
+    // both sides equally, so buy === sell for those.
+    factors: [
+      { key: "RSI", buy: mRsi.buy.points, sell: mRsi.sell.points, value: mRsi.value },
+      { key: "%B",  buy: mBoll.buy.points, sell: mBoll.sell.points, value: mBoll.value },
+      { key: "CLX", buy: mClx.buy.points, sell: mClx.sell.points, value: mClx.value },
+      { key: "REV", buy: mRev.buy.points, sell: mRev.sell.points, value: mRev.value },
+      { key: "RS",  buy: mRs.buy.points, sell: mRs.sell.points, value: mRs.value },
+      { key: "DRY", buy: dry.points, sell: dry.points, value: dry.value },
+      { key: "EXP", buy: exp.points, sell: exp.points, value: exp.value },
+    ],
+    gates: { adr: adr.points, liq: liq.points },
+  };
+}
+
+/* Compute just the headline verdict for one historical close. Thin wrapper over
+   historicalScoreDetail — passes QS_DESCORED so the seed replay scores the same
+   factors the live scorer does (REV excluded), keeping the Backtest Log and the
+   live table consistent. (historicalScoreDetail itself stays neutral — scores
+   whatever it's told — so the attribution/A-B tooling can still toggle REV.) */
+function historicalVerdict(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers = GAP_DAMPER_TIERS, vixHist = null) {
+  return historicalScoreDetail(hAsOf, spyAsOf, earningsHist, asOfDate, gapTiers, vixHist, { maskFactors: QS_DESCORED }).verdict;
 }
 
 /* Replay the last `daysBack` sessions and fold each day's verdict through the

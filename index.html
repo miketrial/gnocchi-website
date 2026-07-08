@@ -70,6 +70,7 @@
   }
   .btn:hover{filter:brightness(.97)}
   .btn:active{transform:scale(.97); opacity:.85}
+  #groupSector.active{background:var(--accent,#2563eb); color:#fff; border-color:var(--accent,#2563eb)}
   .btn .spin{display:inline-block; animation:spin 1s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
 
@@ -264,6 +265,18 @@
   .sec-ind{background:#fef3c7;color:#92400e}
   .sec-energy{background:#fee2e2;color:#991b1b}
   .sec-cons{background:#fce7f3;color:#9d174d}
+  .sec-fin{background:#dcfce7;color:#166534}
+  .sec-hlth{background:#cffafe;color:#155e75}
+  .sec-mat{background:#f5f5f4;color:#57534e}
+  .sec-util{background:#fef9c3;color:#854d0e}
+  .sec-re{background:#ffe4e6;color:#9f1239}
+  .sec-other{background:#eef1f5;color:#64748b}
+
+  /* sector group header row (grouping overlay) */
+  tr.sec-group-head td{padding:6px 8px 3px;border-bottom:1px solid var(--line,#e2e6ec);background:transparent}
+  tr.sec-group-head .sec{font-size:8px;padding:1px 6px}
+  tr.sec-group-head em{font-style:normal;color:var(--ink-faint);font-size:8px;margin-left:6px}
+  [data-theme="white"] tr.sec-group-head td{border-bottom-color:#d5d9df}
 
   .score{font-weight:700; font-size:10px; padding:1px 5px; border-radius:5px; text-align:center; cursor:pointer}
   .score:not(.n):hover{opacity:.8}
@@ -1083,6 +1096,7 @@
         <button class="btn" id="rescan">Rescan</button>
         <button class="btn" id="forceRescan" title="Force a full rescan of every row — bypasses the 'fresh rows' shortcut and re-pulls FMP for everything. Same as Shift+click on Rescan.">Force Rescan</button>
         <button class="btn" id="restoreOrder" title="Restore your saved drag-drop order and clear column sort" style="display:none">↺ Order</button>
+        <button class="btn" id="groupSector" title="Group rows by sector — pins stay on top, and your column sort is kept within each sector">⊞ Sector</button>
         <button class="btn" id="pipelineBtn" onclick="document.getElementById('pipelineModal').style.display='flex'">Scoring Pipeline</button>
       </div>
       <div class="rescan-timer" id="rescanTimer"></div>
@@ -1318,7 +1332,7 @@
         <tr class="grphdr">
           <th colspan="3"></th>
           <th colspan="3" class="grp">Setup</th>
-          <th colspan="2" class="grp">Momentum</th>
+          <th colspan="3" class="grp">Momentum</th>
           <th colspan="2" class="grp">Valuation</th>
           <th colspan="2" class="grp">Quality</th>
           <th colspan="2" class="grp">Catalyst</th>
@@ -1327,11 +1341,12 @@
           <th></th>
           <th class="sortable" data-sort="name">Company<span class="sub">(ticker)</span></th>
           <th class="num sortable" data-sort="price">Price<span class="sub">live</span></th>
-          <th class="grp-start"><div class="chkhdr"><span><span class="hl">Trend</span></span><span><span class="hl">3M Mom</span></span><span><span class="hl">Near Hi</span></span><span><span class="hl">Liquid</span></span><span><span class="hl">Anlyst Rev</span></span><span><span class="hl">Value</span></span><span><span class="hl">Quality</span></span><span><span class="hl">Leverage</span></span><span><span class="hl">Catalyst</span></span><span><span class="hl">Vol Surge</span></span></div></th>
-          <th class="sortable" data-sort="score" data-rulecard="score" style="cursor:help">Score<span class="sub">of 30</span></th>
+          <th class="grp-start"><div class="chkhdr"><span><span class="hl">Trend</span></span><span><span class="hl">3M Mom</span></span><span><span class="hl">Near Hi</span></span><span><span class="hl">Liquid</span></span><span><span class="hl">Anlyst Rev</span></span><span><span class="hl">Value</span></span><span><span class="hl">Quality</span></span><span><span class="hl">Leverage</span></span><span><span class="hl">Catalyst</span></span><span><span class="hl">Vol Surge</span></span><span><span class="hl">Sector RS</span></span></div></th>
+          <th class="sortable" data-sort="score" data-rulecard="score" style="cursor:help">Score<span class="sub">of 33</span></th>
           <th class="num sortable" data-sort="vspe" data-rulecard="vsSect" style="cursor:help">VS Sector<span class="sub">P/E</span></th>
           <th class="grp-start" data-rulecard="trend" style="cursor:help">Trend<span class="sub">price &amp; DMA</span></th>
           <th data-rulecard="mom" style="cursor:help">3M Return<span class="sub">vs 0</span></th>
+          <th data-rulecard="sectorRs" style="cursor:help">Sector RS<span class="sub">vs SPY</span></th>
           <th class="grp-start" data-rulecard="fwdpe" style="cursor:help">Fwd P/E<span class="sub">vs sector</span></th>
           <th data-rulecard="epsrev" style="cursor:help">Anlyst Rev<span class="sub">PT &amp; ratings</span></th>
           <th class="grp-start" data-rulecard="qual" style="cursor:help">FCF / ROE<span class="sub">TTM</span></th>
@@ -1345,7 +1360,7 @@
   </div>
 
   <div class="legend">
-    <div class="ttl">Swing scoring &nbsp;·&nbsp; 10 factors tuned for 1wk-3mo swing trades</div>
+    <div class="ttl">Swing scoring &nbsp;·&nbsp; 11 factors tuned for 1wk-3mo swing trades</div>
     <span><b style="background:var(--good-bg);color:var(--good-fg)">●</b><span style="color:var(--good-fg);font-weight:600">Green</span> · factor passes</span>
     <span><b style="background:var(--bad-bg);color:var(--bad-fg)">●</b><span style="color:var(--bad-fg);font-weight:600">Red</span> · factor fails</span>
     <span><b style="background:var(--pur-bg);color:var(--pur-fg)">●</b><span style="color:var(--pur-fg);font-weight:600">Purple</span> · data not available from FMP for this ticker</span>
@@ -1578,15 +1593,6 @@
 <div id="ruleCard" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.55;padding:14px 16px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:300px;max-width:360px;pointer-events:none;white-space:normal;border:0.5px solid rgba(255,255,255,.08)"></div>
 
 <!-- Per-ticker watchlist history popover -->
-<!-- Backtest popover: aggregate hit rate / avg return on 3/3 entry signals -->
-<div id="backtestPop" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10.5px;line-height:1.45;padding:14px 16px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:380px;max-width:480px;max-height:70vh;overflow-y:auto;pointer-events:auto;border:0.5px solid rgba(255,255,255,.08);top:80px;left:50%;transform:translateX(-50%)">
-  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-    <span style="font-size:12px;font-weight:700;letter-spacing:.3px">Backtest · 3/3 Entry Signals</span>
-    <span id="backtestClose" style="cursor:pointer;color:#8a95a8;font-size:13px;padding:0 2px">✕</span>
-  </div>
-  <div id="backtestBody"></div>
-</div>
-
 <!-- ===== QUICK SWING FEATURE ===== Bounce backtest ("as-if") paper-trade log popover -->
 <div id="qsBtPop" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10.5px;line-height:1.45;padding:16px 18px;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.45);width:min(880px,94vw);max-height:82vh;overflow-y:auto;pointer-events:auto;border:0.5px solid rgba(255,255,255,.08);top:64px;left:50%;transform:translateX(-50%)">
   <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
@@ -1620,6 +1626,40 @@
   <div class="qs-bt-note">This is a rolling 15-day window of <em>recent activity</em>, not a full track record — too few trades to judge the strategy, and deliberately capped at 15 days. The seed is a historical replay of the EOD factors decided at each daily close (the after-hours leg can't be reconstructed — there's no historical after-hours data — so those days may differ slightly from what the live tool showed intraday; the VIX leg <em>is</em> now reconstructed from ^VIX EOD history). Forward datapoints are recorded each time you open the app or rescan, at the price that scan saw. The 2.5×ATR stop assumes a fill at the stop price (or the day's open on a gap-through). SPY buy-and-hold is the benchmark for both longs and shorts (opportunity cost of just holding the market those days). No slippage or commissions. Cumulative $ assumes a fixed $10,000 per trade.</div>
 </div>
 <!-- ===== END QUICK SWING FEATURE ===== -->
+
+<!-- ===== SWING BACKTEST FEATURE ===== Swing as-if paper-trade log popover (long-only trend-follow; mirrors the Bounce log) -->
+<div id="stBtPop" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10.5px;line-height:1.45;padding:16px 18px;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.45);width:min(880px,94vw);max-height:82vh;overflow-y:auto;pointer-events:auto;border:0.5px solid rgba(255,255,255,.08);top:64px;left:50%;transform:translateX(-50%)">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+    <span style="font-size:12px;font-weight:700;letter-spacing:.3px">Swing backtest · as-if trade log</span>
+    <span id="stBtClose" style="cursor:pointer;color:#8a95a8;font-size:13px;padding:0 2px">✕</span>
+  </div>
+  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px">Go long each time the swing trend signal turns strong (uptrend + 12/18 on the price-based factors) — each exits on a 50/200 death-cross, a 4×ATR stop, or a 63-day cap · rolling ~6.5-month window (an EOD reconstruction of the trend/momentum core of the score, not a live track record) · backfilled the first time you open this</div>
+  <div id="stBtStatus" style="display:none;font-size:10px;color:#fbbf24;margin-bottom:10px">⟳ Backfilling history…</div>
+  <div class="qs-bt-layout">
+    <aside class="qs-bt-key">
+      <div class="qs-bt-key-title">What the numbers mean</div>
+      <dl>
+        <dt>Win rate</dt><dd>Share of closed trades that made money. Trend-following runs a <em>low</em> win rate by design — a few big winners carry it.</dd>
+        <dt>Avg P/L</dt><dd>Average % gain/loss per closed trade.</dd>
+        <dt>Median hold</dt><dd>Typical days a trade stayed open (swing trades run weeks).</dd>
+        <dt>Best / Worst</dt><dd>Biggest single winner and loser.</dd>
+        <dt>Cumulative</dt><dd>Total $ if you'd put a fixed $10,000 into every trade.</dd>
+        <dt>Edge vs SPY</dt><dd>Your avg P/L minus what <em>SPY</em> returned over the same trade dates — did riding these trends beat just holding the market? Positive = the signal added value.</dd>
+        <dt>Equity curve</dt><dd>Running cumulative $ after each closed trade, in exit order, with <em>SPY</em> buy-and-hold overlaid. Above the dashed SPY line = the strategy is adding value.</dd>
+        <dt>Open</dt><dd>A <em>LONG</em> still running. <em>Now</em> is the live price, <em>Stop</em> the 4×ATR auto-exit line, <em>Unrealized</em> the paper gain so far. A red <em>● STOP</em> means price is at/through the stop.</dd>
+        <dt>Closed</dt><dd>Finished trades, grouped by ticker (best cumulative first). Click a ticker to expand. <em>Exit on</em> is why it closed — <em>TREND</em> (50DMA crossed below 200DMA), <em>STOP</em> (broke its 4×ATR stop), or <em>TIME</em> (hit the 63-day cap).</dd>
+      </dl>
+    </aside>
+    <div class="qs-bt-main">
+      <div id="stBtStats" class="qs-bt-stats"></div>
+      <div id="stBtChart"></div>
+      <div id="stBtOpen"></div>
+      <div id="stBtClosed"></div>
+    </div>
+  </div>
+  <div class="qs-bt-note">This is a rolling ~6.5-month window of <em>recent activity</em> — a small sample, not a full track record. The entry signal is the <em>reconstructable</em> price/volume/sector core of the 33-point swing score (Trend, 3-Month Momentum, Near-High, Liquidity, Volume-Surge, Sector-RS); the five fundamental factors (analyst revisions, valuation, quality, leverage, catalyst) can't be reconstructed at a past date, so — like the live tool's own philosophy of buying confirmed strength — the log times entries off the trend core. The seed is a historical replay of those factors at each daily close. Forward datapoints are recorded on each rescan, at the price that scan saw. The 4×ATR stop assumes a fill at the stop (or the day's open on a gap-through). SPY buy-and-hold is the benchmark (opportunity cost of just holding the market those days). No slippage or commissions. Cumulative $ assumes a fixed $10,000 per trade. Long-only: a 2-year study found shorting weak names loses on this universe and blows out the worst-case drawdown — see scripts/run-short-study.mjs.</div>
+</div>
+<!-- ===== END SWING BACKTEST FEATURE ===== -->
 
 <div id="tickerHist" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:10px;line-height:1.5;padding:12px 14px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:340px;max-width:600px;pointer-events:auto;white-space:normal;border:0.5px solid rgba(255,255,255,.08)">
   <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
@@ -1723,7 +1763,67 @@ let net = [
 /* ---------------- sort state ---------------- */
 let sortCol = null, sortDir = 1;
 let stSortCol = null, stSortDir = -1; // Short Term sort (-1 = desc = highest score first)
+let groupBySector = localStorage.getItem('gn_group_sector')==='1'; // sector-grouping overlay (shared by both views)
 const SECTOR_LABEL = {tech:'Tech',semi:'Semis',saas:'SaaS',hw:'Hardware',ind:'Industrials',energy:'Energy',cons:'Consumer'};
+
+/* ---------------- sector grouping ---------------- */
+// Normalize a sector string (seed short-code OR raw FMP full name) to a single
+// canonical {key,label}. `key` drives the .sec-<key> badge color; `label` is
+// the display text. Everything unknown/empty folds into the 'other' bucket,
+// which always renders last.
+function normalizeSector(raw){
+  const s = (raw||'').trim();
+  if(!s) return {key:'other', label:'Unclassified'};
+  const k = s.toLowerCase();
+  // Seed short codes pass through with their existing labels.
+  if(SECTOR_LABEL[k]) return {key:k, label:SECTOR_LABEL[k]};
+  // Raw FMP full names fold into buckets.
+  const FMP = {
+    'technology':               {key:'tech',   label:'Technology'},
+    'communication services':   {key:'tech',   label:'Communication'},
+    'financial services':       {key:'fin',    label:'Financials'},
+    'financial':                {key:'fin',    label:'Financials'},
+    'healthcare':               {key:'hlth',   label:'Healthcare'},
+    'consumer cyclical':        {key:'cons',   label:'Consumer'},
+    'consumer defensive':       {key:'cons',   label:'Consumer'},
+    'industrials':              {key:'ind',    label:'Industrials'},
+    'energy':                   {key:'energy', label:'Energy'},
+    'basic materials':          {key:'mat',    label:'Materials'},
+    'utilities':                {key:'util',   label:'Utilities'},
+    'real estate':              {key:'re',     label:'Real Estate'},
+  };
+  return FMP[k] || {key:'other', label:s};
+}
+// Resolve a watchlist row's sector. Long-Term rows may not carry `sector` yet
+// (older stored rows / before the pipeline change), so fall back to the Swing
+// pipeline's live sector keyed by symbol.
+function sectorOf(row){
+  const raw = row.sector
+    || shortRowsBySym[(row.sym||'').toUpperCase()]?.sector
+    || '';
+  return normalizeSector(raw);
+}
+// Build the render list with interleaved sector-header markers. Pinned block is
+// left untouched on top; unpinned rows cluster into sector groups in first-seen
+// (i.e. current-sort) order, so the active column sort is preserved within each
+// group. Returns [{row} | {header:{key,label,count}}].
+function groupedRenderList(pinned, unpinned){
+  if(!groupBySector) return [...pinned, ...unpinned].map(r=>({row:r}));
+  const out = pinned.map(r=>({row:r}));
+  const buckets = new Map();
+  for(const r of unpinned){
+    const {key,label} = sectorOf(r);
+    if(!buckets.has(key)) buckets.set(key,{key,label,rows:[]});
+    buckets.get(key).rows.push(r);
+  }
+  const groups = [...buckets.values()].sort((a,b)=>(a.key==='other'?1:0)-(b.key==='other'?1:0));
+  for(const g of groups){
+    out.push({header:{key:g.key, label:g.label, count:g.rows.length}});
+    for(const r of g.rows) out.push({row:r});
+  }
+  return out;
+}
+
 function sortVal(r, col){
   const num = s => parseFloat((s||'').replace(/[~x%]/g,'')) || 0;
   switch(col){
@@ -1829,6 +1929,20 @@ document.getElementById('restoreOrder').addEventListener('click', () => {
   document.getElementById('restoreOrder').style.display = 'none';
 });
 
+// Sector-grouping toggle — purely a render overlay (doesn't touch sort/pins/order).
+(function initGroupSector(){
+  const btn = document.getElementById('groupSector');
+  if(!btn) return;
+  const paint = () => btn.classList.toggle('active', groupBySector);
+  paint();
+  btn.addEventListener('click', () => {
+    groupBySector = !groupBySector;
+    try{ localStorage.setItem('gn_group_sector', groupBySector?'1':'0'); }catch(e){}
+    paint();
+    renderWatchlist(); renderShortWatchlist();
+  });
+})();
+
 /* ---------------- render watchlist ---------------- */
 function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
@@ -1858,18 +1972,32 @@ function isUnavailable(reason){
 }
 function renderWatchlist(){
   const tb=document.getElementById('wlBody'); tb.innerHTML='';
-  // Pinned rows first, then the rest in their existing order
+  // Pinned rows first, then the rest — optionally clustered into sector groups.
   const pinned = watchlist.filter(r=>pinnedSyms.has(r.sym));
   const unpinned = watchlist.filter(r=>!pinnedSyms.has(r.sym));
-  const ordered = [...pinned, ...unpinned];
-  const dividerAt = pinned.length > 0 && unpinned.length > 0 ? pinned.length : -1;
-  ordered.forEach((r,i)=>{
-    if(i===dividerAt){
+  const list = groupedRenderList(pinned, unpinned);
+  const showPinDivider = pinned.length > 0 && unpinned.length > 0;
+  const numCols=document.querySelectorAll('thead th').length||18;
+  let rowNum = 0, lastPinnedTr = null, pinDividerDone = false;
+  list.forEach(item=>{
+    const isPinnedRow = !!(item.row && pinnedSyms.has(item.row.sym));
+    // Divider between the pinned block and the first non-pinned element.
+    if(showPinDivider && !pinDividerDone && !isPinnedRow){
+      if(lastPinnedTr) lastPinnedTr.classList.add('pin-last');
       const div=document.createElement('tr'); div.className='pin-divider';
-      const numCols=document.querySelectorAll('thead th').length||18;
       div.innerHTML=`<td colspan="${numCols}"></td>`;
       tb.appendChild(div);
+      pinDividerDone = true;
+      if(item.row) item._pinFirst = true;
     }
+    // Sector group header row (grouping overlay only).
+    if(item.header){
+      const h=document.createElement('tr'); h.className='sec-group-head';
+      h.innerHTML=`<td colspan="${numCols}"><span class="sec sec-${item.header.key}">${escHtml(item.header.label)}</span><em>${item.header.count}</em></td>`;
+      tb.appendChild(h);
+      return;
+    }
+    const r=item.row;
     const reasons=r.reasons||[];
     const checks=(r.v||[]).map((g,k)=>{
       const reason=reasons[k]||LABELS[k];
@@ -1879,9 +2007,8 @@ function renderWatchlist(){
     const hasNA=reasons.some(isUnavailable);
     const tr=document.createElement('tr');
     tr.dataset.sym=r.sym;
-    if(pinnedSyms.has(r.sym)) tr.classList.add('pinned');
-    if(dividerAt>0 && i===dividerAt-1) tr.classList.add('pin-last');
-    if(dividerAt>0 && i===dividerAt) tr.classList.add('pin-first');
+    if(isPinnedRow) tr.classList.add('pinned');
+    if(item._pinFirst) tr.classList.add('pin-first');
     if(r.scoring) tr.classList.add('scoring');
     else tr.classList.add(hasNA?'sc-na':'sc-'+scoreClass(r.score));
     const scoreEl=r.scoring
@@ -1898,9 +2025,9 @@ function renderWatchlist(){
     const betaClass=r.beta>=2?'mom-hi':r.beta>=1?'':'mom-lo';
     const coCell=r.scoring
       ?`<td class="co-cell"><span class="sym" style="opacity:0.3">${r.sym}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
-      :`<td class="co-cell"><span class="sym">${r.sym}</span>${r.warnings&&r.warnings.length?`<span class="warn-badge" title="${escHtml('Data-integrity warning:\n• '+r.warnings.join('\n• '))}">⚠</span>`:''}${r.sector?`<span class="sec sec-${r.sector}">${SECTOR_LABEL[r.sector]||r.sector}</span>`:''} <span class="name">${escHtml((r.name||'').length>16?(r.name.slice(0,15)+'…'):r.name)}</span><div class="checked" data-since="${r.scored_at||''}"></div></td>`;
+      :`<td class="co-cell"><span class="sym">${r.sym}</span>${r.warnings&&r.warnings.length?`<span class="warn-badge" title="${escHtml('Data-integrity warning:\n• '+r.warnings.join('\n• '))}">⚠</span>`:''}${r.sector?(()=>{const s=normalizeSector(r.sector);return `<span class="sec sec-${s.key}">${escHtml(s.label)}</span>`;})():''} <span class="name">${escHtml((r.name||'').length>16?(r.name.slice(0,15)+'…'):r.name)}</span><div class="checked" data-since="${r.scored_at||''}"></div></td>`;
     tr.innerHTML=`
-      <td class="idx">${i+1}.</td>
+      <td class="idx">${rowNum+1}.</td>
       ${coCell}
       <td class="num price-cell">${r.price!=null?'$'+(+r.price).toFixed(2):'—'}</td>
       <td class="grp-start"><div class="checks">${checks}</div></td>
@@ -1959,6 +2086,8 @@ function renderWatchlist(){
       );
       dragSrc = null;
     });
+    rowNum++;
+    if(isPinnedRow) lastPinnedTr = tr;
     tb.appendChild(tr);
   });
   updateChecked();
@@ -2109,10 +2238,11 @@ const ST_FACTOR_META = [
   { label:'Net Debt/EBITDA', unit:'x',  toVal: r => r?.ratio != null ? +r.ratio.toFixed(2) : null },
   { label:'Days to Earnings',unit:'d',  toVal: r => r?.daysUntil != null ? r.daysUntil : null },
   { label:'Vol Surge',       unit:'x',  toVal: r => r?.rv != null ? +r.rv.toFixed(2) : null },
+  { label:'Sector RS',       unit:'pp', toVal: r => r?.delta != null ? +(r.delta*100).toFixed(1) : null },
 ];
 
 // Map data-column attribute values (set on TDs) to factor indices
-const ST_COL_TO_FACTOR = { score:-1, trend:0, mom:1, fwdpe:5, epsrev:4, qual:6, lev:7, cat:8, vs:9 };
+const ST_COL_TO_FACTOR = { score:-1, trend:0, mom:1, fwdpe:5, epsrev:4, qual:6, lev:7, cat:8, vs:9, sectorRs:10 };
 
 function saveShortHistory(sym, row) {
   if (!row || !row.scored_at) return;
@@ -2147,19 +2277,20 @@ function buildStFactChart(entries, factorIdx) {
   let svg = '';
 
   if (factorIdx === -1) {
-    // Overall score — detect scale: legacy /10 entries cap at 10, new /30 go higher
+    // Overall score — detect scale: legacy /10 entries cap at 10, new /33 go higher
+    // (was /30 before the Sector RS factor added an 11th check)
     const maxScore = Math.max(...entries.map(e => parseInt(e.score) || 0), 1);
-    const scale = maxScore > 10 ? 30 : 10;
+    const scale = maxScore > 10 ? 33 : 10;
     const ys = v => pt + cH - (v/scale)*cH;
-    const gridLines = scale === 30 ? [0,10,20,30] : [0,5,10];
+    const gridLines = scale === 33 ? [0,11,22,33] : [0,5,10];
     gridLines.forEach(v => {
       svg += `<line x1="${pl}" y1="${ys(v)}" x2="${W-pr}" y2="${ys(v)}" stroke="rgba(255,255,255,.07)" stroke-width="0.5"/>`;
       svg += `<text x="${pl-4}" y="${ys(v)+3.5}" text-anchor="end" fill="#606878" font-size="8">${v}</text>`;
     });
     const pts = entries.map((e,i) => {
       const v = parseInt(e.score) || 0;
-      const good = scale === 30 ? v >= 20 : v >= 7;
-      const mid  = scale === 30 ? v >= 12 : v >= 5;
+      const good = scale === 33 ? v >= 22 : v >= 7;
+      const mid  = scale === 33 ? v >= 13 : v >= 5;
       return { x: xs(i), y: ys(v), v, verdict: good?'good':mid?'mixed':'bad' };
     });
     if (n > 1) {
@@ -2196,6 +2327,7 @@ function buildStFactChart(entries, factorIdx) {
         4: [-5, 0, 5],       // analyst composite %: -5=weak, 0=ok, 5=good
         7: [1, 3, 5],        // leverage x: 1=good, 3=ok, 5=weak (lower=better)
         9: [0.8, 1.5, 2.5],  // vol surge x: 0.8=weak, 1.5=ok, 2.5=good
+        10: [-3, 8, 15],     // sector RS pp vs SPY: -3=weak, 8=ok, 15=good
       };
       (thresholds[factorIdx] || []).forEach(tv => {
         if (tv >= lo && tv <= hi) {
@@ -2611,6 +2743,9 @@ function setView(v){
   // already always force-fetches fresh FMP (see rescanShort / rescanQuickSwing).
   const fr=document.getElementById('forceRescan');
   if(fr) fr.style.display=(isShort||isQs)?'none':'';
+  // Sector grouping only applies to the two shared-watchlist screeners.
+  const gs=document.getElementById('groupSector');
+  if(gs) gs.style.display=(v==='watchlist'||isShort)?'':'none';
   const navTog=document.getElementById('navToggle');
   if(navTog){
     navTog.style.display=(isShort||isQs)?'none':'';
@@ -3466,7 +3601,7 @@ window.addEventListener('scroll',()=>{
  *  Short Term view (FMP-only, swing trading 1wk-3mo)                 *
  * ================================================================== */
 
-// Tooltip text for each of the 10 chips (factor, why it matters, rule).
+// Tooltip text for each of the 11 chips (factor, why it matters, rule).
 // "Your value:" gets appended at render time from the per-row computed value.
 const SHORT_LABELS = [
   { name: "Trend",          why: "An uptrend (price above both its 50-day and 200-day moving averages, with 50 above 200) is the single strongest predictor that recent strength will continue over the next 2-12 weeks.", rule: "Price > 50-day MA > 200-day MA" },
@@ -3479,6 +3614,7 @@ const SHORT_LABELS = [
   { name: "Leverage",       why: "Over-levered names are most fragile when rates move or sentiment shifts — the kind of single-day -15% gap you can't trade out of.", rule: "Net debt / EBITDA < 3x (or net cash position)" },
   { name: "Catalyst",       why: "Swing trades work best when there's a known event within the holding window that will re-rate the stock — most commonly the next earnings release.", rule: "Earnings between 7 and 90 days from today" },
   { name: "Volume Surge",   why: "Today's trading volume relative to its 20-day average. Unusually high volume (≥ 1.5×) is one of the most reliable leading indicators of a near-term move — institutions accumulating or distributing leave a footprint here before it shows up in price.", rule: "Today's volume ≥ 1.5× the 20-day average" },
+  { name: "Sector RS",      why: "Stocks in sectors that are beating the market tend to keep beating it — a momentum-confirmation signal, backtested against real forward returns (see scripts/study-short-factors.mjs). NOT an early-warning for a sector rotation: it's a slow 3-12 month weighted window, so a high score means 'this sector has been a leader,' not 'this sector is safe from a reversal.'", rule: "Sector ETF's weighted 3-12mo return ≥ SPY's by 8pp or more" },
 ];
 
 // Newbie tooltip text built from the label + actual computed value
@@ -3513,6 +3649,9 @@ async function ensureShortDataLoaded(){
   applyStSort();
   applyStSortHeaders();
   renderShortWatchlist();
+  // A grouped Long-Term view derives sector for older rows from this data via
+  // the sectorOf fallback — refresh it now that the sectors are available.
+  if (groupBySector) renderWatchlist();
 }
 
 /* ===== QUICK SWING FEATURE =====
@@ -4255,6 +4394,172 @@ document.addEventListener('click', e => {
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeQsBacktest(); });
 /* ===== END QUICK SWING FEATURE ===== */
 
+/* ===== SWING BACKTEST FEATURE ===== Swing as-if paper-trade log (client).
+   Long-only trend-follow sibling of the Bounce log — same server-driven shape,
+   reusing the qs-bt-* CSS and the qsBt* formatting/equity-curve helpers. */
+let stBacktestLogs = [];
+
+async function loadStBacktest(){
+  if (!API_LIVE) return;
+  try {
+    const logs = await api.get('/api/short/backtest');
+    if (Array.isArray(logs)) { stBacktestLogs = logs; renderStBacktest(); }
+  } catch(e) { /* non-critical */ }
+}
+
+function renderStBacktest(){
+  const stats = document.getElementById('stBtStats');
+  const chartEl = document.getElementById('stBtChart');
+  const openEl = document.getElementById('stBtOpen');
+  const closedEl = document.getElementById('stBtClosed');
+  if (!stats || !openEl || !closedEl) return;
+
+  const openTrades = stBacktestLogs.filter(l => l && l.open).map(l => l.open);
+  const closed = [].concat(...stBacktestLogs.map(l => (l && Array.isArray(l.closed)) ? l.closed : []))
+                   .sort((a, b) => (Date.parse(b.exitScoredAt || b.exitAt) || 0) - (Date.parse(a.exitScoredAt || a.exitAt) || 0));
+
+  const n = closed.length;
+  if (!n) {
+    stats.innerHTML = `<div class="qs-bt-empty">No closed trades in the window yet. If this is your first time opening the log, history is backfilling now — otherwise none of your tickers had a strong swing setup that entered and closed in the last ~6.5 months.</div>`;
+  } else {
+    const wins = closed.filter(t => t.pnlPct > 0).length;
+    const winRate = (wins / n) * 100;
+    const avgPnl = closed.reduce((s, t) => s + t.pnlPct, 0) / n;
+    const holds = closed.map(t => t.holdDays).filter(h => h != null).sort((a, b) => a - b);
+    const medHold = holds.length ? holds[Math.floor((holds.length - 1) / 2)] : null;
+    const best = closed.reduce((m, t) => t.pnlPct > m.pnlPct ? t : m, closed[0]);
+    const worst = closed.reduce((m, t) => t.pnlPct < m.pnlPct ? t : m, closed[0]);
+    const cumDollars = closed.reduce((s, t) => s + QS_BT_NOTIONAL * (t.pnlPct / 100), 0);
+    const bench = closed.filter(t => typeof t.spyPct === 'number');
+    const hasBench = bench.length > 0;
+    const avgSpy = hasBench ? bench.reduce((s, t) => s + t.spyPct, 0) / bench.length : null;
+    const edge = hasBench ? avgPnl - avgSpy : null;
+    const cumSpy = hasBench ? bench.reduce((s, t) => s + QS_BT_NOTIONAL * (t.spyPct / 100), 0) : null;
+    const dollars = d => (d >= 0 ? '+' : '−') + '$' + Math.abs(d).toLocaleString(undefined,{maximumFractionDigits:0});
+    const stat = (k, v, cls, sub) => `<div class="qs-bt-stat"><span class="k">${k}</span><span class="v ${cls||''}">${v}</span>${sub?`<span class="sub">${sub}</span>`:''}</div>`;
+    stats.innerHTML =
+      stat('Closed trades', n) +
+      stat('Win rate', winRate.toFixed(0) + '%', '', 'low by design — trend-follow') +
+      stat('Avg P/L', qsBtPct(avgPnl), qsBtPnlClass(avgPnl), hasBench ? `SPY same days ${qsBtPct(avgSpy)}` : '') +
+      stat('Edge vs SPY', hasBench ? qsBtPct(edge) : '—', hasBench ? qsBtPnlClass(edge) : '', hasBench ? 'per trade, timing alone' : 'no benchmark yet') +
+      stat('Median hold', medHold == null ? '—' : medHold + 'd') +
+      stat('Best', qsBtPct(best.pnlPct) + ' ' + escHtml(best.sym), qsBtPnlClass(best.pnlPct)) +
+      stat('Worst', qsBtPct(worst.pnlPct) + ' ' + escHtml(worst.sym), qsBtPnlClass(worst.pnlPct)) +
+      stat('Cumulative', dollars(cumDollars), qsBtPnlClass(cumDollars), hasBench ? `SPY same days ${dollars(cumSpy)}` : '');
+  }
+
+  // Open positions (all LONG) — unrealized vs the live row price.
+  if (!openTrades.length) {
+    openEl.innerHTML = '';
+  } else {
+    const rows = openTrades.map(o => {
+      const live = shortRowsBySym[o.sym?.toUpperCase()]?.price;
+      const unreal = (live > 0 && o.entryPrice > 0) ? ((live - o.entryPrice) / o.entryPrice) * 100 : null;
+      const stop = o.stopPrice;
+      const breached = (stop > 0 && live > 0 && live <= stop);
+      const stopCell = stop > 0
+        ? `<td data-tip="${escHtml('Stop = entry − 4×ATR(14), pinned at entry. The as-if trade auto-exits if price breaks this line.')}">${qsBtPrice(stop)}</td>`
+        : `<td>—</td>`;
+      const flag = breached ? ` <span style="color:#f87171;font-weight:700">● STOP</span>` : '';
+      return `<tr${breached?' style="background:rgba(248,113,113,.08)"':''}><td>${escHtml(o.sym)} <span class="qs-bt-side qs-bt-side-long">LONG</span></td><td>${qsBtDate(o.entryScoredAt || o.entryAt)}</td>` +
+        `<td>${qsBtPrice(o.entryPrice)}</td><td>${qsBtPrice(live)}</td>${stopCell}` +
+        `<td class="${unreal==null?'':qsBtPnlClass(unreal)}">${unreal==null?'—':qsBtPct(unreal)}${flag}</td></tr>`;
+    }).join('');
+    openEl.innerHTML = `<div class="qs-bt-sec-head">Open as-if positions (${openTrades.length})</div>` +
+      `<table class="qs-bt-table"><thead><tr><th>Ticker</th><th>Entry</th><th>Entry $</th><th>Now $</th><th>Stop $</th><th>Unrealized</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  if (chartEl) chartEl.innerHTML = n ? qsBtEquityCurveSVG(closed) : '';
+
+  // Closed trades, grouped by ticker.
+  if (!n) {
+    closedEl.innerHTML = '';
+  } else {
+    const groups = new Map();
+    for (const t of closed) {
+      const k = (t.sym || '?').toUpperCase();
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(t);
+    }
+    const ordered = [...groups.entries()]
+      .map(([sym, trades]) => ({ sym, trades, agg: qsBtTickerAgg(trades) }))
+      .sort((a, b) => b.agg.cum - a.agg.cum);
+    const sections = ordered.map(({ sym, trades, agg }) => {
+      const rows = trades.map(t => {
+        const reason = t.exitReason ? `<span class="qs-bt-reason">${escHtml(t.exitReason)}</span>` : '';
+        return `<tr>` +
+          `<td>${qsBtDate(t.entryScoredAt || t.entryAt)}</td><td>${qsBtPrice(t.entryPrice)}</td>` +
+          `<td>${qsBtDate(t.exitScoredAt || t.exitAt)}</td><td>${qsBtPrice(t.exitPrice)}</td>` +
+          `<td>${t.holdDays==null?'—':t.holdDays+'d'}</td>` +
+          `<td class="${qsBtPnlClass(t.pnlPct)}">${qsBtPct(t.pnlPct)}</td>` +
+          `<td>${reason}</td></tr>`;
+      }).join('');
+      return `<details class="qs-bt-tk">
+        <summary>
+          <span class="qs-bt-tk-chev">▶</span>
+          <span class="qs-bt-tk-sym">${escHtml(sym)}</span>
+          <span class="qs-bt-tk-m">${agg.n} trade${agg.n===1?'':'s'}</span>
+          <span class="qs-bt-tk-m">${agg.winRate.toFixed(0)}% win</span>
+          <span class="qs-bt-tk-m ${qsBtPnlClass(agg.avg)}">${qsBtPct(agg.avg)} avg</span>
+          <span class="qs-bt-tk-spacer"></span>
+          <span class="qs-bt-tk-cum ${qsBtPnlClass(agg.cum)}">${qsBtDollars(agg.cum)}</span>
+        </summary>
+        <div class="qs-bt-tk-body">
+          <table class="qs-bt-table"><thead><tr><th>Entry</th><th>Entry $</th><th>Exit</th><th>Exit $</th><th>Hold</th><th>P/L</th><th>Exit on</th></tr></thead><tbody>${rows}</tbody></table>
+        </div>
+      </details>`;
+    }).join('');
+    closedEl.innerHTML = `<div class="qs-bt-sec-head">Closed as-if trades · by ticker (${n} across ${ordered.length})</div>${sections}`;
+  }
+}
+
+let stBtSeedInFlight = false;
+function openStBacktest(){
+  const pop = document.getElementById('stBtPop');
+  if (!pop) return;
+  pop.style.display = 'block';
+  renderStBacktest();  // paint from cache
+  loadStBacktest();    // refresh from server
+  seedStBacktest();    // lazily backfill history for un-seeded tickers
+}
+async function seedStBacktest(){
+  if (!API_LIVE || stBtSeedInFlight) return;
+  stBtSeedInFlight = true;
+  const status = document.getElementById('stBtStatus');
+  let guard = 0, errStreak = 0;
+  try {
+    while (guard++ < 90) {
+      let res;
+      // A single cold-start / transient timeout shouldn't abandon the whole
+      // backfill — retry a few times with a short backoff before giving up.
+      try { res = await api.send('/api/short/backtest-seed', 'POST', {}); errStreak = 0; }
+      catch(e){
+        if (++errStreak >= 3) break;
+        await new Promise(r => setTimeout(r, 1500));
+        continue;
+      }
+      await loadStBacktest();
+      const remaining = res && typeof res.remaining === 'number' ? res.remaining : 0;
+      if (status) status.style.display = remaining > 0 ? 'block' : 'none';
+      if (remaining <= 0) break;
+    }
+  } finally {
+    stBtSeedInFlight = false;
+    if (status) status.style.display = 'none';
+  }
+}
+function closeStBacktest(){
+  const pop = document.getElementById('stBtPop');
+  if (pop) pop.style.display = 'none';
+}
+document.getElementById('stBtClose')?.addEventListener('click', closeStBacktest);
+document.addEventListener('click', e => {
+  const pop = document.getElementById('stBtPop');
+  if (pop && pop.style.display === 'block' && !pop.contains(e.target) && e.target.id !== 'backtestBtn') closeStBacktest();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeStBacktest(); });
+/* ===== END SWING BACKTEST FEATURE ===== */
+
 async function rescanQuickSwing(e){
   const force = true; // Rescan always force-fetches fresh FMP, same as Short Term.
   localStorage.setItem('gn_qs_last_rescan', Date.now()); updateRescanTimer();
@@ -4313,8 +4618,8 @@ async function rescanQuickSwing(e){
 function shortScoreClass(s){
   const n = parseInt((s||'').toString());
   if (isNaN(n)) return 'na';   // unscored rows render in neutral, not red
-  if (n >= 20) return 'g';     // ≥ 20/30 (67%) — strong setup
-  if (n >= 12) return 'y';     // ≥ 12/30 (40%) — mixed
+  if (n >= 22) return 'g';     // ≥ 22/33 (67%) — strong setup
+  if (n >= 13) return 'y';     // ≥ 13/33 (~40%) — mixed
   return 'r';
 }
 
@@ -4325,7 +4630,7 @@ function shortScoreClass(s){
 // Persisted to Netlify Blobs (/api/watch-state) so all visitors share state.
 // localStorage is used as a fast local cache / offline fallback.
 // User clicks the flag to toggle "watching" on/off. The render loop
-// auto-promotes to "ready" when score ≥ 22, Catalyst good/ok, Vol Surge
+// auto-promotes to "ready" when score ≥ 24, Catalyst good/ok, Vol Surge
 // good/ok. When a "ready" stock falls back, it's demoted to "watching"
 // AND a demoted record is captured with the failure reasons so the user
 // sees what changed in the red card.
@@ -4488,7 +4793,7 @@ function readyFailureReasons(r){
   const tvp = tvpFor(r);
   if (!tvp) return ['no data'];
   const scoreNum = parseInt(r.score) || 0;
-  if (scoreNum < 22) return [`score ${scoreNum}/30 below 22 threshold`];
+  if (scoreNum < 24) return [`score ${scoreNum}/33 below 24 threshold`];
   const lost = [];
   if (!tvp.T) lost.push('T');
   if (!tvp.V) lost.push(tvp.volWarn ? 'V (distribution)' : 'V');
@@ -4823,7 +5128,7 @@ function tradeCard(sym, opts){
   return `${outerOpen}
     <div class="wp-tc-head">
       <span class="wp-tc-sym">${sym}</span>
-      <span class="wp-tc-sub">${score}/30 · ${greens}/3 ${sigPills} ${daysBadge}${earnBadge}</span>
+      <span class="wp-tc-sub">${score}/33 · ${greens}/3 ${sigPills} ${daysBadge}${earnBadge}</span>
       ${closeBtn}
     </div>
     <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;margin:4px 0 0">
@@ -4858,8 +5163,8 @@ function renderWatchPanel(){
       const score  = r?.score ? parseInt(r.score) || 0 : 0;
       readyMeta[sym] = { greens, score };
       // Premium = high-conviction setup: either a full 3/3 hit, OR ≥2 greens
-      // with a strong score (≥26). Standard = everything else still in Ready.
-      const isPremium = greens === 3 || (greens >= 2 && score >= 26);
+      // with a strong score (≥29). Standard = everything else still in Ready.
+      const isPremium = greens === 3 || (greens >= 2 && score >= 29);
       if (isPremium) readyPremium.push(sym);
       else readyStandard.push(sym);
     }
@@ -4904,17 +5209,17 @@ function renderWatchPanel(){
     }).join('');
     let body;
     if (kind === 'ready' && items.length) {
-      // Split Ready into Premium (3/3 + score≥26) and Standard sub-groups.
+      // Split Ready into Premium (3/3 + score≥29) and Standard sub-groups.
       // Both render as compact TVP chips — the full price-ladder trade card
       // is too tall to show inline for every Premium ticker at once, so it's
       // reserved for the click-through popover (showTickerHistory).
       const prem = renderItems(readyPremium);
       const std  = renderItems(readyStandard);
       const premHead = readyPremium.length
-        ? `<div class="wp-tier-head wp-tier-prem">★ Premium <span class="wp-tier-sub">3/3 · or 2/3 with score ≥ 26</span><span class="wp-tier-count">${readyPremium.length}</span></div>${prem}`
+        ? `<div class="wp-tier-head wp-tier-prem">★ Premium <span class="wp-tier-sub">3/3 · or 2/3 with score ≥ 29</span><span class="wp-tier-count">${readyPremium.length}</span></div>${prem}`
         : '';
       const stdHead = readyStandard.length
-        ? `<div class="wp-tier-head wp-tier-std">Standard <span class="wp-tier-sub">1–2 green with score 22–25</span><span class="wp-tier-count">${readyStandard.length}</span></div>${std}`
+        ? `<div class="wp-tier-head wp-tier-std">Standard <span class="wp-tier-sub">1–2 green with score 24–28</span><span class="wp-tier-count">${readyStandard.length}</span></div>${std}`
         : '';
       body = premHead + stdHead;
     } else {
@@ -4942,7 +5247,7 @@ function renderWatchPanel(){
     <div class="wp-head">
       <span class="wp-title" id="wlHelpTrigger" style="cursor:help;border-bottom:1px dashed currentColor">Watchlist ?</span>
       <span class="wp-sub">Click a ticker to see its history · × to clear</span>
-      <span id="backtestBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none" data-tip="Hit rate + avg return on 3/3 entry signals">▢ Backtest</span>
+      <span id="backtestBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="As-if you went long each time the swing trend signal turned strong, exiting on a 50/200 death-cross, a 4×ATR stop, or a 63-day cap — rolling ~6.5-month window with a SPY benchmark. An EOD reconstruction, not a live track record.">▢ Backtest log</span>
     </div>
     <div class="wp-cards">
       ${section('ready',    '✓ Ready',    ready,    'No stocks ready to trade yet', 'ready')}
@@ -4975,11 +5280,11 @@ const ruleCard = document.getElementById('ruleCard');
 const RULE_CARDS = {
   score: {
     title: 'Score — how to read it',
-    summary: 'Composite of the 10 short-term factors. Each factor scores 0–3 (bad / weak / ok / good) for a max of 30.',
+    summary: 'Composite of the 11 short-term factors. Each factor scores 0–3 (bad / weak / ok / good) for a max of 33.',
     bands: [
-      ['good', '20–30', 'Strong setup. Multiple factors aligned. Worth watching for entry.'],
-      ['ok',   '12–19', 'Mixed. Some tailwinds, some red flags. Wait for confirmation.'],
-      ['bad',  '0–11',  'Weak. Not a swing-trade candidate right now — revisit after a rescan.'],
+      ['good', '22–33', 'Strong setup. Multiple factors aligned. Worth watching for entry.'],
+      ['ok',   '13–21', 'Mixed. Some tailwinds, some red flags. Wait for confirmation.'],
+      ['bad',  '0–12',  'Weak. Not a swing-trade candidate right now — revisit after a rescan.'],
     ],
     rules: [
       ['Score alone is a ranking, not a buy signal.', 'A 24 with red Vol Surge is worse than a 21 with green Vol Surge + ↑ flow.'],
@@ -5028,6 +5333,20 @@ const RULE_CARDS = {
       ['But beware vertical moves.', '+60% in 3 months = late. Look for steady climbers, not parabolic ones.'],
     ],
     footer: 'Combine with Trend: green here + green Trend is the cleanest momentum setup.',
+  },
+  sectorRs: {
+    title: 'Sector RS — is the whole sector leading?',
+    summary: 'Ticker\'s sector ETF (or SMH for Semiconductors) weighted 3-12mo return, minus SPY\'s. Backtested against real forward returns before shipping — see scripts/study-short-factors.mjs.',
+    bands: [
+      ['good', '+15pp or more', 'Sector strongly leading the market.'],
+      ['ok',   '+8pp to +15pp', 'Sector beating the market.'],
+      ['bad',  'Under +8pp',    'Sector roughly in line or lagging.'],
+    ],
+    rules: [
+      ['This is momentum confirmation, not a rotation warning.', 'It\'s a slow 3-12mo weighted window — during the actual June-July 2026 semiconductor rotation, AVGO\'s sector score stayed high the entire way down. A green chip here means "this sector has been a leader," not "this sector is safe from a reversal."'],
+      ['Use it to size conviction on an otherwise-green setup, not to time an exit.', 'Pair with the ticker\'s own Trend/3M Momentum — sector strength without ticker strength is a weaker case.'],
+    ],
+    footer: 'Sector ETF map: 11 GICS SPDR sector ETFs, with Semiconductors specifically mapped to SMH instead of the broader XLK.',
   },
   fwdpe: {
     title: 'Fwd P/E — overpayment filter',
@@ -5213,111 +5532,11 @@ document.getElementById('tickerHistJump').addEventListener('click', () => {
 // popover. Time on X (left = oldest, right = newest); rows = T / V / P; each
 // cell colored green (on) / grey (off) / yellow (off but green within 24h of
 // that scan). One cell per recorded scan, sized to fit the popover width.
-// Backtest: walks sigHistory for every ticker, finds "entry events" — scans
-// where TVP first hits 3/3 after being below — pairs each with an "exit"
-// (the next scan where green count drops below 3, or the latest scan if it
-// stayed 3/3). Returns per-event rows and aggregate stats.
-//
-// Caveat: prices were only added recently. Events whose entry scan predates
-// that change have no price and get filtered out — the sample size grows
-// over time as more scans accumulate.
-function computeBacktest(){
-  const events = [];
-  const greens = e => (e.T?1:0)+(e.V?1:0)+(e.P?1:0);
-  for (const sym of Object.keys(sigHistory)) {
-    const arr = sigHistory[sym] || [];
-    let prevG = 0;
-    for (let i = 0; i < arr.length; i++) {
-      const g = greens(arr[i]);
-      if (g === 3 && prevG < 3) {
-        // Found an entry — look for the exit (first non-3/3 after this)
-        let exitIdx = -1;
-        for (let j = i + 1; j < arr.length; j++) {
-          if (greens(arr[j]) < 3) { exitIdx = j; break; }
-        }
-        const entry = arr[i];
-        const exit  = exitIdx >= 0 ? arr[exitIdx] : arr[arr.length - 1];
-        const isOpen = exitIdx < 0;
-        // If the trade is still "open" (signal still 3/3), use the live price
-        // from shortRowsBySym for the exit so unrealized P&L shows.
-        let exitPrice = exit?.price;
-        if (isOpen) {
-          const live = shortRowsBySym[sym]?.raw?.[0]?.price;
-          if (typeof live === 'number') exitPrice = live;
-        }
-        if (typeof entry.price === 'number' && typeof exitPrice === 'number' && entry.price > 0) {
-          events.push({
-            sym, isOpen,
-            entryTs: entry.ts, exitTs: exit.ts,
-            entryPrice: entry.price, exitPrice,
-            returnPct: (exitPrice - entry.price) / entry.price * 100,
-            holdDays: Math.max(0, Math.round((exit.ts - entry.ts) / 86400000)),
-          });
-        }
-      }
-      prevG = g;
-    }
-  }
-  events.sort((a,b) => b.returnPct - a.returnPct);
-  const n = events.length;
-  if (!n) return { events, stats: null };
-  const wins = events.filter(e => e.returnPct > 0).length;
-  const avg  = events.reduce((s,e) => s + e.returnPct, 0) / n;
-  const best = events[0];
-  const worst = events[n-1];
-  return {
-    events,
-    stats: { n, wins, hitRate: wins/n*100, avg, best, worst,
-             openCount: events.filter(e=>e.isOpen).length },
-  };
-}
-function showBacktest(){
-  const { events, stats } = computeBacktest();
-  const el = document.getElementById('backtestBody');
-  if (!stats) {
-    el.innerHTML = `<div style="padding:20px 4px;color:#8a95a8;font-size:11px">
-      No 3/3 entry signals with price data yet. Price snapshots started recording
-      this release — rescan a few times across days to build the sample.</div>`;
-    document.getElementById('backtestPop').style.display = 'block';
-    return;
-  }
-  const pct = v => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
-  const color = v => v > 0 ? '#34d399' : v < 0 ? '#f87171' : '#cbd5e1';
-  const date = ts => new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric'});
-  const summary = `
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;padding:10px;background:rgba(255,255,255,.04);border-radius:8px">
-      <div><div style="font-size:8.5px;color:#8a95a8;text-transform:uppercase;letter-spacing:.4px">Signals</div><div style="font-size:16px;font-weight:700">${stats.n}</div></div>
-      <div><div style="font-size:8.5px;color:#8a95a8;text-transform:uppercase;letter-spacing:.4px">Hit rate</div><div style="font-size:16px;font-weight:700;color:${color(stats.hitRate-50)}">${stats.hitRate.toFixed(0)}%</div></div>
-      <div><div style="font-size:8.5px;color:#8a95a8;text-transform:uppercase;letter-spacing:.4px">Avg return</div><div style="font-size:16px;font-weight:700;color:${color(stats.avg)}">${pct(stats.avg)}</div></div>
-      <div><div style="font-size:8.5px;color:#8a95a8;text-transform:uppercase;letter-spacing:.4px">Open</div><div style="font-size:16px;font-weight:700">${stats.openCount}</div></div>
-    </div>`;
-  const row = e => `
-    <tr>
-      <td style="padding:4px 6px;font-weight:600">${e.sym}${e.isOpen?'<span style="font-size:8px;color:#fbbf24;margin-left:4px">●OPEN</span>':''}</td>
-      <td style="padding:4px 6px;color:#8a95a8;font-size:9.5px">${date(e.entryTs)} → ${date(e.exitTs)}</td>
-      <td style="padding:4px 6px;text-align:right;color:#cbd5e1">$${e.entryPrice.toFixed(2)} → $${e.exitPrice.toFixed(2)}</td>
-      <td style="padding:4px 6px;text-align:right;color:#8a95a8">${e.holdDays}d</td>
-      <td style="padding:4px 6px;text-align:right;font-weight:700;color:${color(e.returnPct)}">${pct(e.returnPct)}</td>
-    </tr>`;
-  el.innerHTML = summary + `
-    <div style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#8a95a8;margin-bottom:4px">All signals · sorted by return</div>
-    <table style="width:100%;border-collapse:collapse;font-size:10px">
-      <thead><tr style="color:#8a95a8;font-size:8.5px;text-transform:uppercase;letter-spacing:.4px">
-        <th style="text-align:left;padding:2px 6px;font-weight:600">Sym</th>
-        <th style="text-align:left;padding:2px 6px;font-weight:600">Hold</th>
-        <th style="text-align:right;padding:2px 6px;font-weight:600">Entry → Exit</th>
-        <th style="text-align:right;padding:2px 6px;font-weight:600">Days</th>
-        <th style="text-align:right;padding:2px 6px;font-weight:600">Return</th>
-      </tr></thead>
-      <tbody>${events.map(row).join('')}</tbody>
-    </table>`;
-  document.getElementById('backtestPop').style.display = 'block';
-}
-document.getElementById('backtestClose').addEventListener('click', () => {
-  document.getElementById('backtestPop').style.display = 'none';
-});
+// SWING BACKTEST FEATURE — the ▢ Backtest button in the Swing watch panel opens
+// the server-driven as-if paper-trade log (openStBacktest, defined above). The
+// old client-only "3/3 TVP" hit-rate calculator was replaced by it.
 document.addEventListener('click', e => {
-  if (e.target.id === 'backtestBtn') showBacktest();
+  if (e.target.id === 'backtestBtn') openStBacktest();
 });
 // Inline mini-history for demoted chips: returns an SVG sparkline string
 // (last ~12 scans) showing T/V/P state at each scan so you can see at a
@@ -5506,7 +5725,7 @@ function renderShortWatchlist(){
     const tvp = tvpFor(r);
     if (!tvp) continue;
     // Ready criteria, in priority order:
-    //   1. score ≥ 22 (quality gate — junk tickers can't sit in Ready)
+    //   1. score ≥ 24 (quality gate — junk tickers can't sit in Ready)
     //   2. ≥1 of T/V/P is currently green OR was green within the last 24h
     //      (yellow counts: gives the user a 24h alert window to react before
     //      the stock auto-demotes).
@@ -5518,16 +5737,16 @@ function renderShortWatchlist(){
       (!tvp.T && (lastGreenAt(sym,'T') ?? 0) > now - SIG_STALE_MS ? 1 : 0) +
       (!tvp.V && (lastGreenAt(sym,'V') ?? 0) > now - SIG_STALE_MS ? 1 : 0) +
       (!tvp.P && (lastGreenAt(sym,'P') ?? 0) > now - SIG_STALE_MS ? 1 : 0);
-    // r.score is "NN/30" (string) from the pipeline — parse before comparing.
+    // r.score is "NN/33" (string) from the pipeline — parse before comparing.
     const scoreNum = parseInt(r.score) || 0;
-    const scoreOk = scoreNum >= 22;
+    const scoreOk = scoreNum >= 24;
     const qualifiesReady = scoreOk && (greenCount >= 1 || yellowCount >= 1);
     if (state === 'watching' && scoreOk && greenCount >= 1) {
       watchFlags[sym] = 'ready';
       justPromoted.add(sym);
       flagsDirty = true;
       if (demotedRecent[sym]) { delete demotedRecent[sym]; demotedDirty = true; }
-      logActivity(sym, 'promote', `${greenCount}/3 entry signals · score ${scoreNum}/30`);
+      logActivity(sym, 'promote', `${greenCount}/3 entry signals · score ${scoreNum}/33`);
     } else if (state === 'ready' && !qualifiesReady) {
       watchFlags[sym] = 'watching';
       flagsDirty = true;
@@ -5545,18 +5764,30 @@ function renderShortWatchlist(){
   // surfaces Ready / Watching / Demoted; the table just highlights in place.
   const pinned   = watchlist.filter(r => pinnedSyms.has(r.sym));
   const unpinned = watchlist.filter(r => !pinnedSyms.has(r.sym));
-  let ordered = [...pinned, ...unpinned];
-  const dividerAt = (pinned.length > 0 && unpinned.length > 0) ? pinned.length : -1;
+  const list = groupedRenderList(pinned, unpinned);
+  const showPinDivider = (pinned.length > 0 && unpinned.length > 0);
+  const numCols = document.querySelectorAll('#shortView thead th').length || 13;
+  let rowNum = 0, lastPinnedTr = null, pinDividerDone = false;
 
   renderWatchPanel();
 
-  ordered.forEach((wl, i) => {
-    if (i === dividerAt) {
+  list.forEach(item => {
+    const isPinnedRow = !!(item.row && pinnedSyms.has(item.row.sym));
+    if (showPinDivider && !pinDividerDone && !isPinnedRow) {
+      if (lastPinnedTr) lastPinnedTr.classList.add('pin-last');
       const div = document.createElement('tr'); div.className = 'pin-divider';
-      const numCols = document.querySelectorAll('#shortView thead th').length || 13;
       div.innerHTML = `<td colspan="${numCols}"></td>`;
       tb.appendChild(div);
+      pinDividerDone = true;
+      if (item.row) item._pinFirst = true;
     }
+    if (item.header) {
+      const h = document.createElement('tr'); h.className = 'sec-group-head';
+      h.innerHTML = `<td colspan="${numCols}"><span class="sec sec-${item.header.key}">${escHtml(item.header.label)}</span><em>${item.header.count}</em></td>`;
+      tb.appendChild(h);
+      return;
+    }
+    const wl = item.row;
     const sym = (wl.sym || '').toUpperCase();
     const isLegacy  = !!wl.legacy;
     const isScoring = !!wl.shortScoring;
@@ -5569,13 +5800,12 @@ function renderShortWatchlist(){
       return `<div class="chk ${cls}" data-tip="${escHtml(tipForChip(k, reasons[k]))}"></div>`;
     }).join('');
 
-    const score = r.score || '—/30';
+    const score = r.score || '—/33';
     const cls = (isScoring || isLegacy) ? '' : 'sc-' + shortScoreClass(score);
     const tr = document.createElement('tr');
     tr.dataset.sym = sym;
-    if (pinnedSyms.has(sym)) tr.classList.add('pinned');
-    if (dividerAt > 0 && i === dividerAt - 1) tr.classList.add('pin-last');
-    if (dividerAt > 0 && i === dividerAt)     tr.classList.add('pin-first');
+    if (isPinnedRow) tr.classList.add('pinned');
+    if (item._pinFirst) tr.classList.add('pin-first');
     if (isScoring) tr.classList.add('scoring');
     else if (isLegacy) tr.classList.add('legacy');
     else tr.classList.add(cls);
@@ -5597,6 +5827,7 @@ function renderShortWatchlist(){
     })();
     const mom = raw[1] != null ? `${(raw[1] * 100).toFixed(1)}%` : '—';
     const momCls = (raw[1] != null && raw[1] > 0) ? 'mom-hi' : (raw[1] != null && raw[1] < 0) ? 'mom-lo' : '';
+    const sectorRs = raw[10] && raw[10].delta != null ? `${raw[10].delta >= 0 ? '+' : ''}${(raw[10].delta * 100).toFixed(1)}pp` : '—';
     const fwdPe = raw[5] && raw[5].fwdPe != null ? `${raw[5].fwdPe.toFixed(1)}x` : '—';
     const epsRev = (() => {
       const v = raw[4];
@@ -5650,7 +5881,7 @@ function renderShortWatchlist(){
     const wfTitle = wfState === 'ready'
       ? 'Ready to trade — criteria met. Click to clear.' + wfTipExtra
       : wfState === 'watching'
-        ? 'Watching — auto-promotes to Ready when score ≥22 and Catalyst + Vol Surge are healthy. Click to clear.'
+        ? 'Watching — auto-promotes to Ready when score ≥24 and Catalyst + Vol Surge are healthy. Click to clear.'
         : 'Click to add to watch list — get a green flash when entry criteria fire.';
     const wfBtn = `<span class="wflag ${wfState}" data-wflag="${sym}" data-tip="${escHtml(wfTitle)}">${wfContent}</span>`;
     const coCell = isScoring
@@ -5666,14 +5897,15 @@ function renderShortWatchlist(){
     };
 
     tr.innerHTML = `
-      <td class="idx">${i + 1}.</td>
+      <td class="idx">${rowNum + 1}.</td>
       ${coCell}
       <td class="num price-cell">${price != null ? '$' + (+price).toFixed(2) : '—'}</td>
       <td class="grp-start"><div class="checks">${checks}</div></td>
-      <td data-col="score" style="cursor:pointer" data-tip="${escHtml('Composite score: '+score+'. Each of the 10 factors scores 0–3 points (bad/weak/ok/good) for a max of 30. 20+/30 is a strong setup, 12–19 is mixed, under 12 is weak. Click to see score history.')}"><span class="score ${shortScoreClass(score)}">${score}</span></td>
+      <td data-col="score" style="cursor:pointer" data-tip="${escHtml('Composite score: '+score+'. Each of the 11 factors scores 0–3 points (bad/weak/ok/good) for a max of 33. 22+/33 is a strong setup, 13–21 is mixed, under 13 is weak. Click to see score history.')}"><span class="score ${shortScoreClass(score)}">${score}</span></td>
       <td class="num" data-tip="Forward P/E vs the sector median. Negative = cheaper than peers, positive = more expensive. Risk filter: overpriced stocks fall harder on missed catalysts."><span class="pill ${vsSectPillCls}">${vsSect}</span></td>
       <td class="grp-start num ${vCls(0)}" data-col="trend" style="cursor:pointer" data-tip="${tipFor(0)}">${trendVal}</td>
       <td class="num ${vCls(1)}" data-col="mom" style="cursor:pointer" data-tip="${tipFor(1)}">${mom}</td>
+      <td class="num ${vCls(10)}" data-col="sectorRs" style="cursor:pointer" data-tip="${tipFor(10)}">${sectorRs}</td>
       <td class="grp-start num ${vCls(5)}" data-col="fwdpe" style="cursor:pointer" data-tip="${tipFor(5)}">${fwdPe}</td>
       <td class="num ${vCls(4)}" data-col="epsrev" style="cursor:pointer" data-tip="${tipFor(4)}">${epsRev}</td>
       <td class="grp-start num ${vCls(6)}" data-col="qual" style="cursor:pointer" data-tip="${tipFor(6)}">${qual}</td>
@@ -5723,6 +5955,8 @@ function renderShortWatchlist(){
       );
       dragSrc = null;
     });
+    rowNum++;
+    if (isPinnedRow) lastPinnedTr = tr;
     tb.appendChild(tr);
     if (isScoring) syncCheckAnim(sym);
   });

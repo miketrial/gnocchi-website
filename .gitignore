@@ -7,3 +7,10 @@ plan.md
 
 # Local Netlify folder
 .netlify
+
+# Secrets — never commit (set these in Netlify env instead)
+.env
+
+# Dependencies / scratch
+node_modules/
+scratchpad/
