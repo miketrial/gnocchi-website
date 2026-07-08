@@ -17,6 +17,8 @@ const qsRowStore       = () => getStore("qs-rows");      // key = TICKER, per-ti
 const qsTradesStore    = () => getStore("qs-trades");    // key = TICKER, per-ticker paper-trade backtest log
 const qsFmpStore       = () => getStore("qs-fmp");       // key = TICKER, per-ticker raw FMP fan-out cache (24h TTL)
 const qsAlertStore     = () => getStore("qs-alert-state");// key = TICKER, last verdict a Telegram alert was sent for (dedup)
+const qsDailyStore     = () => getStore("qs-daily");     // key = TICKER, the day's auto Top-N (Most-Active 500 scan), replaced wholesale at 9:45 ET
+const qsUniverseStore  = () => getStore("qs-universe");  // key = "latest", cached resolved most-active symbol list ({ts, day, symbols})
 const spyHistStore     = () => getStore("spy-hist");     // key = index/ETF symbol ("SPY", "VIX", "XLK", "SMH", ...), one shared blob per symbol per scan batch
 
 /* ---------- FMP cache (24h TTL) ---------- */
@@ -64,6 +66,23 @@ export async function acquireRescanLock(jobId) {
 export async function releaseRescanLock(jobId) {
   const cur = await lockStore().get("rescan", { type: "json" }).catch(() => null);
   if (!cur || cur.jobId === jobId) await lockStore().delete("rescan").catch(() => {});
+}
+
+/* ---------- Generic named lock ----------
+   Same check-then-set as the rescan lock, but with a caller-chosen name + TTL.
+   Used by the daily Most-Active 500 scan (name "qs-daily-scan"), which can run
+   ~7-8 min — longer than the 6-min rescan lock — so it needs its own longer
+   lease to keep the 9:45 cron and a manual "Scan now" click from stacking a
+   second 2,000-call fan-out on top of a run already in flight. */
+export async function acquireLock(name, jobId, ttlMs) {
+  const cur = await lockStore().get(name, { type: "json" }).catch(() => null);
+  if (cur && cur.until > Date.now()) return false; // someone holds a fresh lock
+  await lockStore().setJSON(name, { jobId, startedAt: Date.now(), until: Date.now() + ttlMs });
+  return true;
+}
+export async function releaseLock(name, jobId) {
+  const cur = await lockStore().get(name, { type: "json" }).catch(() => null);
+  if (!cur || cur.jobId === jobId) await lockStore().delete(name).catch(() => {});
 }
 
 /* ---------- Anthropic spend circuit-breaker ----------
@@ -379,6 +398,52 @@ export async function putQuickswingFmpCache(ticker, data) {
 }
 export async function deleteQuickswingFmpCache(ticker) {
   await qsFmpStore().delete(ticker.toUpperCase()).catch(() => {});
+}
+
+/* ---------- Quick Swing: Daily Top-N auto list (Most-Active 500 scan) ----------
+   Separate blob namespace from the manual `qs-rows` watchlist so the two lists
+   stay independent: the manual list is edited only by the user; this one is
+   replaced wholesale each morning by the 9:45 ET scan's top buy-scored picks.
+   Same row shape as `qs-rows` (a scoreTickerQuickSwing row), so the alert loop
+   and UI can consume both identically. Removable with the QUICK SWING FEATURE block. */
+export async function listQsDaily() {
+  const s = qsDailyStore();
+  const { blobs } = await s.list();
+  const rows = await Promise.all(blobs.map(b => s.get(b.key, { type: "json" }).catch(() => null)));
+  return rows.filter(Boolean);
+}
+export async function getQsDailyRow(ticker) {
+  return qsDailyStore().get(ticker.toUpperCase(), { type: "json" }).catch(() => null);
+}
+export async function putQsDailyRow(ticker, row) {
+  await qsDailyStore().setJSON(ticker.toUpperCase(), row);
+}
+export async function deleteQsDailyRow(ticker) {
+  await qsDailyStore().delete(ticker.toUpperCase()).catch(() => {});
+}
+// Atomic-ish wholesale swap: drop every existing pick, then write the new set.
+// Called once at 9:45 ET so the bottom list reflects only that day's top names.
+export async function replaceQsDaily(rows) {
+  const s = qsDailyStore();
+  const { blobs } = await s.list();
+  await Promise.all(blobs.map(b => s.delete(b.key).catch(() => {})));
+  await Promise.all((rows || []).map(r => s.setJSON(String(r.sym).toUpperCase(), r).catch(() => {})));
+}
+
+/* ---------- Quick Swing: cached most-active universe ----------
+   The resolved list of ~500 most-active symbols the daily scan iterates. Cached
+   ~20h (one blob, "latest") so a same-day re-run (manual "Scan now") reuses one
+   screener call instead of re-fetching the universe. `day` is the ET trading day
+   it was resolved for, so a stale prior-day list is treated as a miss. */
+const QS_UNIVERSE_TTL_MS = 20 * 60 * 60 * 1000;
+export async function getQsUniverse(day = null) {
+  const entry = await qsUniverseStore().get("latest", { type: "json" }).catch(() => null);
+  if (!entry || !entry.ts || Date.now() - entry.ts > QS_UNIVERSE_TTL_MS) return null;
+  if (day && entry.day && entry.day !== day) return null;
+  return Array.isArray(entry.symbols) ? entry.symbols : null;
+}
+export async function putQsUniverse(symbols, day = null) {
+  await qsUniverseStore().setJSON("latest", { ts: Date.now(), day, symbols });
 }
 
 /* ---------- Shared SPY history cache ----------

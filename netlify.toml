@@ -77,6 +77,16 @@
   status = 200
 
 [[redirects]]
+  from = "/api/quickswing/daily"
+  to = "/.netlify/functions/quickswing-daily"
+  status = 200
+
+[[redirects]]
+  from = "/api/quickswing/daily/rescan"
+  to = "/.netlify/functions/quickswing-daily-background"
+  status = 200
+
+[[redirects]]
   from = "/api/quickswing/watchlist/*"
   to = "/.netlify/functions/quickswing-delete/:splat"
   status = 200

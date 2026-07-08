@@ -170,3 +170,32 @@ export function formatSummary(diff, cur, label) {
 
   return L.join("\n");
 }
+
+/* ---------- Daily Top-N message (Most-Active 500 scan) ----------
+   A SEPARATE Telegram message from the hourly watchlist summary and the 5-min
+   alerts — sent once at ~9:45 ET by quickswing-daily-background.mjs. Same visual
+   grammar (emoji + HTML) so it reads consistently with the rest of the Bounce
+   texts, but its own header and content: the day's best buy-scored names out of
+   the 500 most-active companies. `rows` MUST already be ranked best-first. */
+export function formatDailyTop({ rows = [], regime = null, label = "", scanned = 0 } = {}) {
+  const L = [`🎯 <b>Top ${rows.length} Bounce Picks — Most-Active 500</b>`];
+  if (label) L.push(`<i>${esc(label)}</i>`);
+
+  const mBits = [];
+  if (typeof regime?.price === "number") mBits.push(`SPY $${regime.price.toFixed(2)}`);
+  if (regime?.label) mBits.push(esc(regime.label));
+  if (typeof regime?.vix?.level === "number") mBits.push(`VIX ${regime.vix.level.toFixed(2)}`);
+  if (mBits.length) L.push(mBits.join(" · "));
+  if (scanned) L.push(`Scanned ${scanned} most-active names.`);
+
+  L.push("");
+  if (!rows.length) {
+    L.push("<i>No qualifying names scored today.</i>");
+    return L.join("\n");
+  }
+  rows.forEach((r, i) => {
+    L.push(`${i + 1}. ${verdictEmoji(r.verdict)} <b>${esc(r.sym)}</b> ${esc(r.verdict ?? "—")}`
+      + ` · buy ${esc(String(r.buyScore ?? "—"))} · ${fmtPrice(r.price)}`);
+  });
+  return L.join("\n");
+}

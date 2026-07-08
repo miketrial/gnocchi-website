@@ -118,14 +118,15 @@ export function positionExitDecision(pos, row, timeStopDays = 3) {
   return { reason: null };
 }
 
-export function formatExitAlert(row, reason, pos, session = "regular") {
+export function formatExitAlert(row, reason, pos, session = "regular", source = "manual") {
   const prefix = session === "afterhours" ? "🌙 AH " : "";
+  const tag = source === "daily" ? " 🎯" : "";
   const sym = esc(row?.sym ?? "?");
   const long = pos?.side === "long";
   const label = reason === "TARGET" ? "took profit" : reason === "STOP" ? "stopped out" : reason === "TIME" ? "timed out" : "exit";
   const emoji = reason === "TARGET" ? "✅" : reason === "STOP" ? "🛑" : "⚪️";
   const price = fmtPrice(row?.price);
-  const lines = [`${prefix}${emoji} <b>${sym} — EXIT</b> (${label})`];
+  const lines = [`${prefix}${emoji} <b>${sym} — EXIT</b> (${label})${tag}`];
   if (pos?.entryPrice != null && row?.price != null) {
     const pl = ((row.price - pos.entryPrice) / pos.entryPrice) * 100 * (long ? 1 : -1);
     lines.push(`${long ? "Long" : "Short"} ${fmtPrice(pos.entryPrice)} → ${price}${row?.priceIsLive ? " (live)" : ""} (${pl >= 0 ? "+" : ""}${pl.toFixed(2)}%)`);
@@ -135,8 +136,12 @@ export function formatExitAlert(row, reason, pos, session = "regular") {
   return lines.join("\n");
 }
 
-export function formatAlert(row, kind, session = "regular") {
+// `source` = "manual" (your watchlist) | "daily" (an auto pick from the 9:45
+// Most-Active 500 scan). A 🎯 tag on the header lets you tell them apart at a
+// glance without splitting the alert stream. Defaults preserve existing calls.
+export function formatAlert(row, kind, session = "regular", source = "manual") {
   const prefix = session === "afterhours" ? "🌙 AH " : "";
+  const tag = source === "daily" ? " 🎯" : "";
   const sym = esc(row?.sym ?? "?");
   const price = fmtPrice(row?.price);
   const lines = [];
@@ -144,7 +149,7 @@ export function formatAlert(row, kind, session = "regular") {
   if (kind === "BUY" || kind === "SELL") {
     const emoji = kind === "BUY" ? "🟢" : "🔴";
     const tier = row?.tier ? ` (${esc(row.tier)})` : "";
-    lines.push(`${prefix}${emoji} <b>${sym} — ${kind}</b>${tier}`);
+    lines.push(`${prefix}${emoji} <b>${sym} — ${kind}</b>${tier}${tag}`);
     lines.push(`Buy ${esc(row?.buyScore ?? "?")} · Sell ${esc(row?.sellScore ?? "?")}`);
     lines.push(`Price ${price}${row?.priceIsLive ? " (live)" : ""}`);
     if (row?.stop?.price != null) {
@@ -157,7 +162,7 @@ export function formatAlert(row, kind, session = "regular") {
     const why = row?.verdict === "BLOCKED"
       ? `BLOCKED${row?.blockedReason ? ` — ${esc(row.blockedReason)}` : ""}`
       : "cooled to NEUTRAL";
-    lines.push(`${prefix}⚪️ <b>${sym} — EXIT</b>`);
+    lines.push(`${prefix}⚪️ <b>${sym} — EXIT</b>${tag}`);
     lines.push(`Verdict ${why}`);
     lines.push(`Price ${price}${row?.priceIsLive ? " (live)" : ""}`);
   }

@@ -20,7 +20,7 @@
    block. */
 import { scoreTickerQuickSwing, getMarketRegime } from "../lib/quickswing-pipeline.mjs";
 import {
-  listQuickswingRows, putQuickswingRow,
+  listQuickswingRows, listQsDaily, putQuickswingRow, putQsDailyRow,
   getQsAlertState, putQsAlertState,
   getQsOpenDigestDate, putQsOpenDigestDate,
   acquireRescanLock, releaseRescanLock,
@@ -59,15 +59,33 @@ export default async (req) => {
   let scored = 0, alerted = 0;
   try {
     const regime = await getMarketRegime().catch(() => null);
-    const watchlist = await listQuickswingRows();
+    // Scan the UNION of your manual watchlist (qs-rows) + the day's auto Top-N
+    // from the 9:45 Most-Active scan (qs-daily), deduped by symbol with the
+    // manual list winning the tag. This is what folds the auto picks into the
+    // 5-min live rescore + verdict alerts. The manual side stays first-class.
+    const [manual, daily] = await Promise.all([
+      listQuickswingRows(),
+      listQsDaily().catch(() => []),
+    ]);
+    const manualSet = new Set(manual.map((r) => r?.sym).filter(Boolean));
+    const dailySet = new Set(daily.map((r) => r?.sym).filter(Boolean));
+    const sourceOf = new Map();
+    for (const r of manual) if (r?.sym) sourceOf.set(r.sym, "manual");
+    for (const r of daily) if (r?.sym && !sourceOf.has(r.sym)) sourceOf.set(r.sym, "daily");
+    const watchlist = [...sourceOf.entries()].map(([sym, source]) => ({ sym, source }));
 
     const scoredRows = [];
     const prevMap = {};
 
-    for (const { sym } of watchlist) {
+    for (const { sym, source } of watchlist) {
       try {
         const row = await scoreTickerQuickSwing(sym, { skipCache: true, marketRegime: regime });
-        await putQuickswingRow(sym, row).catch(() => {}); // keep the app table fresh
+        // Write each fresh row back to the store(s) it belongs to, so the auto
+        // list refreshes in place WITHOUT leaking auto names into the manual
+        // watchlist. A name in both stays first-class in qs-rows and mirrors to
+        // qs-daily so the bottom section shows the same live read.
+        if (manualSet.has(sym)) await putQuickswingRow(sym, row).catch(() => {});
+        if (dailySet.has(sym)) await putQsDailyRow(sym, row).catch(() => {});
         scored++;
 
         const prevState = await getQsAlertState(sym).catch(() => null);
@@ -89,12 +107,12 @@ export default async (req) => {
           // Holding: check for a position exit (STOP → TARGET → FLIP → TIME).
           const { reason } = positionExitDecision(pos, row, QS_TIME_STOP_DAYS);
           if (reason === "FLIP") {
-            await sendTelegram(formatAlert(row, row.verdict, session)); // opposite-side entry
+            await sendTelegram(formatAlert(row, row.verdict, session, source)); // opposite-side entry
             pos = makeAlertPosition(row, sideForVerdict(row.verdict), sessionDate);
             newVerdict = row.verdict;
             alerted++;
           } else if (reason) { // STOP / TARGET / TIME
-            await sendTelegram(formatExitAlert(row, reason, pos, session));
+            await sendTelegram(formatExitAlert(row, reason, pos, session, source));
             pos = null;
             newVerdict = row.verdict; // keep the side so we don't immediately re-enter it
             alerted++;
@@ -104,7 +122,7 @@ export default async (req) => {
           // Flat: fire on a fresh BUY/SELL entry, and open a position to track it.
           const { fire, kind } = alertTransition(prevVerdict, row.verdict);
           if (fire && (kind === "BUY" || kind === "SELL")) {
-            await sendTelegram(formatAlert(row, kind, session));
+            await sendTelegram(formatAlert(row, kind, session, source));
             pos = makeAlertPosition(row, sideForVerdict(kind), sessionDate);
             alerted++;
           }
@@ -118,13 +136,15 @@ export default async (req) => {
     }
 
     if (isOpenScan) {
-      // One consolidated Market Open message (uses prior-close verdicts for the
-      // "changes since prior close" section, so it's built BEFORE we overwrite
-      // the state below).
+      // One consolidated Market Open message — scoped to your MANUAL watchlist
+      // only, so it stays separate from the 9:45 Most-Active scan's own message.
+      // (Uses prior-close verdicts for the "changes since prior close" section,
+      // so it's built BEFORE we overwrite the state below.)
+      const manualRows = scoredRows.filter((r) => manualSet.has(r.sym));
       const res = await sendTelegram(
-        formatOpenSnapshot({ rows: scoredRows, prevMap, regime, label: etClockLabel(new Date()) })
+        formatOpenSnapshot({ rows: manualRows, prevMap, regime, label: etClockLabel(new Date()) })
       );
-      if (res?.ok) alerted = scoredRows.filter((r) => r.verdict === "BUY" || r.verdict === "SELL").length;
+      if (res?.ok) alerted = manualRows.filter((r) => r.verdict === "BUY" || r.verdict === "SELL").length;
       // Re-baseline dedup AND open a fresh alert-position for every active setup,
       // so intraday take-profit/stop/time exits alert from the open.
       for (const row of scoredRows) {
