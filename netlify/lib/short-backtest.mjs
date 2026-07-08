@@ -43,7 +43,8 @@ export const SBT_TIME_STOP_DAYS = 63;      // sessions — the outer 3-month swi
 export const SBT_ENTRY_MIN = 12;           // technical strong bar (12/18 = same 67% as 22/33 live)
 // Bump when the entry/exit calibration changes so already-seeded logs re-seed.
 // v1: long-only, entry techScore≥12 & uptrend, exit 4×ATR / 50-200 death-cross / 63d.
-export const SBT_SEED_VERSION = 1;
+// v2: Near-High factor re-tuned (top mark → 5-18% pullback zone, not pinned at high).
+export const SBT_SEED_VERSION = 2;
 
 const round2 = x => (x == null ? null : Math.round(x * 100) / 100);
 
@@ -79,11 +80,12 @@ export function computeShortSignal(hist, { spyStrength = null, sectorStrength = 
     if (ret >= 0.15) momPts = 3; else if (ret >= 0.05) momPts = 2; else if (ret >= 0) momPts = 1; else momPts = 0;
   }
 
-  // 3. Near 52w High
+  // 3. Near 52w High — re-tuned to reward the 5-18% "pullback to strength" zone
+  //    over being pinned at the high (see checkNearHigh in short-pipeline.mjs).
   const high = Math.max(...closes);
   const offHigh = (high - price) / high;
   let nearPts;
-  if (offHigh <= 0.05) nearPts = 3; else if (offHigh <= 0.15) nearPts = 2; else if (offHigh <= 0.30) nearPts = 1; else nearPts = 0;
+  if (offHigh > 0.05 && offHigh <= 0.18) nearPts = 3; else if (offHigh <= 0.05) nearPts = 2; else if (offHigh <= 0.30) nearPts = 1; else nearPts = 0;
 
   // 4. Liquidity (20-day avg $-volume) — also the eligibility gate
   const dv = hist.slice(0, 20).map(d => (d.close ?? d.price ?? 0) * (d.volume ?? 0)).filter(v => v > 0);

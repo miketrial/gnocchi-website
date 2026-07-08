@@ -328,12 +328,22 @@ function checkNearHigh(hist) {
   const high = Math.max(...closes);
   const now = closes[0];
   const pctOff = (high - now) / high;
+  // Re-tuned (2026-07): a 2-year FMP study (scripts/run-short-study.mjs +
+  // scratchpad/analyze-factors.mjs) found forward swing returns PEAK 5-18% off the
+  // 52w high — the constructive "pullback to strength" — and are weaker for names
+  // pinned right at the high, which are extended and mean-revert on a multi-week
+  // horizon (8-12%-off names averaged +2.95% fwd-21d vs +1.99% at the high). This
+  // reshaped the factor's information coefficient from -0.03 to +0.06. Right at the
+  // high is still constructive (2 pts) but the top mark now goes to the pullback
+  // zone rather than rewarding chasing an extended breakout.
   let points;
-  if (pctOff <= 0.05)       points = 3;
-  else if (pctOff <= 0.15)  points = 2;
-  else if (pctOff <= 0.30)  points = 1;
-  else                      points = 0;
-  const label = points === 3 ? "at/near 52w high" : points === 2 ? "near high" : points === 1 ? "recovering" : "far from high";
+  if (pctOff > 0.05 && pctOff <= 0.18) points = 3;   // near the high with room to run — the sweet spot
+  else if (pctOff <= 0.05)             points = 2;   // pinned at the 52w high — extended
+  else if (pctOff <= 0.30)             points = 1;
+  else                                 points = 0;
+  const label = points === 3 ? "constructive pullback below the 52w high"
+    : points === 2 ? "pinned at the 52w high (extended)"
+    : points === 1 ? "well off the high" : "far from high";
   return scored(points, `${(pctOff * 100).toFixed(1)}% off 52w high ($${high.toFixed(2)}) — ${label}`, { high, pctOff });
 }
 

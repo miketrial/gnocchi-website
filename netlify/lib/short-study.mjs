@@ -127,8 +127,10 @@ function fExtreme(h) {
   if (closes.length < 200) return null;
   const now = closes[0], high = Math.max(...closes), low = Math.min(...closes);
   const offHigh = (high - now) / high, offLow = (now - low) / low;
+  // Re-tuned: forward returns peak 5-18% off the high (constructive pullback),
+  // not pinned at it (extended). See scratchpad/analyze-factors.mjs.
   let buy;
-  if (offHigh <= 0.05) buy = 3; else if (offHigh <= 0.15) buy = 2; else if (offHigh <= 0.30) buy = 1; else buy = 0;
+  if (offHigh > 0.05 && offHigh <= 0.18) buy = 3; else if (offHigh <= 0.05) buy = 2; else if (offHigh <= 0.30) buy = 1; else buy = 0;
   let sell;
   if (offLow <= 0.05) sell = 3; else if (offLow <= 0.15) sell = 2; else if (offLow <= 0.30) sell = 1; else sell = 0;
   return { buy, sell, offHigh, offLow };
@@ -179,7 +181,9 @@ function fVolume(h) {
   const mildBuy = flow != null && flow >= 0.1;
   const mildSell = flow != null && flow <= -0.1;
 
-  // Long (accumulation) — mirrors checkVolumeSurge's buy ladder.
+  // Long (accumulation) — mirrors checkVolumeSurge's buy ladder. (A 2026-07 study
+  // A/B'd a reshape here and it measurably HURT — the original is already monotonic
+  // and predictive on the broad population; see analyze-factors.mjs. Left as-is.)
   let buy;
   if (rv >= 1.5 && isDown) buy = 0;
   else if (sustSell) buy = 0;
