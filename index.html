@@ -4526,12 +4526,18 @@ async function seedStBacktest(){
   if (!API_LIVE || stBtSeedInFlight) return;
   stBtSeedInFlight = true;
   const status = document.getElementById('stBtStatus');
-  let guard = 0;
+  let guard = 0, errStreak = 0;
   try {
-    while (guard++ < 60) {
+    while (guard++ < 90) {
       let res;
-      try { res = await api.send('/api/short/backtest-seed', 'POST', {}); }
-      catch(e){ break; }
+      // A single cold-start / transient timeout shouldn't abandon the whole
+      // backfill — retry a few times with a short backoff before giving up.
+      try { res = await api.send('/api/short/backtest-seed', 'POST', {}); errStreak = 0; }
+      catch(e){
+        if (++errStreak >= 3) break;
+        await new Promise(r => setTimeout(r, 1500));
+        continue;
+      }
       await loadStBacktest();
       const remaining = res && typeof res.remaining === 'number' ? res.remaining : 0;
       if (status) status.style.display = remaining > 0 ? 'block' : 'none';

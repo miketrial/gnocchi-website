@@ -18,7 +18,9 @@ import {
   annotateShortBenchmarks, SBT_SEED_VERSION, SBT_WINDOW_DAYS,
 } from "../lib/short-backtest.mjs";
 
-const BATCH = 3; // swing replays are heavier than Bounce's — keep the batch small
+const BATCH = 2; // swing replays are heavier than Bounce's (130-session vs 15) —
+                 // keep the batch small so a cold-start call stays well under the
+                 // function timeout; the client loops until nothing is left.
 
 /* Sector -> ETF map — identical to short-pipeline.mjs's sectorEtfFor(). */
 const INDUSTRY_ETF = { "Semiconductors": "SMH" };
