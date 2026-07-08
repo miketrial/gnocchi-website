@@ -15,10 +15,12 @@ export default async () => {
   const now = new Date();
   const { weekday, hour, minute } = etParts(now);
   const isWeekday = ["Mon", "Tue", "Wed", "Thu", "Fri"].includes(weekday);
-  // 09:45 ET, ±1 min for cron jitter. Exactly one of the two UTC fires lands
-  // here; the other resolves to 08:45 or 10:45 ET and is skipped. Skip market
-  // holidays entirely (no point scanning a closed market's stale bars).
-  const inWindow = isWeekday && hour === 9 && Math.abs(minute - 45) <= 1 && !isMarketHoliday(etDateStr(now));
+  // 09:45 ET, tolerant of Netlify cron jitter. Only ONE of the two UTC fires maps
+  // to ET hour 9 (the other is hour 8 or 10), so gating on hour===9 && minute>=44
+  // fires once even if delivery slips several minutes late — a tight ±1-min gate
+  // would drop the whole day's scan on jitter. A double-dispatch (e.g. :45 and
+  // :50 both matching) is harmless: the daily-scan lock rejects the second.
+  const inWindow = isWeekday && hour === 9 && minute >= 44 && !isMarketHoliday(etDateStr(now));
   if (!inWindow) return new Response("", { status: 204 });
 
   // Netlify sets URL (production) / DEPLOY_PRIME_URL (Deploy Previews) to the

@@ -389,7 +389,7 @@ export function formatPreCloseRoster(positions = [], label = "", timeStopDays = 
     const distR = (R && R > 0) ? ((long ? (p.price - p.stopPrice) : (p.stopPrice - p.price)) / R) : null;
     const stopBit = distR != null ? ` · ${distR.toFixed(1)}R to stop` : "";
     const bars = p.barsHeld != null ? ` · day ${(p.barsHeld ?? 0) + 1}/${timeStopDays}` : "";
-    const gap = p.overnightGap ? ` · ovn ±${p.overnightGap.avgAbsOvn}%` : "";
+    const gap = (p.overnightGap && p.overnightGap.avgAbsOvn != null) ? ` · ovn ±${p.overnightGap.avgAbsOvn}%` : "";
     L.push(`${long ? "🟢" : "🔴"} ${esc(p.sym)} ${(pl >= 0 ? "+" : "")}${pl.toFixed(2)}%${stopBit}${bars}${gap}`);
   }
   return L.join("\n");

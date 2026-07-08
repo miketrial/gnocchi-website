@@ -63,16 +63,18 @@ async function postChunk(token, payload) {
         continue;
       }
       if (r.status >= 500) { await delay(1500 * (attempt + 1)); continue; }
-      // Other 4xx (bad HTML, chat blocked, …) won't fix on retry — log and stop.
+      // Other 4xx (bad HTML, chat blocked/deactivated, …) will NEVER fix on
+      // retry → permanent. Callers must treat this as "give up + advance state"
+      // so a blocked bot / malformed message can't re-fire the same alert forever.
       const errBody = await r.text().catch(() => "");
       console.error(`[telegram] sendMessage → ${r.status}: ${errBody}`);
-      return { ok: false, status: r.status };
+      return { ok: false, status: r.status, permanent: true };
     } catch (e) {
       console.error("[telegram] send error:", e?.message || e);
       await delay(1000 * (attempt + 1));
     }
   }
-  return { ok: false, status: 0 };
+  return { ok: false, status: 0 }; // transient: retries exhausted → hold back & retry next tick
 }
 
 export async function sendTelegram(text, opts = {}) {
@@ -84,7 +86,7 @@ export async function sendTelegram(text, opts = {}) {
   }
 
   const parts = chunk(String(text ?? ""));
-  let allOk = true, firstMessageId = null;
+  let allOk = true, firstMessageId = null, sawTransient = false;
   for (let i = 0; i < parts.length; i++) {
     const payload = {
       chat_id: chatId,
@@ -96,7 +98,10 @@ export async function sendTelegram(text, opts = {}) {
     };
     const res = await postChunk(token, payload);
     if (res.ok) { _ok++; if (i === 0) firstMessageId = res.messageId; }
-    else { _fail++; allOk = false; }
+    else { _fail++; allOk = false; if (!res.permanent) sawTransient = true; }
   }
-  return { ok: allOk, messageId: firstMessageId };
+  // `permanent` = the send failed and NONE of the failures were transient (i.e.
+  // retrying is pointless — a blocked bot or malformed HTML). Callers advance
+  // their dedup on permanent failures but hold back on transient ones.
+  return { ok: allOk, messageId: firstMessageId, permanent: !allOk && !sawTransient };
 }

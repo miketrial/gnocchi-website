@@ -84,6 +84,12 @@ export async function releaseLock(name, jobId) {
   const cur = await lockStore().get(name, { type: "json" }).catch(() => null);
   if (!cur || cur.jobId === jobId) await lockStore().delete(name).catch(() => {});
 }
+// Non-blocking peek: is a fresh named lock currently held? Used by the alert loop
+// to avoid writing qs-daily rows while the daily scan is mid-replace.
+export async function isLockHeld(name) {
+  const cur = await lockStore().get(name, { type: "json" }).catch(() => null);
+  return !!(cur && cur.until > Date.now());
+}
 
 /* ---------- Anthropic spend circuit-breaker ----------
    Hard daily ceiling on Haiku web-search calls (the only paid Anthropic usage).

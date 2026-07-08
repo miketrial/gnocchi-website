@@ -69,7 +69,7 @@ async function fetchQualityLosers(key, qualitySet) {
    down names get a slot even if they're not top-by-volume. `day` = ET trading
    day; a cached list from another day is a miss so the universe rolls forward.
    On a screener failure we fall back to the last cached list over an empty scan. */
-export async function getBounceUniverse({ n = DEFAULT_UNIVERSE_N, forceRefresh = false, day = null } = {}) {
+export async function getBounceUniverse({ n = DEFAULT_UNIVERSE_N, forceRefresh = false, day = null, persist = true } = {}) {
   if (!forceRefresh) {
     const cached = await getQsUniverse(day).catch(() => null);
     if (cached && cached.symbols?.length) return { symbols: cached.symbols.slice(0, n), sectors: cached.sectors || {}, day: cached.day || day, stale: false };
@@ -123,9 +123,12 @@ export async function getBounceUniverse({ n = DEFAULT_UNIVERSE_N, forceRefresh =
     if (symbols.length >= n) break;
   }
 
-  // Only persist a FULL-size resolution. A small test/manual run (e.g. n=8) must
-  // never overwrite the day's real universe cache — otherwise a later full run
-  // would read back the truncated list and scan only those few names.
-  if (symbols.length && n >= DEFAULT_UNIVERSE_N) await putQsUniverse({ symbols, sectors }, day).catch(() => {});
+  // Persist for real runs so a same-day "Scan now" reuses one screener call and
+  // the screener-down fallback has yesterday's list to serve. Caller passes
+  // persist=false for a small explicit test; the n>=50 floor is a belt-and-braces
+  // guard so a tiny test (e.g. n=8) can never poison the day's real cache even if
+  // persist is mis-passed. (Previously gated on n>=250, which silently disabled
+  // the cache whenever QS_DAILY_UNIVERSE_N was lowered below 250.)
+  if (symbols.length && persist && n >= 50) await putQsUniverse({ symbols, sectors }, day).catch(() => {});
   return { symbols, sectors, day, stale: false };
 }

@@ -24,11 +24,11 @@ import {
   getQsAlertState, putQsAlertState,
   getQsOpenDigestDate, putQsOpenDigestDate,
   getQsPreCloseDate, putQsPreCloseDate, putQsStopMark,
-  getQsHeartbeat, putQsHeartbeat,
+  getQsHeartbeat, putQsHeartbeat, isLockHeld,
   acquireRescanLock, releaseRescanLock,
 } from "../lib/store.mjs";
 import { QS_TIME_STOP_DAYS } from "../lib/quickswing-backtest.mjs";
-import { barIsStale } from "../lib/market-calendar.mjs";
+import { barIsStale, previousTradingDay } from "../lib/market-calendar.mjs";
 import { sendTelegram } from "../lib/telegram.mjs";
 import {
   alertTransition, formatAlert, formatExitAlert,
@@ -39,11 +39,12 @@ import {
 } from "../lib/quickswing-alert.mjs";
 
 const sideForVerdict = (v) => (v === "BUY" ? "long" : v === "SELL" ? "short" : null);
-// A send counts as "delivered" for dedup purposes if it succeeded OR was a
-// deliberate no-op (Telegram not configured). Only a real DELIVERY FAILURE
-// (429/5xx exhausted, network error) holds the state back so it re-fires next
-// tick — otherwise a user without Telegram would freeze the whole state machine.
-const delivered = (res) => !!res && (res.ok || res.skipped);
+// A send counts as "delivered" for dedup purposes if it succeeded, was a
+// deliberate no-op (Telegram not configured), OR failed PERMANENTLY (blocked
+// bot / malformed message — retrying can never help). Only a TRANSIENT failure
+// (429/5xx exhausted, network error) holds the state back to re-fire next tick,
+// so neither a Telegram-less user nor a permanent 4xx can freeze the machine.
+const delivered = (res) => !!res && (res.ok || res.skipped || res.permanent);
 // A silent gap longer than this (~3 missed 5-min cycles) counts as an outage:
 // on recovery we send a catch-up roster.
 const OUTAGE_MS = 16 * 60 * 1000;
@@ -63,25 +64,26 @@ async function holdNudges(pos, row) {
   let sent = 0;
   const long = pos.side === "long";
 
+  // The dedup flags LATCH for the life of the position (never reset on a brief
+  // recovery), so a choppy name whose verdict/price oscillates across a threshold
+  // gets ONE cooling / one near-stop note, not a fresh one on every dip. A new
+  // position (after this one closes) starts with fresh flags. The loud STOP alert
+  // still fires if it actually stops.
+
   // B1 — verdict drained off the position's side before any hard exit.
   const supportsSide = long ? row.verdict === "BUY" : row.verdict === "SELL";
   if (!supportsSide && !pos.cooledNotified) {
     const res = await sendTelegram(formatCoolingNote(row, pos), { silent: true });
     if (delivered(res)) { pos = { ...pos, cooledNotified: true }; sent++; }
-  } else if (supportsSide && pos.cooledNotified) {
-    pos = { ...pos, cooledNotified: false }; // recovered — allow a future cool to re-notify
   }
 
   // B5 — price entered the ~0.3R danger band before the hard stop.
-  if (pos.stopPrice != null && pos.entryPrice != null && row.price != null) {
+  if (pos.stopPrice != null && pos.entryPrice != null && row.price != null && !pos.nearStopWarned) {
     const R = Math.abs(pos.entryPrice - pos.stopPrice);
     const dist = long ? (row.price - pos.stopPrice) : (pos.stopPrice - row.price);
-    const inBand = R > 0 && dist > 0 && dist <= NEAR_STOP_R * R;
-    if (inBand && !pos.nearStopWarned) {
+    if (R > 0 && dist > 0 && dist <= NEAR_STOP_R * R) {
       const res = await sendTelegram(formatApproachingStop(row, pos), { silent: true });
       if (delivered(res)) { pos = { ...pos, nearStopWarned: true }; sent++; }
-    } else if (!inBand && pos.nearStopWarned) {
-      pos = { ...pos, nearStopWarned: false };
     }
   }
 
@@ -139,21 +141,36 @@ export default async (req) => {
   const isOpenScan = session === "regular" && lastDigest !== today;
 
   // Silent-loop recovery (F3): a long gap since our last successful run → send a
-  // one-time catch-up roster after this scan.
+  // one-time catch-up roster after this scan. Threshold is session-aware: after
+  // hours the loop only runs every 15 min, so a 16-min bar would false-trigger.
+  const outageMs = session === "afterhours" ? 2 * OUTAGE_MS : OUTAGE_MS;
   const hb = await getQsHeartbeat().catch(() => null);
   const gapMs = hb?.ts ? (Date.now() - hb.ts) : 0;
-  const wasOutage = !!hb?.ts && gapMs > OUTAGE_MS;
+  const wasOutage = !!hb?.ts && gapMs > outageMs;
 
-  // Pre-close review (B4): once/day around 15:50 ET.
+  // Pre-close review (B4): once/day from ~15:48 ET onward. Widened past a single
+  // :50 tick so if that tick is lock-skipped the :55 tick still fires it (the
+  // once-per-day dedup keeps it to one send).
   const { hour: etHour, minute: etMin } = etParts(now);
   const preCloseDone = await getQsPreCloseDate().catch(() => null);
-  const isPreClose = session === "regular" && etHour === 15 && etMin >= 48 && etMin <= 54 && preCloseDone !== today;
+  const isPreClose = session === "regular" && etHour === 15 && etMin >= 48 && preCloseDone !== today;
+
+  // A position untracked longer than the time-stop window is a zombie (e.g. a
+  // daily pick that rotated off the list): its entry/bars are stale. This cutoff
+  // is the trading day past which a carried position is treated as expired.
+  let expiryCutoff = today;
+  for (let i = 0; i < QS_TIME_STOP_DAYS + 1; i++) expiryCutoff = previousTradingDay(expiryCutoff);
 
   let scored = 0, alerted = 0, staleSkipped = 0;
   const openPositions = [];   // positions open at the START of this tick (recovery + pre-close rosters)
   const priorStateBySym = {}; // for the open-scan carried-position fix (B3)
   const pendingEntries = [];  // deferred fresh entries for flood batching (A4)
+  const closedThisTick = new Set(); // exits processed this tick — excluded from the rosters
   try {
+    // Don't mirror rows into qs-daily while the morning daily scan is mid-replace
+    // (different lock) — otherwise an alert-tick write can resurrect a name the
+    // scan just dropped. The daily worker rewrites qs-daily itself during its run.
+    const dailyScanRunning = await isLockHeld("qs-daily-scan").catch(() => false);
     const regime = await getMarketRegime().catch(() => null);
     const [manual, daily] = await Promise.all([
       listQuickswingRows(),
@@ -175,7 +192,7 @@ export default async (req) => {
         // Write each fresh row back to the store(s) it belongs to (no leakage of
         // auto names into the manual watchlist; a name in both mirrors to daily).
         if (manualSet.has(sym)) await putQuickswingRow(sym, row).catch(() => {});
-        if (dailySet.has(sym)) await putQsDailyRow(sym, row).catch(() => {});
+        if (dailySet.has(sym) && !dailyScanRunning) await putQsDailyRow(sym, row).catch(() => {});
         scored++;
 
         const prevState = await getQsAlertState(sym).catch(() => null);
@@ -196,11 +213,19 @@ export default async (req) => {
         // don't inflate the time-stop counter.
         const sessionDate = row.dataAsOf || today;
         let pos = prevState?.pos ?? null;
+        let prevVerdictEff = prevVerdict;
+        // Expire a zombie: a position untracked past the time-stop window has a
+        // stale entry/bars — drop it and treat the name as flat so it evaluates
+        // fresh instead of resurrecting a days-old cost basis / firing a bogus exit.
+        if (pos && pos.lastSessionDate && pos.lastSessionDate < expiryCutoff) {
+          pos = null;
+          prevVerdictEff = null;
+        }
         if (pos && pos.lastSessionDate && sessionDate > pos.lastSessionDate) {
           pos = { ...pos, barsHeld: (pos.barsHeld || 0) + 1, lastSessionDate: sessionDate };
         }
 
-        let newVerdict = prevVerdict;
+        let newVerdict = prevVerdictEff;
         if (pos) {
           // Holding: STOP → TARGET → FLIP → TIME. Only advance state on a CONFIRMED send.
           const { reason } = positionExitDecision(pos, row, QS_TIME_STOP_DAYS);
@@ -213,6 +238,7 @@ export default async (req) => {
             if (delivered(res)) {
               if (reason === "STOP") await putQsStopMark(sym, today).catch(() => {}); // A6 — withhold from daily for a few sessions
               pos = null;
+              closedThisTick.add(sym); // exclude from the pre-close / outage rosters below
               newVerdict = row.verdict; // keep the side so we don't immediately re-enter it
               alerted++;
             }
@@ -224,7 +250,7 @@ export default async (req) => {
             alerted += nudged.sent;
           }
         } else {
-          const { fire, kind } = alertTransition(prevVerdict, row.verdict);
+          const { fire, kind } = alertTransition(prevVerdictEff, row.verdict);
           if (fire && (kind === "BUY" || kind === "SELL")) {
             if (barIsStale(row.dataAsOf, today)) {
               // FMP's daily bar is >=1 full session behind — the technicals are
@@ -261,15 +287,19 @@ export default async (req) => {
         { silent: true }
       );
       if (res?.ok) alerted = manualRows.filter((r) => r.verdict === "BUY" || r.verdict === "SELL").length;
-      // Re-baseline dedup + positions to the open. B3 fix: CARRY a same-side
-      // position's real entry/stop/bars across the day instead of resetting it to
-      // today's open (which zeroed barsHeld so the time-stop never tripped and
-      // reset the cost basis each morning).
+      // Re-baseline dedup + positions to the open. CARRY any still-open (non-
+      // expired) position across the day — preserving its real entry/stop/bars —
+      // regardless of today's verdict: a long that cooled to NEUTRAL is still held
+      // (dropping it orphaned the position); a flip to the opposite side is caught
+      // by the next tick's exit logic. Only open a fresh position when there was
+      // no live prior one. (Fixes the time-stop/cost-basis reset and the NEUTRAL-
+      // at-open orphan.)
       for (const row of scoredRows) {
         const side = sideForVerdict(row.verdict);
         const prior = priorStateBySym[row.sym]?.pos;
+        const priorLive = prior && prior.side && !(prior.lastSessionDate && prior.lastSessionDate < expiryCutoff);
         let pos;
-        if (side && prior && prior.side === side) {
+        if (priorLive) {
           const nd = row.dataAsOf || today;
           const advanced = prior.lastSessionDate && nd > prior.lastSessionDate;
           pos = { ...prior, barsHeld: (prior.barsHeld || 0) + (advanced ? 1 : 0), lastSessionDate: nd };
@@ -281,15 +311,20 @@ export default async (req) => {
       await putQsOpenDigestDate(today).catch(() => {});
     }
 
+    // Rosters review positions open at the START of this tick, minus any that
+    // exited during it (so we never tell you to "hold or flatten" a name the loop
+    // just closed).
+    const stillOpen = openPositions.filter((p) => !closedThisTick.has(p.sym));
+
     // Pre-close review (B4) — once/day, silent.
     if (isPreClose && !isOpenScan) {
-      const res = await sendTelegram(formatPreCloseRoster(openPositions, etClockLabel(now), QS_TIME_STOP_DAYS), { silent: true });
+      const res = await sendTelegram(formatPreCloseRoster(stillOpen, etClockLabel(now), QS_TIME_STOP_DAYS), { silent: true });
       if (delivered(res)) await putQsPreCloseDate(today).catch(() => {});
     }
 
     // Silent-loop recovery roster (F3) — once, after a real outage, silent.
     if (wasOutage && !isOpenScan) {
-      await sendTelegram(formatOutageRoster(openPositions, gapMs / 60000), { silent: true }).catch(() => {});
+      await sendTelegram(formatOutageRoster(stillOpen, gapMs / 60000), { silent: true }).catch(() => {});
     }
 
     // Heartbeat — stamp only on a successful finish (F1 watchdog reads it).

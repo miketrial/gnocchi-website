@@ -14,8 +14,10 @@ import { sendTelegram } from "../lib/telegram.mjs";
 
 export const config = { schedule: "*/5 * * * *" };
 
-// ~3 missed 5-min cycles without a successful worker run = the loop is dark.
-const STALE_MS = 16 * 60 * 1000;
+// A stale heartbeat = the worker isn't running. Session-aware: regular hours run
+// every 5 min (~3 missed = 16 min); after-hours only every 15 min, so allow more.
+const STALE_REGULAR_MS = 16 * 60 * 1000;
+const STALE_AH_MS = 32 * 60 * 1000;
 
 export default async () => {
   const { run, session } = decideWindow(new Date());
@@ -25,24 +27,32 @@ export default async () => {
 
   // Silent-loop watchdog — this cron fires reliably even when the fire-and-forget
   // worker is dead, so it is the only place that can notice the loop went dark.
-  // Alert ONCE per stuck heartbeat; also track today's worst gap for the close-of-
-  // day health footer. Runs BEFORE we (re)dispatch the worker below.
+  // We anchor a grace period on the FIRST in-window dispatch today: that avoids a
+  // false alarm on the day's first tick (which legitimately sees a prior-day
+  // heartbeat), AND — unlike a "same-day heartbeat" gate — still catches a worker
+  // that has been dead since before today once we've been dispatching for the
+  // stale window with no fresh heartbeat. Alerts ONCE per stuck heartbeat and
+  // tracks today's worst gap for the close-of-day health footer.
   try {
+    const nowMs = Date.now();
     const today = etDateStr(new Date());
+    const staleMs = session === "afterhours" ? STALE_AH_MS : STALE_REGULAR_MS;
     const hb = await getQsHeartbeat();
     const wd = await getQsWatchdog();
-    // Only flag a gap when the last heartbeat is from TODAY — the day's first tick
-    // legitimately has a stale (prior-day) heartbeat the worker is about to refresh.
-    const sameDayHb = hb?.ts && etDateStr(new Date(hb.ts)) === today;
-    const gapMs = sameDayHb ? (Date.now() - hb.ts) : 0;
-    const stale = sameDayHb && gapMs > STALE_MS;
+    const firstTickTs = (wd.day === today && wd.firstTickTs) ? wd.firstTickTs : nowMs;
+    const hbAge = hb?.ts ? (nowMs - hb.ts) : Infinity;
+    const dispatchAge = nowMs - firstTickTs;
+    const stale = hbAge > staleMs && dispatchAge > staleMs;
+    const hbKey = hb?.ts || 0; // dedup: one alert per stuck heartbeat value
     const priorWorst = wd.day === today ? (wd.worstGapMs || 0) : 0;
-    const worstGapMs = Math.max(priorWorst, gapMs);
-    if (stale && wd.staleAlertedForTs !== hb.ts) {
-      await sendTelegram(`⚠️ <b>Bounce scan silent</b> — no successful run since ${etClockLabel(new Date(hb.ts))} (~${Math.round(gapMs / 60000)} min). The 5-min alert loop may be down.`);
-      await putQsWatchdog({ day: today, staleAlertedForTs: hb.ts, worstGapMs });
+    const worstGapMs = Math.max(priorWorst, Math.min(hbAge, dispatchAge));
+    if (stale && wd.staleAlertedForTs !== hbKey) {
+      const since = hb?.ts ? etClockLabel(new Date(hb.ts)) : "before today";
+      const mins = Math.round((hb?.ts ? hbAge : dispatchAge) / 60000);
+      await sendTelegram(`⚠️ <b>Bounce scan silent</b> — no successful run since ${since} (~${mins} min). The 5-min alert loop may be down.`);
+      await putQsWatchdog({ day: today, firstTickTs, staleAlertedForTs: hbKey, worstGapMs });
     } else {
-      await putQsWatchdog({ day: today, staleAlertedForTs: stale ? wd.staleAlertedForTs : null, worstGapMs });
+      await putQsWatchdog({ day: today, firstTickTs, staleAlertedForTs: stale ? wd.staleAlertedForTs : null, worstGapMs });
     }
   } catch (e) {
     console.error("[qs-alert-cron] watchdog:", e?.message || e);

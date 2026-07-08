@@ -75,8 +75,10 @@ export default async (req) => {
   const force = !!body.force;
   const topN = Number(body.n) > 0 ? Number(body.n) : TOP_N;
   // Universe size — defaults to UNIVERSE_N (250). A small value (e.g. {universe:8})
-  // lets a manual/test run exercise the whole path without the full fan-out.
+  // lets a manual/test run exercise the whole path without the full fan-out; such
+  // a test must NOT persist its truncated list as the day's real universe cache.
   const universeN = Number(body.universe) > 0 ? Number(body.universe) : UNIVERSE_N;
+  const isSmallTest = Number(body.universe) > 0 && Number(body.universe) < UNIVERSE_N;
 
   const jobId = `qs-daily-${Date.now()}`;
   const gotLock = await acquireLock("qs-daily-scan", jobId, LOCK_MS);
@@ -90,7 +92,7 @@ export default async (req) => {
   try {
     const day = etDateStr(new Date());
     const [uni, regime, manualRows, stopMarks] = await Promise.all([
-      getBounceUniverse({ n: universeN, day, forceRefresh: force }).catch(() => ({ symbols: [], sectors: {} })),
+      getBounceUniverse({ n: universeN, day, forceRefresh: force, persist: !isSmallTest }).catch(() => ({ symbols: [], sectors: {} })),
       getMarketRegime().catch(() => null),
       listQuickswingRows().catch(() => []),
       listQsStopMarks().catch(() => ({})),
@@ -151,9 +153,12 @@ export default async (req) => {
 
     await replaceQsDaily(top).catch((e) => console.error("[qs-daily] replaceQsDaily failed:", e?.message || e));
 
-    // Health snapshot for the close-of-day summary footer: how many names came
-    // back with no usable data, and whether the scan looks FMP-degraded.
-    const na = scored.filter(r => r.price == null || !r.verdict).length;
+    // Health snapshot for the close-of-day summary footer: how many of the
+    // UNIVERSE came back with no usable data. Count vs. the universe (not vs.
+    // `scored`) so names whose scoring THREW — dropped to null and excluded from
+    // `scored` — are counted as na; otherwise a mass FMP outage would look "OK".
+    const usable = scored.filter(r => r.price != null && r.verdict).length;
+    const na = Math.max(0, universe.length - usable);
     const degraded = uni.stale || (universe.length > 0 && na / universe.length > 0.5);
     await putQsLastScan({ day, scanned: scored.length, universe: universe.length, na, degraded }).catch(() => {});
 
