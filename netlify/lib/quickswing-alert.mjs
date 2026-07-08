@@ -202,6 +202,31 @@ export function etClockLabel(now = new Date()) {
   return `${h12}:${String(minute).padStart(2, "0")} ${ampm} ET`;
 }
 
+/* ---------- Silent-loop watchdog decision (Section F, pure) ----------
+   Extracted so the alert cron and the tests exercise the SAME logic. Decides,
+   from the last heartbeat + prior watchdog state, whether the alert loop has
+   gone dark. A first-dispatch grace period (firstTickTs) prevents a false alarm
+   on the day's first tick AND still catches a worker dead since before today
+   once we've been dispatching for the stale window with no fresh heartbeat.
+   `staleMs` is session-aware (after-hours runs every 15 min, not 5).
+   Returns { shouldAlert, stale, hbAge, dispatchAge, nextState }. */
+export function evaluateWatchdog({ hbTs, wd = {}, nowMs, session, staleRegularMs, staleAhMs, today }) {
+  const staleMs = session === "afterhours" ? staleAhMs : staleRegularMs;
+  const firstTickTs = (wd.day === today && wd.firstTickTs) ? wd.firstTickTs : nowMs;
+  const hbAge = hbTs ? (nowMs - hbTs) : Infinity;
+  const dispatchAge = nowMs - firstTickTs;
+  const stale = hbAge > staleMs && dispatchAge > staleMs;
+  const hbKey = hbTs || 0; // dedup: one alert per stuck heartbeat value
+  const priorWorst = wd.day === today ? (wd.worstGapMs || 0) : 0;
+  const worstGapMs = Math.max(priorWorst, Math.min(hbAge, dispatchAge));
+  const shouldAlert = stale && wd.staleAlertedForTs !== hbKey;
+  const nextState = {
+    day: today, firstTickTs, worstGapMs,
+    staleAlertedForTs: shouldAlert ? hbKey : (stale ? wd.staleAlertedForTs : null),
+  };
+  return { shouldAlert, stale, hbAge, dispatchAge, worstGapMs, nextState };
+}
+
 function sideOf(v) { return v === "BUY" ? "BUY" : v === "SELL" ? "SELL" : "FLAT"; }
 function scoreNum(s) { const n = parseInt(String(s ?? "").split("/")[0], 10); return isFinite(n) ? n : 0; }
 

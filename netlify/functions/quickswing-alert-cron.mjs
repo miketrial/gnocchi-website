@@ -8,7 +8,7 @@
    netlify/lib/quickswing-alert.mjs (pure + unit-tested). Off-window fires
    return immediately having spent zero FMP calls.
    Removable with the rest of the QUICK SWING FEATURE block. */
-import { decideWindow, etDateStr, etClockLabel } from "../lib/quickswing-alert.mjs";
+import { decideWindow, etDateStr, etClockLabel, evaluateWatchdog } from "../lib/quickswing-alert.mjs";
 import { getQsHeartbeat, getQsWatchdog, putQsWatchdog } from "../lib/store.mjs";
 import { sendTelegram } from "../lib/telegram.mjs";
 
@@ -36,24 +36,18 @@ export default async () => {
   try {
     const nowMs = Date.now();
     const today = etDateStr(new Date());
-    const staleMs = session === "afterhours" ? STALE_AH_MS : STALE_REGULAR_MS;
     const hb = await getQsHeartbeat();
     const wd = await getQsWatchdog();
-    const firstTickTs = (wd.day === today && wd.firstTickTs) ? wd.firstTickTs : nowMs;
-    const hbAge = hb?.ts ? (nowMs - hb.ts) : Infinity;
-    const dispatchAge = nowMs - firstTickTs;
-    const stale = hbAge > staleMs && dispatchAge > staleMs;
-    const hbKey = hb?.ts || 0; // dedup: one alert per stuck heartbeat value
-    const priorWorst = wd.day === today ? (wd.worstGapMs || 0) : 0;
-    const worstGapMs = Math.max(priorWorst, Math.min(hbAge, dispatchAge));
-    if (stale && wd.staleAlertedForTs !== hbKey) {
+    const { shouldAlert, hbAge, dispatchAge, nextState } = evaluateWatchdog({
+      hbTs: hb?.ts, wd, nowMs, session, today,
+      staleRegularMs: STALE_REGULAR_MS, staleAhMs: STALE_AH_MS,
+    });
+    if (shouldAlert) {
       const since = hb?.ts ? etClockLabel(new Date(hb.ts)) : "before today";
       const mins = Math.round((hb?.ts ? hbAge : dispatchAge) / 60000);
       await sendTelegram(`⚠️ <b>Bounce scan silent</b> — no successful run since ${since} (~${mins} min). The 5-min alert loop may be down.`);
-      await putQsWatchdog({ day: today, firstTickTs, staleAlertedForTs: hbKey, worstGapMs });
-    } else {
-      await putQsWatchdog({ day: today, firstTickTs, staleAlertedForTs: stale ? wd.staleAlertedForTs : null, worstGapMs });
     }
+    await putQsWatchdog(nextState);
   } catch (e) {
     console.error("[qs-alert-cron] watchdog:", e?.message || e);
   }
