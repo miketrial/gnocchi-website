@@ -259,6 +259,17 @@ export default async (req) => {
               staleSkipped++;
               continue;
             }
+            // Echo suppression: a daily-listed name showing up for the FIRST time
+            // (no prior alert state → prevVerdictEff null) was just announced in the
+            // 9:45 Top-15 message. Don't re-announce it in the entry digest — open
+            // its paper position SILENTLY so exit management (stop/target/time) still
+            // runs. A later genuine intraday flip (prevVerdictEff = e.g. NEUTRAL) is
+            // NOT null, so it still alerts normally.
+            if (source === "daily" && prevVerdictEff === null) {
+              const seedPos = makeAlertPosition(row, sideForVerdict(kind), sessionDate);
+              await putQsAlertState(sym, row.verdict, seedPos).catch(() => {});
+              continue;
+            }
             // Defer to the post-loop batch decision (A4). State/position advance
             // there, after the send confirms — so leave this sym's state untouched.
             pendingEntries.push({ sym, row, kind, source, sessionDate });
