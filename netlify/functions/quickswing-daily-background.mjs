@@ -31,7 +31,7 @@
    Removable with the QUICK SWING FEATURE block. */
 import { scoreTickerQuickSwing, getMarketRegime } from "../lib/quickswing-pipeline.mjs";
 import { getBounceUniverse } from "../lib/qs-universe.mjs";
-import { replaceQsDaily, acquireLock, releaseLock, listQuickswingRows } from "../lib/store.mjs";
+import { replaceQsDaily, acquireLock, releaseLock, listQuickswingRows, putQsLastScan } from "../lib/store.mjs";
 import { fmpCallCount } from "../lib/fmp-client.mjs";
 import { sendTelegram } from "../lib/telegram.mjs";
 import { formatDailyTop } from "../lib/quickswing-summary.mjs";
@@ -143,9 +143,16 @@ export default async (req) => {
 
     await replaceQsDaily(top).catch((e) => console.error("[qs-daily] replaceQsDaily failed:", e?.message || e));
 
+    // Health snapshot for the close-of-day summary footer: how many names came
+    // back with no usable data, and whether the scan looks FMP-degraded.
+    const na = scored.filter(r => r.price == null || !r.verdict).length;
+    const degraded = uni.stale || (universe.length > 0 && na / universe.length > 0.5);
+    await putQsLastScan({ day, scanned: scored.length, universe: universe.length, na, degraded }).catch(() => {});
+
     try {
       await sendTelegram(formatDailyTop({
         rows: top, regime, label: etClockLabel(new Date()), scanned: scored.length,
+        stale: !!uni.stale, asOfDay: uni.day,
       }));
     } catch (e) { console.error("[qs-daily] telegram failed:", e?.message || e); }
 

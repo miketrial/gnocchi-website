@@ -12,9 +12,10 @@
    Removable with the rest of the QUICK SWING FEATURE block. */
 import { getMarketRegime } from "../lib/quickswing-pipeline.mjs";
 import { safe } from "../lib/fmp-client.mjs";
-import { listQuickswingRows, getQsSummarySnapshot, putQsSummarySnapshot } from "../lib/store.mjs";
+import { listQuickswingRows, getQsSummarySnapshot, putQsSummarySnapshot,
+         getQsLastScan, getQsWatchdog } from "../lib/store.mjs";
 import { sendTelegram } from "../lib/telegram.mjs";
-import { buildSnapshot, diffSnapshots, formatSummary, summaryLabel } from "../lib/quickswing-summary.mjs";
+import { buildSnapshot, diffSnapshots, formatSummary, summaryLabel, summaryWindow } from "../lib/quickswing-summary.mjs";
 
 export default async (req) => {
   const { label = "" } = await req.json().catch(() => ({}));
@@ -33,8 +34,24 @@ export default async (req) => {
     // prior-day snapshot must never be treated as "one hour ago".
     const prev = prevRaw && prevRaw.day === cur.day ? prevRaw : null;
 
+    // Close-of-day only: append the "system OK / FMP degraded" health footer,
+    // built from the morning scan's outcome + the watchdog's worst gap today.
+    let health = null;
+    if (summaryWindow(new Date()).isClose) {
+      const [lastScan, wd] = await Promise.all([
+        getQsLastScan().catch(() => null),
+        getQsWatchdog().catch(() => null),
+      ]);
+      if (lastScan && lastScan.day === cur.day) {
+        health = {
+          scanned: lastScan.scanned, na: lastScan.na, degraded: !!lastScan.degraded,
+          worstGapMin: wd?.worstGapMs != null ? Math.round(wd.worstGapMs / 60000) : null,
+        };
+      }
+    }
+
     const diff = diffSnapshots(prev, cur);
-    const res = await sendTelegram(formatSummary(diff, cur, label || summaryLabel(cur.etHour)));
+    const res = await sendTelegram(formatSummary(diff, cur, label || summaryLabel(cur.etHour), health));
     await putQsSummarySnapshot(cur).catch(() => {});
 
     console.log(`[qs-summary] label=${label || summaryLabel(cur.etHour)} tickers=${Object.keys(cur.rows).length} `

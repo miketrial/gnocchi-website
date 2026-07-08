@@ -72,7 +72,7 @@ async function fetchQualityLosers(key, qualitySet) {
 export async function getBounceUniverse({ n = DEFAULT_UNIVERSE_N, forceRefresh = false, day = null } = {}) {
   if (!forceRefresh) {
     const cached = await getQsUniverse(day).catch(() => null);
-    if (cached && cached.symbols?.length) return { symbols: cached.symbols.slice(0, n), sectors: cached.sectors || {} };
+    if (cached && cached.symbols?.length) return { symbols: cached.symbols.slice(0, n), sectors: cached.sectors || {}, day: cached.day || day, stale: false };
   }
 
   const key = process.env.FMP_API_KEY;
@@ -88,8 +88,15 @@ export async function getBounceUniverse({ n = DEFAULT_UNIVERSE_N, forceRefresh =
 
   if (!Array.isArray(rows) || !rows.length) {
     // Screener down — reuse whatever we last resolved (any day) over an empty scan.
-    const stale = await getQsUniverse().catch(() => null);
-    return { symbols: (stale?.symbols || []).slice(0, n), sectors: stale?.sectors || {} };
+    // Flag it stale (unless the fallback happens to be today's) so the daily
+    // message can warn the list may be missing today's movers.
+    const fallback = await getQsUniverse().catch(() => null);
+    return {
+      symbols: (fallback?.symbols || []).slice(0, n),
+      sectors: fallback?.sectors || {},
+      day: fallback?.day || null,
+      stale: !!(fallback?.symbols?.length) && fallback?.day !== day,
+    };
   }
 
   const quality = rows
@@ -120,5 +127,5 @@ export async function getBounceUniverse({ n = DEFAULT_UNIVERSE_N, forceRefresh =
   // never overwrite the day's real universe cache — otherwise a later full run
   // would read back the truncated list and scan only those few names.
   if (symbols.length && n >= DEFAULT_UNIVERSE_N) await putQsUniverse({ symbols, sectors }, day).catch(() => {});
-  return { symbols, sectors };
+  return { symbols, sectors, day, stale: false };
 }

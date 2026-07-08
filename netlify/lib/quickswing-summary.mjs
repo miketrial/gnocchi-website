@@ -14,6 +14,7 @@
    (quickswing-summary-cron.mjs) wire these to real I/O.
    Removable with the rest of the QUICK SWING FEATURE block. */
 import { etParts } from "./quickswing-alert.mjs";
+import { isMarketHoliday, isHalfDay } from "./market-calendar.mjs";
 
 /* ---------- Window gating (America/New_York, DST-safe) ----------
    Fires at the top of each ET hour from 10:00 to 16:00 inclusive:
@@ -24,7 +25,13 @@ export function summaryWindow(now = new Date()) {
   const { weekday, hour } = etParts(now);
   const isWeekday = ["Mon", "Tue", "Wed", "Thu", "Fri"].includes(weekday);
   if (!isWeekday) return { run: false };
-  if (hour >= 10 && hour <= 16) return { run: true, etHour: hour, label: summaryLabel(hour) };
+  const dateStr = etDate(now);
+  if (isMarketHoliday(dateStr)) return { run: false };
+  // Half-days close at 13:00 ET — end the summary series there.
+  const lastHour = isHalfDay(dateStr) ? 13 : 16;
+  if (hour >= 10 && hour <= lastHour) {
+    return { run: true, etHour: hour, label: summaryLabel(hour), isClose: hour === lastHour };
+  }
   return { run: false };
 }
 
@@ -127,7 +134,10 @@ function verdictEmoji(v) {
   return v === "BUY" ? "🟢" : v === "SELL" ? "🔴" : v === "BLOCKED" ? "⛔️" : v === "NEUTRAL" ? "⚪️" : "▫️";
 }
 
-export function formatSummary(diff, cur, label) {
+// `health` (optional) appends a close-of-day system line: normally a "✅ Bounce
+// OK" heartbeat, or a "⚠️ FMP degraded" flag when the day's scan mostly returned
+// no data. Only the summary worker's close-of-day run passes it.
+export function formatSummary(diff, cur, label, health = null) {
   const m = diff.market;
   const L = [`📊 <b>Hourly Summary — ${esc(label)}</b>`];
 
@@ -168,6 +178,16 @@ export function formatSummary(diff, cur, label) {
     }
   }
 
+  if (health) {
+    L.push("");
+    const gap = health.worstGapMin != null ? ` · longest silent-gap ${health.worstGapMin}m` : "";
+    if (health.degraded) {
+      L.push(`⚠️ <b>FMP degraded</b> — morning scan ${health.scanned ?? "?"} names, ${health.na ?? "?"} returned no data${gap}`);
+    } else {
+      L.push(`✅ <b>Bounce OK</b> — morning scan ${health.scanned ?? 0} names${health.na ? ` (${health.na} na)` : ""}${gap}`);
+    }
+  }
+
   return L.join("\n");
 }
 
@@ -177,9 +197,10 @@ export function formatSummary(diff, cur, label) {
    grammar (emoji + HTML) so it reads consistently with the rest of the Bounce
    texts, but its own header and content: the day's best buy-scored names out of
    the most-active quality-filtered universe. `rows` MUST already be ranked best-first. */
-export function formatDailyTop({ rows = [], regime = null, label = "", scanned = 0 } = {}) {
+export function formatDailyTop({ rows = [], regime = null, label = "", scanned = 0, stale = false, asOfDay = null } = {}) {
   const L = [`🎯 <b>Top ${rows.length} Bounce Picks — Most Active</b>`];
   if (label) L.push(`<i>${esc(label)}</i>`);
+  if (stale) L.push(`⚠️ <i>Universe stale${asOfDay ? ` (from ${esc(asOfDay)})` : ""} — screener may be down; today's movers may be missing.</i>`);
 
   const mBits = [];
   if (typeof regime?.price === "number") mBits.push(`SPY $${regime.price.toFixed(2)}`);

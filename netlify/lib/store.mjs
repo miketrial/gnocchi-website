@@ -443,13 +443,46 @@ export async function getQsUniverse(day = null) {
   const entry = await qsUniverseStore().get("latest", { type: "json" }).catch(() => null);
   if (!entry || !entry.ts || Date.now() - entry.ts > QS_UNIVERSE_TTL_MS) return null;
   if (day && entry.day && entry.day !== day) return null;
-  return Array.isArray(entry.symbols) ? { symbols: entry.symbols, sectors: entry.sectors || {} } : null;
+  return Array.isArray(entry.symbols) ? { symbols: entry.symbols, sectors: entry.sectors || {}, day: entry.day || null } : null;
 }
 // Accepts either a bare symbol array (back-compat) or { symbols, sectors }.
 export async function putQsUniverse(data, day = null) {
   const symbols = Array.isArray(data) ? data : (data?.symbols || []);
   const sectors = Array.isArray(data) ? {} : (data?.sectors || {});
   await qsUniverseStore().setJSON("latest", { ts: Date.now(), day, symbols, sectors });
+}
+
+/* ---------- Quick Swing: health & trust (Section F) ----------
+   One small blob namespace for the alert-loop heartbeat, the watchdog dedup/
+   recovery state, and the daily "system OK / degraded" counters. Single-writer
+   keys to avoid read-modify-write races: `heartbeat` (alert worker), `watchdog`
+   (alert cron), `lastScan` (daily worker). Removable with the QUICK SWING block. */
+const qsHealthStore = () => getStore("qs-health");
+
+// Heartbeat — stamped by the alert worker on every successful finish. The cron
+// reads it to tell whether the fire-and-forget worker is actually running.
+export async function getQsHeartbeat() {
+  return qsHealthStore().get("heartbeat", { type: "json" }).catch(() => null);
+}
+export async function putQsHeartbeat(data = {}) {
+  await qsHealthStore().setJSON("heartbeat", { ts: Date.now(), ...data }).catch(() => {});
+}
+
+// Watchdog state — the cron's once-per-outage dedup + worst-gap-today record.
+export async function getQsWatchdog() {
+  return (await qsHealthStore().get("watchdog", { type: "json" }).catch(() => null)) || {};
+}
+export async function putQsWatchdog(state) {
+  await qsHealthStore().setJSON("watchdog", state || {}).catch(() => {});
+}
+
+// Last daily-scan health snapshot — written once per scan by the daily worker,
+// read by the close-of-day summary footer.
+export async function getQsLastScan() {
+  return qsHealthStore().get("lastScan", { type: "json" }).catch(() => null);
+}
+export async function putQsLastScan(data) {
+  await qsHealthStore().setJSON("lastScan", { ts: Date.now(), ...data }).catch(() => {});
 }
 
 /* ---------- Shared SPY history cache ----------

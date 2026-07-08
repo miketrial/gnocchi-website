@@ -23,17 +23,22 @@ import {
   listQuickswingRows, listQsDaily, putQuickswingRow, putQsDailyRow,
   getQsAlertState, putQsAlertState,
   getQsOpenDigestDate, putQsOpenDigestDate,
+  getQsHeartbeat, putQsHeartbeat,
   acquireRescanLock, releaseRescanLock,
 } from "../lib/store.mjs";
 import { QS_TIME_STOP_DAYS } from "../lib/quickswing-backtest.mjs";
+import { barIsStale } from "../lib/market-calendar.mjs";
 import { sendTelegram } from "../lib/telegram.mjs";
 import {
   alertTransition, formatAlert, formatExitAlert,
   makeAlertPosition, positionExitDecision,
-  etDateStr, etClockLabel, formatOpenSnapshot,
+  etDateStr, etClockLabel, formatOpenSnapshot, formatOutageRoster,
 } from "../lib/quickswing-alert.mjs";
 
 const sideForVerdict = (v) => (v === "BUY" ? "long" : v === "SELL" ? "short" : null);
+// A silent gap longer than this (~3 missed 5-min cycles) counts as an outage:
+// on recovery we send a catch-up roster. Also the staleness bar the cron uses.
+const OUTAGE_MS = 16 * 60 * 1000;
 
 export default async (req) => {
   const { session = "regular" } = await req.json().catch(() => ({}));
@@ -56,7 +61,15 @@ export default async (req) => {
   const lastDigest = await getQsOpenDigestDate().catch(() => null);
   const isOpenScan = session === "regular" && lastDigest !== today;
 
-  let scored = 0, alerted = 0;
+  // Silent-loop recovery: if our last successful run was long enough ago that the
+  // loop effectively went dark, we'll send a one-time catch-up roster after this
+  // scan (unless it's the open scan, which already sends the full snapshot).
+  const hb = await getQsHeartbeat().catch(() => null);
+  const gapMs = hb?.ts ? (Date.now() - hb.ts) : 0;
+  const wasOutage = !!hb?.ts && gapMs > OUTAGE_MS;
+
+  let scored = 0, alerted = 0, staleSkipped = 0;
+  const openPositions = []; // positions open at the START of this tick (for the recovery roster)
   try {
     const regime = await getMarketRegime().catch(() => null);
     // Scan the UNION of your manual watchlist (qs-rows) + the day's auto Top-N
@@ -92,6 +105,15 @@ export default async (req) => {
         const prevVerdict = prevState?.verdict ?? null;
         prevMap[sym] = prevVerdict;
         scoredRows.push(row);
+        // Snapshot positions open at the start of this tick — the recovery roster
+        // (below) reviews these with live prices after a silent gap.
+        if (prevState?.pos) {
+          openPositions.push({
+            sym, side: prevState.pos.side,
+            entryPrice: prevState.pos.entryPrice, stopPrice: prevState.pos.stopPrice,
+            price: row.price,
+          });
+        }
         if (isOpenScan) continue; // the open snapshot (after the loop) handles alerts + positions
 
         // The session (bar) date this scan represents — advances once per trading
@@ -122,6 +144,15 @@ export default async (req) => {
           // Flat: fire on a fresh BUY/SELL entry, and open a position to track it.
           const { fire, kind } = alertTransition(prevVerdict, row.verdict);
           if (fire && (kind === "BUY" || kind === "SELL")) {
+            if (barIsStale(row.dataAsOf, today)) {
+              // FMP's daily bar is >=1 full session behind — the technicals are
+              // frozen. Suppress the ENTRY and DON'T advance the dedup verdict, so
+              // it fires for real once the feed catches up. (Exits are left alone —
+              // better to act on a maybe-stale stop than to miss it.)
+              staleSkipped++;
+              await putQsAlertState(sym, prevVerdict, pos).catch(() => {});
+              continue;
+            }
             await sendTelegram(formatAlert(row, kind, session, source));
             pos = makeAlertPosition(row, sideForVerdict(kind), sessionDate);
             alerted++;
@@ -156,10 +187,21 @@ export default async (req) => {
       // silently skipping the day's open snapshot.
       await putQsOpenDigestDate(today).catch(() => {});
     }
+
+    // Silent-loop recovery roster — once, after a real outage, on a normal tick
+    // (the open scan already sends the full snapshot, so skip it there).
+    if (wasOutage && !isOpenScan) {
+      await sendTelegram(formatOutageRoster(openPositions, gapMs / 60000)).catch(() => {});
+    }
+
+    // Heartbeat — stamp only on a successful finish so the cron watchdog can tell
+    // whether this fire-and-forget worker is actually running.
+    await putQsHeartbeat({ session, scored }).catch(() => {});
   } finally {
     await releaseRescanLock(jobId);
   }
 
-  console.log(`[qs-alert] session=${session} openScan=${isOpenScan} scored=${scored} alerted=${alerted}`);
+  console.log(`[qs-alert] session=${session} openScan=${isOpenScan} scored=${scored} `
+    + `alerted=${alerted} staleSkipped=${staleSkipped} outageRecover=${wasOutage && !isOpenScan}`);
   return new Response("", { status: 202 });
 };

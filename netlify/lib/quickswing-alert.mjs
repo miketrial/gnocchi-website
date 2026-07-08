@@ -20,8 +20,11 @@
      Otherwise (premarket, overnight, weekend) → don't run, spend zero FMP.
    Premarket is intentionally excluded: the FMP plan has no premarket endpoint,
    so there is nothing to score before 09:30 ET. */
+import { isMarketHoliday, isHalfDay } from "./market-calendar.mjs";
+
 const REGULAR_OPEN_MIN = 9 * 60 + 30;   // 09:30
 const REGULAR_CLOSE_MIN = 16 * 60;      // 16:00
+const HALF_DAY_CLOSE_MIN = 13 * 60;     // 13:00
 const AH_CLOSE_MIN = 20 * 60;           // 20:00
 
 export function etParts(now = new Date()) {
@@ -44,10 +47,17 @@ export function decideWindow(now = new Date()) {
   const isWeekday = ["Mon", "Tue", "Wed", "Thu", "Fri"].includes(weekday);
   if (!isWeekday) return { run: false, session: null };
 
-  if (minutesOfDay >= REGULAR_OPEN_MIN && minutesOfDay < REGULAR_CLOSE_MIN) {
+  // Market-calendar gate: no session on a full holiday; regular session ends
+  // early (13:00) on a half-day, and we skip the thin after-hours window then.
+  const dateStr = etDateStr(now);
+  if (isMarketHoliday(dateStr)) return { run: false, session: null };
+  const halfDay = isHalfDay(dateStr);
+  const regClose = halfDay ? HALF_DAY_CLOSE_MIN : REGULAR_CLOSE_MIN;
+
+  if (minutesOfDay >= REGULAR_OPEN_MIN && minutesOfDay < regClose) {
     return { run: true, session: "regular" };
   }
-  if (minutesOfDay >= REGULAR_CLOSE_MIN && minutesOfDay <= AH_CLOSE_MIN) {
+  if (!halfDay && minutesOfDay >= REGULAR_CLOSE_MIN && minutesOfDay <= AH_CLOSE_MIN) {
     // After-hours: throttle the 5-min cron down to every 15 minutes.
     const onQuarterHour = (minutesOfDay % 15) === 0;
     return onQuarterHour ? { run: true, session: "afterhours" } : { run: false, session: null };
@@ -280,6 +290,31 @@ export function formatOpenSnapshot({ rows = [], prevMap = {}, regime = null, lab
   if (!buys.length && !sells.length) {
     L.push("");
     L.push("<i>No active BUY or SELL setups at the open.</i>");
+  }
+  return L.join("\n");
+}
+
+/* ---------- Outage catch-up roster (Section F — health & trust) ----------
+   The alert loop is fire-and-forget; if it goes silent (cold start, wedged lock,
+   bad deploy) the trader gets zero alerts AND zero warning. When it recovers,
+   this one message re-orients him: every open position with live P&L and its
+   stop, so a target/stop that blew through during the blackout gets a look.
+   `positions` = [{ sym, side:'long'|'short', entryPrice, stopPrice, price }].
+   Pure formatting — the worker wires the blob reads. */
+export function formatOutageRoster(positions = [], gapMin = 0) {
+  const L = [`⚠️ <b>Bounce scan back online</b> — was silent ~${Math.round(gapMin)} min`];
+  const open = positions.filter(p => p && p.side && p.price != null && p.entryPrice != null);
+  if (!open.length) {
+    L.push("No open positions to review.");
+    return L.join("\n");
+  }
+  L.push("");
+  L.push("<b>Open positions — verify (a stop/target may have hit during the gap):</b>");
+  for (const p of open) {
+    const long = p.side === "long";
+    const pl = ((p.price - p.entryPrice) / p.entryPrice) * 100 * (long ? 1 : -1);
+    const stopBit = p.stopPrice != null ? ` · stop ${fmtPrice(p.stopPrice)}` : "";
+    L.push(`${long ? "🟢" : "🔴"} ${esc(p.sym)} ${long ? "long" : "short"} ${fmtPrice(p.entryPrice)}→${fmtPrice(p.price)} (${pl >= 0 ? "+" : ""}${pl.toFixed(2)}%)${stopBit}`);
   }
   return L.join("\n");
 }
