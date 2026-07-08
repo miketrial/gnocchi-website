@@ -20,8 +20,11 @@
      Otherwise (premarket, overnight, weekend) → don't run, spend zero FMP.
    Premarket is intentionally excluded: the FMP plan has no premarket endpoint,
    so there is nothing to score before 09:30 ET. */
+import { isMarketHoliday, isHalfDay } from "./market-calendar.mjs";
+
 const REGULAR_OPEN_MIN = 9 * 60 + 30;   // 09:30
 const REGULAR_CLOSE_MIN = 16 * 60;      // 16:00
+const HALF_DAY_CLOSE_MIN = 13 * 60;     // 13:00
 const AH_CLOSE_MIN = 20 * 60;           // 20:00
 
 export function etParts(now = new Date()) {
@@ -44,10 +47,17 @@ export function decideWindow(now = new Date()) {
   const isWeekday = ["Mon", "Tue", "Wed", "Thu", "Fri"].includes(weekday);
   if (!isWeekday) return { run: false, session: null };
 
-  if (minutesOfDay >= REGULAR_OPEN_MIN && minutesOfDay < REGULAR_CLOSE_MIN) {
+  // Market-calendar gate: no session on a full holiday; regular session ends
+  // early (13:00) on a half-day, and we skip the thin after-hours window then.
+  const dateStr = etDateStr(now);
+  if (isMarketHoliday(dateStr)) return { run: false, session: null };
+  const halfDay = isHalfDay(dateStr);
+  const regClose = halfDay ? HALF_DAY_CLOSE_MIN : REGULAR_CLOSE_MIN;
+
+  if (minutesOfDay >= REGULAR_OPEN_MIN && minutesOfDay < regClose) {
     return { run: true, session: "regular" };
   }
-  if (minutesOfDay >= REGULAR_CLOSE_MIN && minutesOfDay <= AH_CLOSE_MIN) {
+  if (!halfDay && minutesOfDay >= REGULAR_CLOSE_MIN && minutesOfDay <= AH_CLOSE_MIN) {
     // After-hours: throttle the 5-min cron down to every 15 minutes.
     const onQuarterHour = (minutesOfDay % 15) === 0;
     return onQuarterHour ? { run: true, session: "afterhours" } : { run: false, session: null };
@@ -118,14 +128,15 @@ export function positionExitDecision(pos, row, timeStopDays = 3) {
   return { reason: null };
 }
 
-export function formatExitAlert(row, reason, pos, session = "regular") {
+export function formatExitAlert(row, reason, pos, session = "regular", source = "manual") {
   const prefix = session === "afterhours" ? "🌙 AH " : "";
+  const tag = source === "daily" ? " 🎯" : "";
   const sym = esc(row?.sym ?? "?");
   const long = pos?.side === "long";
   const label = reason === "TARGET" ? "took profit" : reason === "STOP" ? "stopped out" : reason === "TIME" ? "timed out" : "exit";
   const emoji = reason === "TARGET" ? "✅" : reason === "STOP" ? "🛑" : "⚪️";
   const price = fmtPrice(row?.price);
-  const lines = [`${prefix}${emoji} <b>${sym} — EXIT</b> (${label})`];
+  const lines = [`${prefix}${emoji} <b>${sym} — EXIT</b> (${label})${tag}`];
   if (pos?.entryPrice != null && row?.price != null) {
     const pl = ((row.price - pos.entryPrice) / pos.entryPrice) * 100 * (long ? 1 : -1);
     lines.push(`${long ? "Long" : "Short"} ${fmtPrice(pos.entryPrice)} → ${price}${row?.priceIsLive ? " (live)" : ""} (${pl >= 0 ? "+" : ""}${pl.toFixed(2)}%)`);
@@ -135,8 +146,12 @@ export function formatExitAlert(row, reason, pos, session = "regular") {
   return lines.join("\n");
 }
 
-export function formatAlert(row, kind, session = "regular") {
+// `source` = "manual" (your watchlist) | "daily" (an auto pick from the 9:45
+// Most-Active scan). A 🎯 tag on the header lets you tell them apart at a
+// glance without splitting the alert stream. Defaults preserve existing calls.
+export function formatAlert(row, kind, session = "regular", source = "manual") {
   const prefix = session === "afterhours" ? "🌙 AH " : "";
+  const tag = source === "daily" ? " 🎯" : "";
   const sym = esc(row?.sym ?? "?");
   const price = fmtPrice(row?.price);
   const lines = [];
@@ -144,7 +159,7 @@ export function formatAlert(row, kind, session = "regular") {
   if (kind === "BUY" || kind === "SELL") {
     const emoji = kind === "BUY" ? "🟢" : "🔴";
     const tier = row?.tier ? ` (${esc(row.tier)})` : "";
-    lines.push(`${prefix}${emoji} <b>${sym} — ${kind}</b>${tier}`);
+    lines.push(`${prefix}${emoji} <b>${sym} — ${kind}</b>${tier}${tag}`);
     lines.push(`Buy ${esc(row?.buyScore ?? "?")} · Sell ${esc(row?.sellScore ?? "?")}`);
     lines.push(`Price ${price}${row?.priceIsLive ? " (live)" : ""}`);
     if (row?.stop?.price != null) {
@@ -157,7 +172,7 @@ export function formatAlert(row, kind, session = "regular") {
     const why = row?.verdict === "BLOCKED"
       ? `BLOCKED${row?.blockedReason ? ` — ${esc(row.blockedReason)}` : ""}`
       : "cooled to NEUTRAL";
-    lines.push(`${prefix}⚪️ <b>${sym} — EXIT</b>`);
+    lines.push(`${prefix}⚪️ <b>${sym} — EXIT</b>${tag}`);
     lines.push(`Verdict ${why}`);
     lines.push(`Price ${price}${row?.priceIsLive ? " (live)" : ""}`);
   }
@@ -185,6 +200,31 @@ export function etClockLabel(now = new Date()) {
   const ampm = hour >= 12 ? "PM" : "AM";
   const h12 = hour % 12 === 0 ? 12 : hour % 12;
   return `${h12}:${String(minute).padStart(2, "0")} ${ampm} ET`;
+}
+
+/* ---------- Silent-loop watchdog decision (Section F, pure) ----------
+   Extracted so the alert cron and the tests exercise the SAME logic. Decides,
+   from the last heartbeat + prior watchdog state, whether the alert loop has
+   gone dark. A first-dispatch grace period (firstTickTs) prevents a false alarm
+   on the day's first tick AND still catches a worker dead since before today
+   once we've been dispatching for the stale window with no fresh heartbeat.
+   `staleMs` is session-aware (after-hours runs every 15 min, not 5).
+   Returns { shouldAlert, stale, hbAge, dispatchAge, nextState }. */
+export function evaluateWatchdog({ hbTs, wd = {}, nowMs, session, staleRegularMs, staleAhMs, today }) {
+  const staleMs = session === "afterhours" ? staleAhMs : staleRegularMs;
+  const firstTickTs = (wd.day === today && wd.firstTickTs) ? wd.firstTickTs : nowMs;
+  const hbAge = hbTs ? (nowMs - hbTs) : Infinity;
+  const dispatchAge = nowMs - firstTickTs;
+  const stale = hbAge > staleMs && dispatchAge > staleMs;
+  const hbKey = hbTs || 0; // dedup: one alert per stuck heartbeat value
+  const priorWorst = wd.day === today ? (wd.worstGapMs || 0) : 0;
+  const worstGapMs = Math.max(priorWorst, Math.min(hbAge, dispatchAge));
+  const shouldAlert = stale && wd.staleAlertedForTs !== hbKey;
+  const nextState = {
+    day: today, firstTickTs, worstGapMs,
+    staleAlertedForTs: shouldAlert ? hbKey : (stale ? wd.staleAlertedForTs : null),
+  };
+  return { shouldAlert, stale, hbAge, dispatchAge, worstGapMs, nextState };
 }
 
 function sideOf(v) { return v === "BUY" ? "BUY" : v === "SELL" ? "SELL" : "FLAT"; }
@@ -275,6 +315,107 @@ export function formatOpenSnapshot({ rows = [], prevMap = {}, regime = null, lab
   if (!buys.length && !sells.length) {
     L.push("");
     L.push("<i>No active BUY or SELL setups at the open.</i>");
+  }
+  return L.join("\n");
+}
+
+/* ---------- Outage catch-up roster (Section F — health & trust) ----------
+   The alert loop is fire-and-forget; if it goes silent (cold start, wedged lock,
+   bad deploy) the trader gets zero alerts AND zero warning. When it recovers,
+   this one message re-orients him: every open position with live P&L and its
+   stop, so a target/stop that blew through during the blackout gets a look.
+   `positions` = [{ sym, side:'long'|'short', entryPrice, stopPrice, price }].
+   Pure formatting — the worker wires the blob reads. */
+export function formatOutageRoster(positions = [], gapMin = 0) {
+  const L = [`⚠️ <b>Bounce scan back online</b> — was silent ~${Math.round(gapMin)} min`];
+  const open = positions.filter(p => p && p.side && p.price != null && p.entryPrice != null);
+  if (!open.length) {
+    L.push("No open positions to review.");
+    return L.join("\n");
+  }
+  L.push("");
+  L.push("<b>Open positions — verify (a stop/target may have hit during the gap):</b>");
+  for (const p of open) {
+    const long = p.side === "long";
+    const pl = ((p.price - p.entryPrice) / p.entryPrice) * 100 * (long ? 1 : -1);
+    const stopBit = p.stopPrice != null ? ` · stop ${fmtPrice(p.stopPrice)}` : "";
+    L.push(`${long ? "🟢" : "🔴"} ${esc(p.sym)} ${long ? "long" : "short"} ${fmtPrice(p.entryPrice)}→${fmtPrice(p.price)} (${pl >= 0 ? "+" : ""}${pl.toFixed(2)}%)${stopBit}`);
+  }
+  return L.join("\n");
+}
+
+/* ---------- Fresh-entry flood digest (A4) ----------
+   On a market-wide washout many names cross into a fresh BUY in the same tick.
+   Instead of 8-12 individual buzzes, coalesce them into ONE ranked digest.
+   `entries` = [{ sym, kind:'BUY'|'SELL', row }]. */
+export function formatEntryDigest(entries = []) {
+  const rank = (e) => scoreNum(e.kind === "BUY" ? e.row?.buyScore : e.row?.sellScore);
+  const sorted = entries.slice().sort((a, b) => rank(b) - rank(a));
+  const buys = sorted.filter(e => e.kind === "BUY");
+  const sells = sorted.filter(e => e.kind === "SELL");
+  const L = [`🌊 <b>${entries.length} new setups this scan</b>`];
+  const block = (arr, emoji, label) => {
+    if (!arr.length) return;
+    const head = arr.slice(0, 8).map(e => `${esc(e.sym)} ${rank(e)}`).join(" · ");
+    const more = arr.length > 8 ? ` …and ${arr.length - 8} more` : "";
+    L.push(`${emoji} <b>${arr.length} ${label}:</b> ${head}${more}`);
+  };
+  block(buys, "🟢", "BUY");
+  block(sells, "🔴", "SELL");
+  return L.join("\n");
+}
+
+/* ---------- Open-position management nudges (Section B) ----------
+   One-shot, silent heads-ups while a position is HELD (before any hard exit). */
+
+// B1 — the verdict has drained off the position's side (BUY→NEUTRAL/BLOCKED) but
+// no hard exit fired yet. The user's manual exit cue is exactly this roll-over.
+export function formatCoolingNote(row, pos) {
+  const long = pos.side === "long";
+  return [
+    `🟡 <b>${esc(row?.sym ?? "?")} — read cooling</b>`,
+    `Still holding ${long ? "long" : "short"} ${fmtPrice(pos.entryPrice)} → ${fmtPrice(row?.price)}. Verdict now ${esc(row?.verdict ?? "—")} (buy ${esc(row?.buyScore ?? "?")} · sell ${esc(row?.sellScore ?? "?")}).`,
+    `Conviction draining — watch for the roll to the exit.`,
+  ].join("\n");
+}
+
+// B5 — price has entered the ~0.3R danger band before the hard 2.5×ATR stop.
+export function formatApproachingStop(row, pos) {
+  const long = pos.side === "long";
+  return [
+    `🟠 <b>${esc(row?.sym ?? "?")} — approaching stop</b>`,
+    `${long ? "Long" : "Short"} ${fmtPrice(pos.entryPrice)} → ${fmtPrice(row?.price)} · stop ${fmtPrice(pos.stopPrice)}.`,
+    `In the danger band — last look to tighten or bail before the hard stop.`,
+  ].join("\n");
+}
+
+// B6 — the session BEFORE the time-stop trips, so a bounce that needs one more
+// day is the user's call, not a silent mechanical exit.
+export function formatTimeStopNudge(row, pos, timeStopDays = 3) {
+  const long = pos.side === "long";
+  return [
+    `⏳ <b>${esc(row?.sym ?? "?")} — time-stop next session</b>`,
+    `${long ? "Long" : "Short"} ${fmtPrice(pos.entryPrice)} → ${fmtPrice(row?.price)}, held ${(pos.barsHeld ?? 0) + 1}/${timeStopDays} sessions.`,
+    `It exits on the time-stop next session unless it resolves — your call to give it one more day.`,
+  ].join("\n");
+}
+
+// B4 — once/day pre-close roster: decide hold-overnight vs flatten, with P&L,
+// distance-to-stop in R, sessions held, and each name's overnight-gap profile.
+export function formatPreCloseRoster(positions = [], label = "", timeStopDays = 3) {
+  const open = positions.filter(p => p && p.side && p.price != null && p.entryPrice != null);
+  const L = [`🕒 <b>Pre-close review</b>${label ? ` — ${esc(label)}` : ""}`];
+  if (!open.length) { L.push("Flat into the close — no open positions."); return L.join("\n"); }
+  L.push("<i>Hold overnight or flatten before the bell:</i>");
+  for (const p of open) {
+    const long = p.side === "long";
+    const pl = ((p.price - p.entryPrice) / p.entryPrice) * 100 * (long ? 1 : -1);
+    const R = p.stopPrice != null ? Math.abs(p.entryPrice - p.stopPrice) : null;
+    const distR = (R && R > 0) ? ((long ? (p.price - p.stopPrice) : (p.stopPrice - p.price)) / R) : null;
+    const stopBit = distR != null ? ` · ${distR.toFixed(1)}R to stop` : "";
+    const bars = p.barsHeld != null ? ` · day ${(p.barsHeld ?? 0) + 1}/${timeStopDays}` : "";
+    const gap = (p.overnightGap && p.overnightGap.avgAbsOvn != null) ? ` · ovn ±${p.overnightGap.avgAbsOvn}%` : "";
+    L.push(`${long ? "🟢" : "🔴"} ${esc(p.sym)} ${(pl >= 0 ? "+" : "")}${pl.toFixed(2)}%${stopBit}${bars}${gap}`);
   }
   return L.join("\n");
 }

@@ -14,6 +14,7 @@
    (quickswing-summary-cron.mjs) wire these to real I/O.
    Removable with the rest of the QUICK SWING FEATURE block. */
 import { etParts } from "./quickswing-alert.mjs";
+import { isMarketHoliday, isHalfDay } from "./market-calendar.mjs";
 
 /* ---------- Window gating (America/New_York, DST-safe) ----------
    Fires at the top of each ET hour from 10:00 to 16:00 inclusive:
@@ -24,8 +25,26 @@ export function summaryWindow(now = new Date()) {
   const { weekday, hour } = etParts(now);
   const isWeekday = ["Mon", "Tue", "Wed", "Thu", "Fri"].includes(weekday);
   if (!isWeekday) return { run: false };
-  if (hour >= 10 && hour <= 16) return { run: true, etHour: hour, label: summaryLabel(hour) };
+  const dateStr = etDate(now);
+  if (isMarketHoliday(dateStr)) return { run: false };
+  // Half-days close at 13:00 ET — end the summary series there.
+  const lastHour = isHalfDay(dateStr) ? 13 : 16;
+  if (hour >= 10 && hour <= lastHour) {
+    return { run: true, etHour: hour, label: summaryLabel(hour), isClose: hour === lastHour };
+  }
   return { run: false };
+}
+
+// A3 — nothing worth pinging: no verdict changes, no movers, no regime change,
+// and the market barely moved this hour. The worker still advances the diff
+// baseline; it just skips the send (unless first-of-day / close / holding).
+export function isQuietSummary(diff) {
+  if (!diff?.hasPrev) return false;
+  const m = diff.market || {};
+  const spyQuiet = m.spyHourPct == null || Math.abs(m.spyHourPct) < 0.4;
+  const vixQuiet = m.vixHourDelta == null || Math.abs(m.vixHourDelta) < 1.0;
+  return diff.verdictChanges.length === 0 && diff.movers.length === 0
+    && !m.regimeChanged && spyQuiet && vixQuiet;
 }
 
 export function summaryLabel(hour) {
@@ -127,7 +146,9 @@ function verdictEmoji(v) {
   return v === "BUY" ? "🟢" : v === "SELL" ? "🔴" : v === "BLOCKED" ? "⛔️" : v === "NEUTRAL" ? "⚪️" : "▫️";
 }
 
-export function formatSummary(diff, cur, label) {
+// `openPositions` (optional, B2) renders a live pulse of held positions; `health`
+// (optional, F5) appends a close-of-day "✅ Bounce OK" / "⚠️ FMP degraded" line.
+export function formatSummary(diff, cur, label, health = null, openPositions = null) {
   const m = diff.market;
   const L = [`📊 <b>Hourly Summary — ${esc(label)}</b>`];
 
@@ -168,5 +189,62 @@ export function formatSummary(diff, cur, label) {
     }
   }
 
+  // Open-position pulse (B2) — live P&L% and R-to-stop for each held name, so a
+  // multi-day hold gets an hourly "how close to stopped" read.
+  if (openPositions && openPositions.length) {
+    L.push("");
+    L.push("<b>Open positions:</b>");
+    for (const p of openPositions) {
+      const long = p.side === "long";
+      const pl = (p.entryPrice != null && p.price != null)
+        ? ((p.price - p.entryPrice) / p.entryPrice) * 100 * (long ? 1 : -1) : null;
+      const R = (p.entryPrice != null && p.stopPrice != null) ? Math.abs(p.entryPrice - p.stopPrice) : null;
+      const distR = (R && R > 0) ? ((long ? (p.price - p.stopPrice) : (p.stopPrice - p.price)) / R) : null;
+      const plBit = pl != null ? `${pl >= 0 ? "+" : ""}${pl.toFixed(2)}%` : "n/a";
+      const rBit = distR != null ? ` · ${distR.toFixed(1)}R to stop` : "";
+      L.push(`${long ? "🟢" : "🔴"} ${esc(p.sym)} ${plBit}${rBit}`);
+    }
+  }
+
+  if (health) {
+    L.push("");
+    const gap = health.worstGapMin != null ? ` · longest silent-gap ${health.worstGapMin}m` : "";
+    if (health.degraded) {
+      L.push(`⚠️ <b>FMP degraded</b> — morning scan ${health.scanned ?? "?"} names, ${health.na ?? "?"} returned no data${gap}`);
+    } else {
+      L.push(`✅ <b>Bounce OK</b> — morning scan ${health.scanned ?? 0} names${health.na ? ` (${health.na} na)` : ""}${gap}`);
+    }
+  }
+
+  return L.join("\n");
+}
+
+/* ---------- Daily Top-N message (Most-Active scan) ----------
+   A SEPARATE Telegram message from the hourly watchlist summary and the 5-min
+   alerts — sent once at ~9:45 ET by quickswing-daily-background.mjs. Same visual
+   grammar (emoji + HTML) so it reads consistently with the rest of the Bounce
+   texts, but its own header and content: the day's best buy-scored names out of
+   the most-active quality-filtered universe. `rows` MUST already be ranked best-first. */
+export function formatDailyTop({ rows = [], regime = null, label = "", scanned = 0, stale = false, asOfDay = null } = {}) {
+  const L = [`🎯 <b>Top ${rows.length} Bounce Picks — Most Active</b>`];
+  if (label) L.push(`<i>${esc(label)}</i>`);
+  if (stale) L.push(`⚠️ <i>Universe stale${asOfDay ? ` (from ${esc(asOfDay)})` : ""} — screener may be down; today's movers may be missing.</i>`);
+
+  const mBits = [];
+  if (typeof regime?.price === "number") mBits.push(`SPY $${regime.price.toFixed(2)}`);
+  if (regime?.label) mBits.push(esc(regime.label));
+  if (typeof regime?.vix?.level === "number") mBits.push(`VIX ${regime.vix.level.toFixed(2)}`);
+  if (mBits.length) L.push(mBits.join(" · "));
+  if (scanned) L.push(`Scanned ${scanned} most-active names.`);
+
+  L.push("");
+  if (!rows.length) {
+    L.push("<i>No qualifying names scored today.</i>");
+    return L.join("\n");
+  }
+  rows.forEach((r, i) => {
+    L.push(`${i + 1}. ${verdictEmoji(r.verdict)} <b>${esc(r.sym)}</b> ${esc(r.verdict ?? "—")}`
+      + ` · buy ${esc(String(r.buyScore ?? "—"))} · ${fmtPrice(r.price)}`);
+  });
   return L.join("\n");
 }

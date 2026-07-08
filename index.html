@@ -1422,6 +1422,42 @@
       <tbody id="qsBody"></tbody>
     </table>
   </div>
+
+  <!-- ===== QUICK SWING FEATURE ===== Daily Top-N (Most-Active scan) -->
+  <div id="qsDailySection" style="margin-top:26px">
+    <div class="wp-head">
+      <span class="wp-title" style="border-bottom:1px dashed currentColor">Daily Top 15 — Most Active</span>
+      <span class="wp-sub">Auto-picked each morning (~9:45 ET) from the most-active liquid U.S. movers (mid-cap+, price ≥ $10), tilted toward today's biggest decliners (oversold bounce setups), ranked by Bounce buy score. Excludes names already on your watchlist and caps per sector — fresh, diversified ideas · replaced daily · rescans live · read-only (this list manages itself)</span>
+      <span id="qsDailyStamp" style="margin-left:auto;font-size:10px;color:var(--ink-soft);white-space:nowrap"></span>
+      <button id="qsDailyScanBtn" type="button" style="margin-left:12px;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);background:none;white-space:nowrap" data-tip="Run the Most-Active scan now instead of waiting for 9:45 ET. Takes a few minutes; the list updates when it finishes.">↻ Scan now</button>
+    </div>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Ticker</th>
+            <th class="num">Price</th>
+            <th class="num">Verdict</th>
+            <th class="num">RSI(2)</th>
+            <th class="num">%B</th>
+            <th class="num">Vol Climax</th>
+            <th class="num">Reversal</th>
+            <th class="num">RS vs SPY</th>
+            <th class="num">AH Move</th>
+            <th class="num">Vol Dry-Up</th>
+            <th class="num">Vol Expansion</th>
+            <th class="num">ADR Gate</th>
+            <th class="num">Liquidity</th>
+            <th>Earnings</th>
+          </tr>
+        </thead>
+        <tbody id="qsDailyBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <!-- ===== END QUICK SWING FEATURE ===== -->
+
   <div class="legend">
     <div class="ttl">Bounce scoring &nbsp;·&nbsp; bidirectional BUY/SELL, tuned for a 1-2 day mean-reversion hold</div>
     <div class="qs-key">
@@ -2761,7 +2797,7 @@ function setView(v){
   // Per-view rescan timer & render
   updateRescanTimer();
   if(isShort) renderShortWatchlist();
-  if(isQs) renderQuickSwing(); // ===== QUICK SWING FEATURE =====
+  if(isQs){ renderQuickSwing(); renderQsDaily(); } // ===== QUICK SWING FEATURE =====
   window.scrollTo(0,0);
 }
 document.getElementById('navToggle').onclick=()=>setView(currentView==='net'?'watchlist':'net');
@@ -2770,7 +2806,7 @@ document.querySelectorAll('#viewSwitch button').forEach(b=>{
     const v=b.dataset.v;
     if(v==='basic') setView('watchlist');
     else if(v==='short'){ setView('short'); ensureShortDataLoaded(); }
-    else if(v==='qs'){ setView('qs'); ensureQsDataLoaded(); maybeAutoRescanQuickSwing(); } // ===== QUICK SWING FEATURE =====
+    else if(v==='qs'){ setView('qs'); ensureQsDataLoaded(); ensureQsDailyLoaded(); maybeAutoRescanQuickSwing(); } // ===== QUICK SWING FEATURE =====
   });
 });
 // Default landing view = Short Term — but the setView('short') call itself
@@ -4132,6 +4168,100 @@ document.getElementById('qsView')?.addEventListener('click', e => {
   const col = th.dataset.qssort;
   if (qsSortCol === col) qsSortDir *= -1; else { qsSortCol = col; qsSortDir = -1; }
   renderQuickSwing();
+});
+
+/* ===== QUICK SWING FEATURE ===== Daily Top-N (Most-Active scan) — client.
+   A SEPARATE, read-only list from the manual watchlist above: its own store
+   (qs-daily), its own fetch, its own render. Reuses qsRowHtml so the rows look
+   identical; the daily <tbody> is never wired to selection/context-menu/delete
+   (those bind to #qsBody only), so it can't be edited from here — it manages
+   itself, replaced each morning by the 9:45 scan. */
+let qsDailyLoaded = false;
+let qsDailyRows = [];
+let qsDailyPollTimer = null;
+
+async function ensureQsDailyLoaded(force){
+  if (qsDailyLoaded && !force) { renderQsDaily(); return; }
+  if (!API_LIVE) { qsDailyLoaded = true; renderQsDaily(); return; }
+  try {
+    const rows = await api.get('/api/quickswing/daily');
+    if (Array.isArray(rows)) {
+      qsDailyRows = rows;
+      // Save each into the shared per-symbol history so the factor popover works.
+      rows.forEach(r => { if (r && r.sym) saveQsHistory(r.sym.toUpperCase(), r); });
+      qsDailyLoaded = true;
+    }
+  } catch(e) { /* leave as-is; render whatever we have */ }
+  renderQsDaily();
+}
+
+function qsDailyFreshest(){
+  return qsDailyRows.reduce((m, r) => { const t = Date.parse(r?.scored_at); return (isFinite(t) && t > m) ? t : m; }, 0);
+}
+
+function renderQsDaily(){
+  const body = document.getElementById('qsDailyBody');
+  const stamp = document.getElementById('qsDailyStamp');
+  if (!body) return;
+  const rows = qsDailyRows.slice().filter(r => r && r.sym);
+  // Best buy score first (server pre-sorts; re-sort defensively for live updates).
+  const num = s => { const n = parseInt(String(s||'').split('/')[0]); return isFinite(n) ? n : -1; };
+  rows.sort((a,b) => num(b.buyScore) - num(a.buyScore));
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="15"><div class="qs-empty">No Most-Active picks yet — the first list posts after the 9:45&nbsp;ET scan (or hit “Scan now”).</div></td></tr>`;
+    if (stamp) stamp.textContent = '';
+    return;
+  }
+  body.innerHTML = rows.map((r,i) => qsRowHtml(r, i+1)).join('');
+  if (stamp) {
+    const f = qsDailyFreshest();
+    stamp.textContent = f ? `Scanned ${qsRelTime(f)} · ${rows.length} names` : `${rows.length} names`;
+  }
+}
+
+// Factor-history popover on daily cells too (parity with the watchlist table).
+document.getElementById('qsDailyBody')?.addEventListener('click', e => {
+  qsFactHist.style.display = 'none';
+  const td = e.target.closest('td[data-col]');
+  if (!td) return;
+  const tr = e.target.closest('tr[data-sym]');
+  if (!tr) return;
+  const factorIdx = QS_COL_TO_FACTOR[td.dataset.col];
+  if (factorIdx === undefined) return;
+  e.stopPropagation();
+  openQsFactHist(tr.dataset.sym, factorIdx, td);
+});
+
+// "Scan now" → fire the Most-Active background scan, then poll qs-daily for
+// the refreshed list (the worker replaces it wholesale only when it finishes,
+// ~4 min, so the OLD list stays visible until the new one lands).
+document.getElementById('qsDailyScanBtn')?.addEventListener('click', async () => {
+  const btn = document.getElementById('qsDailyScanBtn');
+  if (!API_LIVE) { showToast('Live API only — the Most-Active scan runs on the server.'); return; }
+  if (!confirm('Run the Most-Active scan now? It takes a few minutes and replaces today’s Top 15 when it finishes.')) return;
+  const startMax = qsDailyFreshest();
+  try {
+    await api.send('/api/quickswing/daily/rescan', 'POST', { force: true, source: 'manual' });
+  } catch(e) { showToast('Could not start the scan — try again in a moment.'); return; }
+  showToast('Most-Active scan started (~4 min). The list refreshes automatically when it completes.');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; btn.textContent = '⟳ Scanning…'; }
+  clearInterval(qsDailyPollTimer);
+  let tries = 0;
+  const resetBtn = () => { if (btn) { btn.disabled = false; btn.style.opacity = ''; btn.textContent = '↻ Scan now'; } };
+  qsDailyPollTimer = setInterval(async () => {
+    tries++;
+    try {
+      const rows = await api.get('/api/quickswing/daily');
+      const fresh = Array.isArray(rows) ? rows.reduce((m,r)=>{const t=Date.parse(r?.scored_at);return isFinite(t)&&t>m?t:m;},0) : 0;
+      if (fresh > startMax) {
+        qsDailyRows = rows; qsDailyLoaded = true; renderQsDaily();
+        clearInterval(qsDailyPollTimer); resetBtn();
+        showToast('Most-Active Top 15 updated.');
+        return;
+      }
+    } catch(e) { /* keep polling */ }
+    if (tries >= 13) { clearInterval(qsDailyPollTimer); resetBtn(); } // ~13-min ceiling
+  }, 60000);
 });
 
 /* ===== QUICK SWING FEATURE ===== Backtest ("as-if") paper-trade log (client) */
