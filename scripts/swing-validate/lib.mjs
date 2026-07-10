@@ -15,16 +15,75 @@
 import { readFileSync, existsSync } from "node:fs";
 import { cleanHist, strengthFactor } from "../../netlify/lib/quickswing-pipeline.mjs";
 import {
-  labelShortTicker, strengthSeries, simulateShortExit, swingExitGrid,
+  labelShortTicker, strengthSeries, shortDetailAt, simulateShortExit, swingExitGrid,
   shortExitGridReport, shortAttributionReport, aggregateShortRule,
   mean, median, winRate, pearson, profitFactor, FACTOR_KEYS,
 } from "../../netlify/lib/short-study.mjs";
 
 export {
-  labelShortTicker, strengthSeries, simulateShortExit, swingExitGrid,
+  labelShortTicker, strengthSeries, shortDetailAt, simulateShortExit, swingExitGrid,
   shortExitGridReport, shortAttributionReport, aggregateShortRule,
   mean, median, winRate, pearson, profitFactor, FACTOR_KEYS, cleanHist, strengthFactor,
 };
+
+/* ---------- Weighted-composite labeling (#2 — re-backtest a reweighted score) ----------
+   Mirrors labelShortTicker's fresh-transition entry logic, but the entry gate is a
+   WEIGHTED core score (Σ weights[k]·factor.buy) crossing `threshold`, not the equal
+   -weight buyScore≥12. Long-only. `weights` is a partial map over FACTOR_KEYS
+   (missing key ⇒ weight 1; set 0 to drop a factor). Reuses the LIVE shortDetailAt so
+   the per-bar factor points are byte-identical to the scorer. Returns the same record
+   shape as labelShortTicker (+ wScore) so the exit sims / attribution work unchanged. */
+const strengthAsOfLocal = (series, date) => { for (const s of series || []) if (s.date <= date) return s.strength; return null; };
+export function labelWeighted(sym, hist, spyStr, secStr, { weights = {}, threshold = 12, maxHorizon = 63, minBars = 200, liqGate = 1 } = {}) {
+  const out = [];
+  if (!Array.isArray(hist) || hist.length < minBars + 2) return out;
+  const len = hist.length;
+  const w = (k) => (weights[k] == null ? 1 : weights[k]);
+  const detail = new Array(len).fill(null);
+  for (let i = 0; i < len; i++) {
+    const h = hist.slice(i);
+    if (h.length < minBars) break;
+    detail[i] = shortDetailAt(h, strengthAsOfLocal(spyStr, hist[i].date), strengthAsOfLocal(secStr, hist[i].date));
+  }
+  const wScoreOf = (d) => d ? d.factors.reduce((s, f) => s + w(f.key) * (f.buy ?? 0), 0) : null;
+  const sideOf = (d) => {
+    if (!d || d.liqPts < liqGate) return null;
+    return wScoreOf(d) >= threshold ? "long" : null;
+  };
+  for (let i = 0; i < len; i++) {
+    const d = detail[i];
+    const side = sideOf(d);
+    if (!side) continue;
+    if (sideOf(detail[i + 1]) === side) continue; // not a fresh transition
+    const fwd = [];
+    for (let hstep = 1; hstep <= maxHorizon && i - hstep >= 0; hstep++) {
+      const j = i - hstep, dj = detail[j] || {};
+      fwd.push({ date: hist[j].date, open: hist[j].open, high: hist[j].high, low: hist[j].low, close: hist[j].close,
+        sma50: dj.sma50 ?? null, sma200: dj.sma200 ?? null, atr14: dj.atr14 ?? null, side: dj.date ? sideOf(dj) : null });
+    }
+    if (!fwd.length) continue;
+    out.push({ sym, side: "long", entryDate: d.date, entryClose: d.close, entryAtr14: d.atr14 ?? null,
+      buyScore: d.buyScore, sellScore: d.sellScore, wScore: wScoreOf(d), factors: d.factors, fwd });
+  }
+  return out;
+}
+// Label a whole cache with a weighted composite (parallels labelUniverse).
+export function labelUniverseWeighted(cache, opts = {}) {
+  const { spyHist, etfBySym, etfHistBySym, histBySym } = cache;
+  const spyStr = strengthSeries(spyHist);
+  const etfStr = {};
+  for (const [etf, h] of Object.entries(etfHistBySym || {})) etfStr[etf] = strengthSeries(h);
+  const records = [];
+  for (const sym of Object.keys(histBySym)) {
+    const hist = histBySym[sym] || [];
+    if (ineligible(hist)) continue;
+    const etf = etfBySym?.[sym] || null;
+    const recs = labelWeighted(sym, hist, spyStr, etf ? (etfStr[etf] || []) : [], opts);
+    for (const r of recs) r.etf = etf;
+    records.push(...recs);
+  }
+  return records;
+}
 
 /* Sector -> ETF map — identical to short-pipeline.mjs's sectorEtfFor(); keeps
    the harness self-contained so the delisted-name extension can map its own. */
