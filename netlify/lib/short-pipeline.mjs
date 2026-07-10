@@ -17,7 +17,8 @@ import { getShortFmpCache, putShortFmpCache, deleteShortFmpCache, getSpyHistCach
 import { round2, na, scored, trueRange, atrFrom } from "./ta-helpers.mjs";
 import { fmp, safe, delay } from "./fmp-client.mjs";
 import { cleanHist, strengthFactor } from "./quickswing-pipeline.mjs";
-import { computeShortSignal } from "./short-backtest.mjs"; // SWING BACKTEST FEATURE
+import { computeShortSignal, sessionComplete } from "./short-backtest.mjs"; // SWING BACKTEST FEATURE
+import { etDateStr, etParts } from "./quickswing-alert.mjs"; // ET wall clock for the partial-bar guard
 
 /* ---------- Sanity range gates — reject implausible FMP values before they
    reach a chip. A swing trader acts on these numbers fast, so a garbage
@@ -47,7 +48,7 @@ function shortSane(value, field) {
      3. Freshness — the newest historical bar must be recent (≤ 6 calendar
         days old) so momentum/trend aren't computed on a frozen series.
    Returns { ok, warnings[] }. */
-function validateShortData(sym, { quote, profile, hist, inc }) {
+export function validateShortData(sym, { quote, profile, hist, inc }) {
   const warnings = [];
   const want = sym.toUpperCase();
 
@@ -60,9 +61,11 @@ function validateShortData(sym, { quote, profile, hist, inc }) {
 
   // Step 2 — price cross-check between feeds representing the SAME point in time.
   // quote.price and profile.price are both current/intraday → comparable.
-  // hist[0].price is YESTERDAY'S close (today's EOD bar hasn't formed yet), so
-  // including it would flag every >6% intraday mover as a "divergence" and
-  // blank all data. Use it only as a soft sanity floor (must be > 0).
+  // NOTE: during market hours hist[0] is TODAY'S IN-PROGRESS PARTIAL bar (FMP's
+  // historical-price-eod/full carries the live session — see cleanHist docs and
+  // the swing-validation report). It is NOT a completed session, so it must never
+  // be treated as final for the backtest fold (see the partial-bar guard TODO in
+  // the SWING BACKTEST FEATURE block). Here it's only a soft sanity floor (>0).
   const livePrices = [quote?.[0]?.price, profile?.[0]?.price]
     .filter(p => typeof p === "number" && p > 0);
   if (livePrices.length >= 2) {
@@ -175,7 +178,7 @@ const SECTOR_ETF = {
   "Consumer Cyclical": "XLY", "Consumer Defensive": "XLP", "Financial Services": "XLF",
   "Communication Services": "XLC", "Basic Materials": "XLB", "Energy": "XLE", "Real Estate": "XLRE",
 };
-function sectorEtfFor(sector, industry) {
+export function sectorEtfFor(sector, industry) {
   return INDUSTRY_ETF[industry] || SECTOR_ETF[sector] || null;
 }
 
@@ -231,7 +234,7 @@ const PRICE_HIST_DAYS = 50;
 // high computed AS OF THAT DAY — so the chart can draw them as moving curves
 // (they change daily), not flat lines. See the call site for why this makes
 // the window self-rolling.
-function buildPriceHist(hist) {
+export function buildPriceHist(hist) {
   const seen = new Set();
   const desc = [];                        // newest-first, validated, deduped
   for (const d of hist || []) {
@@ -275,7 +278,7 @@ function buildPriceHist(hist) {
 }
 
 // 1. Trend: how cleanly price is above its moving averages
-function checkTrend(hist) {
+export function checkTrend(hist) {
   if (!hist || hist.length < 200) return na("Need 200 days of price history");
   const closes = hist.slice(0, 220).map(d => d.price ?? d.close).filter(p => p != null);
   if (closes.length < 200) return na("Insufficient price history");
@@ -302,7 +305,7 @@ function checkTrend(hist) {
 }
 
 // 2. 3M Momentum: graduated by return magnitude
-function check3MMomentum(hist) {
+export function check3MMomentum(hist) {
   if (!hist || hist.length < 65) return na("Need 3 months of price history");
   const closes = hist.slice(0, 70).map(d => d.price ?? d.close).filter(p => p != null);
   if (closes.length < 63) return na("Insufficient price history");
@@ -321,7 +324,7 @@ function check3MMomentum(hist) {
 }
 
 // 3. Near High: how close to the 52-week high
-function checkNearHigh(hist) {
+export function checkNearHigh(hist) {
   if (!hist || hist.length < 200) return na("Need 52 weeks of price history");
   const closes = hist.slice(0, 260).map(d => d.price ?? d.close).filter(p => p != null);
   if (closes.length < 200) return na("Insufficient price history");
@@ -351,7 +354,7 @@ function checkNearHigh(hist) {
 // Window: hist[0..19] — the 20 most recent COMPLETE trading days. (Vol Surge
 // uses hist[1..20] because it's comparing hist[0] to its prior 20-day avg.
 // Different intents, both correct.)
-function checkLiquidity(hist, quote) {
+export function checkLiquidity(hist, quote) {
   if (!hist || hist.length < 20) return na("Need 20 days of price history");
   const dollarVols = hist.slice(0, 20).map(d => (d.price ?? d.close ?? 0) * (d.volume ?? 0)).filter(v => v > 0);
   if (!dollarVols.length) return na("No volume data");
@@ -367,7 +370,7 @@ function checkLiquidity(hist, quote) {
 }
 
 // 5. Analyst Revisions — PT drift + rating drift, graduated by composite magnitude
-function checkAnalystRevisions(ptSummary, grades) {
+export function checkAnalystRevisions(ptSummary, grades) {
   const s = (ptSummary || [])[0] || null;
   const g = Array.isArray(grades) ? grades : [];
   const ptCount = s?.lastMonthCount ?? 0;
@@ -418,7 +421,7 @@ function checkAnalystRevisions(ptSummary, grades) {
 }
 
 // 6. Valuation: Fwd P/E vs sector 75th pct — graduated by how cheap/expensive
-function checkValuation(price, fwdEps, industry) {
+export function checkValuation(price, fwdEps, industry) {
   if (!price || !fwdEps || fwdEps <= 0) return na("No forward P/E (negative or missing fwd EPS)");
   const fwdPe = shortSane(price / fwdEps, "fwdPe");
   if (fwdPe == null) return na("Forward P/E out of plausible range — data suspect");
@@ -433,7 +436,7 @@ function checkValuation(price, fwdEps, industry) {
 }
 
 // 7. Quality: FCF + ROE vs sector median — graduated by how many pass and by how much
-function checkQuality(cf, keyMetrics, industry) {
+export function checkQuality(cf, keyMetrics, industry) {
   const cfTTM = (cf || []).slice(0, 4).reduce((s, q) => s + (q.freeCashFlow ?? 0), 0);
   const km0 = (keyMetrics || [])[0];
   const roe = shortSane(km0?.returnOnEquity, "roe");
@@ -454,7 +457,7 @@ function checkQuality(cf, keyMetrics, industry) {
 }
 
 // 8. Leverage: Net Debt / EBITDA — graduated by how clean the balance sheet is
-function checkLeverage(bs, inc) {
+export function checkLeverage(bs, inc) {
   const bs0 = (bs || [])[0];
   if (!bs0) return na("No balance sheet data");
   const totalDebt = bs0.totalDebt ?? 0;
@@ -479,7 +482,7 @@ function checkLeverage(bs, inc) {
 }
 
 // 9. Catalyst: earnings in 1wk-3mo window, graduated by recent beat streak
-function checkCatalyst(earningsHist) {
+export function checkCatalyst(earningsHist) {
   if (!earningsHist || !earningsHist.length) return na("No earnings calendar data");
   const today = new Date().toISOString().slice(0, 10);
   const future = earningsHist
@@ -518,7 +521,7 @@ function checkCatalyst(earningsHist) {
 //   • 10-day money flow ((up$-vol − down$-vol) / total$-vol, range [-1,+1])
 //     over the 10 most-recent complete days → "what's the multi-day trend?"
 // Confluence = real signal. Disagreement = wait.
-function checkVolumeSurge(quote, hist) {
+export function checkVolumeSurge(quote, hist) {
   // Anchor on most recent complete EOD bar. quote.volume is intraday-partial
   // during market hours; using hist[0] guarantees a full session.
   if (!hist || hist.length < 21) return na("Need 21 days of volume history");
@@ -628,7 +631,7 @@ function checkVolumeSurge(quote, hist) {
 //
 // Thresholds are the study's quintile breakpoints (Q5 starts ~0.15, Q4
 // ~0.08, Q1 ends ~-0.03).
-function checkSectorStrength(sectorHist, spyHist) {
+export function checkSectorStrength(sectorHist, spyHist) {
   const sectorStrength = sectorHist ? strengthFactor(sectorHist) : null;
   const spyStrength = spyHist ? strengthFactor(spyHist) : null;
   if (sectorStrength == null || spyStrength == null) return na("Need 3+ months of sector ETF and SPY price history");
@@ -777,7 +780,18 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   // trend/momentum core of the score) for the as-if trade log. Uses the same
   // fetched hist + already-cached SPY/sector history, so no extra FMP call. The
   // rescan loop folds row.bt into the ticker's trade log via recordShortTransition.
-  const cleanedHist = cleanHist(hist);
+  //
+  // COMPLETED-SESSION GUARD: historical-price-eod/full carries today's IN-PROGRESS
+  // partial bar during market hours. Fold that and the persisted trade log becomes
+  // look-ahead-contaminated + non-deterministic (the entry depends on which minute
+  // the rescan fires, and then wins the seed merge — see swing-validation report
+  // P3). So the fold signal is built from COMPLETED bars only: drop hist[0] until
+  // the ET session closes, making row.bt byte-identical to the seed replay's
+  // completed-bar signal. (The chart/score chips above may still use the live bar.)
+  let cleanedHist = cleanHist(hist);
+  if (cleanedHist.length && !sessionComplete(cleanedHist[0].date, etDateStr(), etParts().minutesOfDay)) {
+    cleanedHist = cleanedHist.slice(1);
+  }
   const btSignal = computeShortSignal(cleanedHist, {
     spyStrength: spyHist ? strengthFactor(spyHist) : null,
     sectorStrength: sectorHist ? strengthFactor(sectorHist) : null,

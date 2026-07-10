@@ -30,6 +30,7 @@
 
 import { atrFrom } from "./ta-helpers.mjs";
 import { strengthFactor } from "./quickswing-pipeline.mjs";
+import { marketCloseMinET } from "./market-calendar.mjs";
 
 const MAX_CLOSED = 200;
 // Rolling window: a trade drops off once its ENTRY is older than this (pruning by
@@ -47,6 +48,24 @@ export const SBT_ENTRY_MIN = 12;           // technical strong bar (12/18 = same
 export const SBT_SEED_VERSION = 2;
 
 const round2 = x => (x == null ? null : Math.round(x * 100) / 100);
+
+/* ---------- Completed-session guard (no partial-today-bar) ----------
+   FMP's historical-price-eod/full carries TODAY'S IN-PROGRESS bar during market
+   hours, so hist[0] is a non-final intraday snapshot until the ET session closes.
+   The forward fold must never book on it (it would be look-ahead-contaminated and
+   non-deterministic — the entry would depend on which minute the rescan fired,
+   and would then win the seed merge, permanently overriding the completed-bar
+   replay). This decides, from the ET wall clock (todayEt = etDateStr(now),
+   minutesOfDay = etParts(now).minutesOfDay), whether a bar dated `barDate` (ET
+   calendar day) is a COMPLETED session: prior days always are; today's bar is
+   complete only once the ET regular session (16:00, or 13:00 on a half-day) has
+   closed. Pure — the caller supplies the clock so it stays testable/deterministic. */
+export function sessionComplete(barDate, todayEt, minutesOfDay) {
+  if (!barDate || !todayEt) return false;
+  if (barDate < todayEt) return true;
+  if (barDate > todayEt) return false;              // future bar — never trust
+  return minutesOfDay >= marketCloseMinET(todayEt); // today: only after the close
+}
 
 export function emptyShortLog() { return { open: null, closed: [] }; }
 export function needsShortSeed(log) { return !log || log.seedVersion !== SBT_SEED_VERSION; }
@@ -196,7 +215,15 @@ function holdDaysBetween(startIso, endIso) {
 export function mergeShortSeed(existing, seed) {
   const ex = existing && typeof existing === "object" ? existing : emptyShortLog();
   const sd = seed && typeof seed === "object" ? seed : emptyShortLog();
+  const open = ex.open ?? sd.open ?? null;
   const seen = new Set();
+  // Seed the dedup set with the SURVIVING open position's key first. Without this,
+  // an entry that is still OPEN in the forward log but already CLOSED in the seed
+  // replay (the replay had more history and folded its exit) would appear BOTH as
+  // an unrealized open position AND as a realized closed trade — double-counting
+  // it in win-rate / avg-return. "Forward wins" ⇒ keep it open, drop the seed's
+  // closed copy.
+  if (open) seen.add(`${open.sym}|${open.entryScoredAt || open.entryAt}`);
   const closed = [];
   for (const t of [...(ex.closed || []), ...(sd.closed || [])]) {
     const key = `${t.sym}|${t.entryScoredAt || t.entryAt}`;
@@ -204,7 +231,7 @@ export function mergeShortSeed(existing, seed) {
     seen.add(key);
     closed.push(t);
   }
-  return { open: ex.open ?? sd.open ?? null, closed, seeded: true, seedVersion: SBT_SEED_VERSION };
+  return { open, closed, seeded: true, seedVersion: SBT_SEED_VERSION };
 }
 
 /* ---------- Fold one scored bar into the trade log (LONG-ONLY) ----------

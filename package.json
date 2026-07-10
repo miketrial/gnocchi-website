@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "dev": "netlify dev",
-    "test": "node tests/qs-invariants.test.mjs && node tests/qs-regressions.test.mjs && node tests/qs-telegram.test.mjs && node tests/qs-watchdog.test.mjs && node tests/qs-state.test.mjs"
+    "test": "node tests/qs-invariants.test.mjs && node tests/qs-regressions.test.mjs && node tests/qs-telegram.test.mjs && node tests/qs-watchdog.test.mjs && node tests/qs-state.test.mjs && node tests/swing-factors.test.mjs && node tests/swing-signal.test.mjs && node tests/swing-engine.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.0",
