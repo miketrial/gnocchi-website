@@ -723,75 +723,75 @@
     #qsView tbody td .qs-vdetail{ white-space:normal }
     .qs-meter-inline{ width:80px }
   }
-  /* --- Backtest ("as-if") paper-trade log — lives inside the dark #qsBtPop popover --- */
+  /* --- Backtest ("as-if") paper-trade log — lives inside the dark :is(#qsBtPop,#stBtPop) popover --- */
   /* Two-column layout: left key rail + right content. */
-  #qsBtPop .qs-bt-layout{ display:flex; gap:20px; align-items:flex-start }
-  #qsBtPop .qs-bt-key{ flex:0 0 168px; border-right:1px solid rgba(255,255,255,.08); padding-right:16px }
-  #qsBtPop .qs-bt-main{ flex:1 1 auto; min-width:0 }
-  #qsBtPop .qs-bt-key-title{ font-size:8.5px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+  :is(#qsBtPop,#stBtPop) .qs-bt-layout{ display:flex; gap:20px; align-items:flex-start }
+  :is(#qsBtPop,#stBtPop) .qs-bt-key{ flex:0 0 168px; border-right:1px solid rgba(255,255,255,.08); padding-right:16px }
+  :is(#qsBtPop,#stBtPop) .qs-bt-main{ flex:1 1 auto; min-width:0 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-key-title{ font-size:8.5px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
     color:#8a95a8; margin-bottom:8px }
-  #qsBtPop .qs-bt-key dl{ margin:0 }
-  #qsBtPop .qs-bt-key dt{ font-size:9.5px; font-weight:700; color:#cbd5e1; margin-top:9px }
-  #qsBtPop .qs-bt-key dt:first-child{ margin-top:0 }
-  #qsBtPop .qs-bt-key dd{ margin:1px 0 0; font-size:9px; line-height:1.45; color:#8a95a8 }
-  #qsBtPop .qs-bt-key em{ font-style:normal; color:#aeb6c4; font-weight:600 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-key dl{ margin:0 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-key dt{ font-size:9.5px; font-weight:700; color:#cbd5e1; margin-top:9px }
+  :is(#qsBtPop,#stBtPop) .qs-bt-key dt:first-child{ margin-top:0 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-key dd{ margin:1px 0 0; font-size:9px; line-height:1.45; color:#8a95a8 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-key em{ font-style:normal; color:#aeb6c4; font-weight:600 }
   /* Stats grid — no card box, just a clean row of figures with a divider under it. */
-  #qsBtPop .qs-bt-stats{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px 8px;
+  :is(#qsBtPop,#stBtPop) .qs-bt-stats{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px 8px;
     padding-bottom:12px; margin-bottom:4px; border-bottom:1px solid rgba(255,255,255,.08) }
-  #qsBtPop .qs-bt-stat{ display:flex; flex-direction:column; gap:2px }
-  #qsBtPop .qs-bt-stat .k{ font-size:8.5px; letter-spacing:.4px; text-transform:uppercase; color:#8a95a8 }
-  #qsBtPop .qs-bt-stat .v{ font-size:16px; font-weight:700; color:#e8eaf0 }
-  #qsBtPop .qs-bt-stat .sub{ font-size:8.5px; color:#6b7488; margin-top:1px }
-  #qsBtPop .qs-bt-sec-head{ font-size:9px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+  :is(#qsBtPop,#stBtPop) .qs-bt-stat{ display:flex; flex-direction:column; gap:2px }
+  :is(#qsBtPop,#stBtPop) .qs-bt-stat .k{ font-size:8.5px; letter-spacing:.4px; text-transform:uppercase; color:#8a95a8 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-stat .v{ font-size:16px; font-weight:700; color:#e8eaf0 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-stat .sub{ font-size:8.5px; color:#6b7488; margin-top:1px }
+  :is(#qsBtPop,#stBtPop) .qs-bt-sec-head{ font-size:9px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
     color:#aeb6c4; margin:14px 0 4px }
-  #qsBtPop table.qs-bt-table{ width:100%; border-collapse:collapse; font-size:10px }
-  #qsBtPop table.qs-bt-table th{ text-align:right; padding:3px 8px; color:#8a95a8; font-weight:600;
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table{ width:100%; border-collapse:collapse; font-size:10px }
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table th{ text-align:right; padding:3px 8px; color:#8a95a8; font-weight:600;
     font-size:8.5px; text-transform:uppercase; letter-spacing:.4px; white-space:nowrap;
     border-bottom:1px solid rgba(255,255,255,.1) }
-  #qsBtPop table.qs-bt-table th:first-child{ text-align:left; padding-left:2px }
-  #qsBtPop table.qs-bt-table td{ text-align:right; padding:4px 8px; white-space:nowrap; color:#cbd5e1;
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table th:first-child{ text-align:left; padding-left:2px }
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table td{ text-align:right; padding:4px 8px; white-space:nowrap; color:#cbd5e1;
     border-bottom:1px solid rgba(255,255,255,.05) }
-  #qsBtPop table.qs-bt-table td:first-child{ text-align:left; padding-left:2px; font-weight:700; color:#e8eaf0 }
-  #qsBtPop table.qs-bt-table tr:last-child td{ border-bottom:none }
-  #qsBtPop table.qs-bt-table tbody tr:hover td{ background:rgba(255,255,255,.04) }
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table td:first-child{ text-align:left; padding-left:2px; font-weight:700; color:#e8eaf0 }
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table tr:last-child td{ border-bottom:none }
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table tbody tr:hover td{ background:rgba(255,255,255,.04) }
   /* Kill the global sticky-first-column rule (lines ~140-141) that paints
      these cells with the light --card colour — inside this dark popover the
      columns must stay static and transparent. */
-  #qsBtPop table.qs-bt-table th:nth-child(1), #qsBtPop table.qs-bt-table td:nth-child(1),
-  #qsBtPop table.qs-bt-table th:nth-child(2), #qsBtPop table.qs-bt-table td:nth-child(2){
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table th:nth-child(1), :is(#qsBtPop,#stBtPop) table.qs-bt-table td:nth-child(1),
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table th:nth-child(2), :is(#qsBtPop,#stBtPop) table.qs-bt-table td:nth-child(2){
     position:static; left:auto; z-index:auto; background:transparent; box-shadow:none }
-  #qsBtPop table.qs-bt-table td.qs-bt-pos, #qsBtPop .qs-bt-stat .v.qs-bt-pos{ color:#34d399; font-weight:700 }
-  #qsBtPop table.qs-bt-table td.qs-bt-neg, #qsBtPop .qs-bt-stat .v.qs-bt-neg{ color:#f87171; font-weight:700 }
-  #qsBtPop .qs-bt-reason{ font-size:8.5px; color:#8a95a8; text-transform:uppercase; letter-spacing:.3px }
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table td.qs-bt-pos, :is(#qsBtPop,#stBtPop) .qs-bt-stat .v.qs-bt-pos{ color:#34d399; font-weight:700 }
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table td.qs-bt-neg, :is(#qsBtPop,#stBtPop) .qs-bt-stat .v.qs-bt-neg{ color:#f87171; font-weight:700 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-reason{ font-size:8.5px; color:#8a95a8; text-transform:uppercase; letter-spacing:.3px }
   /* Long/short side badges on open + closed trades (bidirectional log) */
-  #qsBtPop .qs-bt-side{ font-size:8px; font-weight:700; letter-spacing:.4px; padding:1px 4px; border-radius:3px; vertical-align:middle }
-  #qsBtPop .qs-bt-side-long{ background:rgba(52,211,153,.16); color:#34d399 }
-  #qsBtPop .qs-bt-side-short{ background:rgba(248,113,113,.16); color:#f87171 }
-  #qsBtPop .qs-bt-empty{ font-size:11px; color:#8a95a8; padding:14px 4px; line-height:1.5 }
-  #qsBtPop .qs-bt-note{ font-size:9px; color:#6b7488; margin-top:14px; padding-top:10px;
+  :is(#qsBtPop,#stBtPop) .qs-bt-side{ font-size:8px; font-weight:700; letter-spacing:.4px; padding:1px 4px; border-radius:3px; vertical-align:middle }
+  :is(#qsBtPop,#stBtPop) .qs-bt-side-long{ background:rgba(52,211,153,.16); color:#34d399 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-side-short{ background:rgba(248,113,113,.16); color:#f87171 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-empty{ font-size:11px; color:#8a95a8; padding:14px 4px; line-height:1.5 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-note{ font-size:9px; color:#6b7488; margin-top:14px; padding-top:10px;
     border-top:1px solid rgba(255,255,255,.06); line-height:1.5 }
   /* Equity curve (strategy vs SPY) */
-  #qsBtPop .qs-bt-chart{ margin-top:14px }
-  #qsBtPop .qs-bt-chart svg{ display:block; width:100%; height:auto; overflow:visible }
-  #qsBtPop .qs-bt-chart-legend{ display:flex; gap:14px; align-items:center; margin-top:6px; font-size:9px; color:#8a95a8 }
-  #qsBtPop .qs-bt-chart-legend .sw{ display:inline-block; width:14px; height:0; border-top-width:2px; border-top-style:solid; margin-right:5px; vertical-align:middle }
+  :is(#qsBtPop,#stBtPop) .qs-bt-chart{ margin-top:14px }
+  :is(#qsBtPop,#stBtPop) .qs-bt-chart svg{ display:block; width:100%; height:auto; overflow:visible }
+  :is(#qsBtPop,#stBtPop) .qs-bt-chart-legend{ display:flex; gap:14px; align-items:center; margin-top:6px; font-size:9px; color:#8a95a8 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-chart-legend .sw{ display:inline-block; width:14px; height:0; border-top-width:2px; border-top-style:solid; margin-right:5px; vertical-align:middle }
   /* Collapsible per-ticker sections */
-  #qsBtPop details.qs-bt-tk{ border-bottom:1px solid rgba(255,255,255,.06) }
-  #qsBtPop details.qs-bt-tk[open]{ background:rgba(255,255,255,.015) }
-  #qsBtPop details.qs-bt-tk > summary{ list-style:none; cursor:pointer; display:flex; align-items:baseline;
+  :is(#qsBtPop,#stBtPop) details.qs-bt-tk{ border-bottom:1px solid rgba(255,255,255,.06) }
+  :is(#qsBtPop,#stBtPop) details.qs-bt-tk[open]{ background:rgba(255,255,255,.015) }
+  :is(#qsBtPop,#stBtPop) details.qs-bt-tk > summary{ list-style:none; cursor:pointer; display:flex; align-items:baseline;
     gap:10px; padding:7px 4px; font-size:10px; color:#cbd5e1; user-select:none }
-  #qsBtPop details.qs-bt-tk > summary::-webkit-details-marker{ display:none }
-  #qsBtPop details.qs-bt-tk > summary:hover{ background:rgba(255,255,255,.03) }
-  #qsBtPop .qs-bt-tk-chev{ color:#6b7488; font-size:9px; width:9px; transition:transform .12s ease; flex:0 0 auto }
-  #qsBtPop details.qs-bt-tk[open] .qs-bt-tk-chev{ transform:rotate(90deg) }
-  #qsBtPop .qs-bt-tk-sym{ font-weight:700; color:#e8eaf0; flex:0 0 52px }
-  #qsBtPop .qs-bt-tk-m{ color:#8a95a8; flex:0 0 auto }
-  #qsBtPop .qs-bt-tk-spacer{ flex:1 1 auto }
-  #qsBtPop .qs-bt-tk-cum{ font-weight:700; flex:0 0 auto }
-  #qsBtPop details.qs-bt-tk > .qs-bt-tk-body{ padding:2px 4px 10px }
+  :is(#qsBtPop,#stBtPop) details.qs-bt-tk > summary::-webkit-details-marker{ display:none }
+  :is(#qsBtPop,#stBtPop) details.qs-bt-tk > summary:hover{ background:rgba(255,255,255,.03) }
+  :is(#qsBtPop,#stBtPop) .qs-bt-tk-chev{ color:#6b7488; font-size:9px; width:9px; transition:transform .12s ease; flex:0 0 auto }
+  :is(#qsBtPop,#stBtPop) details.qs-bt-tk[open] .qs-bt-tk-chev{ transform:rotate(90deg) }
+  :is(#qsBtPop,#stBtPop) .qs-bt-tk-sym{ font-weight:700; color:#e8eaf0; flex:0 0 52px }
+  :is(#qsBtPop,#stBtPop) .qs-bt-tk-m{ color:#8a95a8; flex:0 0 auto }
+  :is(#qsBtPop,#stBtPop) .qs-bt-tk-spacer{ flex:1 1 auto }
+  :is(#qsBtPop,#stBtPop) .qs-bt-tk-cum{ font-weight:700; flex:0 0 auto }
+  :is(#qsBtPop,#stBtPop) details.qs-bt-tk > .qs-bt-tk-body{ padding:2px 4px 10px }
   #qsBtBtn:hover{ color:var(--ink) }
-  @media (max-width:620px){ #qsBtPop .qs-bt-layout{ flex-direction:column }
-    #qsBtPop .qs-bt-key{ flex-basis:auto; border-right:none; border-bottom:1px solid rgba(255,255,255,.08);
+  @media (max-width:620px){ :is(#qsBtPop,#stBtPop) .qs-bt-layout{ flex-direction:column }
+    :is(#qsBtPop,#stBtPop) .qs-bt-key{ flex-basis:auto; border-right:none; border-bottom:1px solid rgba(255,255,255,.08);
       padding-right:0; padding-bottom:10px } }
   /* ===== END QUICK SWING FEATURE ===== */
   /* Ready sub-tier divider headings (Premium / Standard) */
