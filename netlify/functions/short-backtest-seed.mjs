@@ -12,7 +12,7 @@
 import { listShortRows, getShortTrades, putShortTrades,
          getSpyHistCache, putSpyHistCache, getSectorHistCache, putSectorHistCache } from "../lib/store.mjs";
 import { safe, delay } from "../lib/fmp-client.mjs";
-import { cleanHist } from "../lib/quickswing-pipeline.mjs";
+import { cleanHist, adjustSplits } from "../lib/quickswing-pipeline.mjs";
 import {
   replayShortTrades, strengthSeriesFor, mergeShortSeed, pruneShortWindow, needsShortSeed,
   annotateShortBenchmarks, dailySignalLog, SBT_SEED_VERSION, SBT_WINDOW_DAYS,
@@ -75,7 +75,10 @@ export default async () => {
         // Fetch the ticker's own history. Its sector ETF comes from the already-
         // scored row (no per-ticker profile fetch → ~half the FMP calls, faster backfill).
         const rawHist = await safe("historical-price-eod/full", sym, "&limit=420"); await delay(120);
-        const hist = cleanHist(rawHist);
+        // Split/corporate-action back-adjust so the historical replay never books a
+        // phantom split gap (e.g. HON 1:2 on 2026-06-29 → a spurious −47% STOP).
+        const splits = await safe("splits", sym, "&limit=20").catch(() => []); await delay(120);
+        const hist = adjustSplits(cleanHist(rawHist), splits);
         const r0 = rowBySym.get(sym) || {};
         const etf = etfFor(r0.sector, r0.industry);
 

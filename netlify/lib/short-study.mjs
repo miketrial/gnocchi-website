@@ -332,6 +332,9 @@ function pnlPct(rec, exitPrice) {
    the close, (3) signal flip at the close, (4) time stop. Runs out of bars → last
    close. `rule` fields:
      initStopAtr  — initial hard stop at entry ± mult×ATR14(entry), 0/undefined = off
+     hardStopPct  — fixed % hard stop at entry×(1∓pct) capping the single-trade loss;
+                    taken as the tighter of {ATR stop, hard line}, filled pessimistically
+                    at the open on a gap-through. 0/undefined = off
      trailAtr     — chandelier trailing stop: extreme-since-entry ∓ mult×ATR14(bar)
      target       — "none" | "pct" | "trendBreak" | "maCross"
      pctX         — fractional target for target:"pct" (e.g. 0.15)
@@ -342,6 +345,11 @@ export function simulateShortExit(rec, rule) {
   const entry = rec.entryClose;
   const initStop = (rule.initStopAtr > 0 && rec.entryAtr14 > 0)
     ? (long ? entry - rule.initStopAtr * rec.entryAtr14 : entry + rule.initStopAtr * rec.entryAtr14)
+    : null;
+  // Fixed-% hard stop pinned at entry (no trailing): caps single-trade loss so a
+  // hyper-volatile name can't ride a too-wide ATR stop to −67%. Tighter-of below.
+  const hardStop = (rule.hardStopPct > 0)
+    ? (long ? entry * (1 - rule.hardStopPct) : entry * (1 + rule.hardStopPct))
     : null;
   let extreme = entry; // highest high (long) / lowest low (short) seen since entry
 
@@ -355,9 +363,9 @@ export function simulateShortExit(rec, rule) {
       const atr = bar.atr14 > 0 ? bar.atr14 : rec.entryAtr14;
       if (atr > 0) trailStop = long ? extreme - rule.trailAtr * atr : extreme + rule.trailAtr * atr;
     }
-    // The effective stop is the tighter (more protective) of init + trailing.
+    // The effective stop is the tighter (more protective) of init + trailing + hard-%.
     let stop = null;
-    for (const s of [initStop, trailStop]) {
+    for (const s of [initStop, trailStop, hardStop]) {
       if (s == null) continue;
       if (stop == null) stop = s;
       else stop = long ? Math.max(stop, s) : Math.min(stop, s);
@@ -470,6 +478,13 @@ export function swingExitGrid() {
     { label: "pct20_atr30",   target: "pct", pctX: 0.20, timeStop: 63, initStopAtr: 3.0 },
     { label: "flip_atr30",    target: "none", useFlip: true, timeStop: 63, initStopAtr: 3.0 },
     { label: "flip_chand30",  target: "none", useFlip: true, timeStop: 63, trailAtr: 3.0 },
+    // Hard-% stop cap variants (risk-first calibration): the tighter of the ATR stop
+    // and a fixed entry×(1−pct) line bounds the single-trade tail. Sweeps build their
+    // own explicit cap grids; these named rows anchor the incumbent + baseline exits.
+    { label: "maCross_atr40_cap15", target: "maCross", timeStop: 63, initStopAtr: 4.0, hardStopPct: 0.15 },
+    { label: "maCross_atr40_cap20", target: "maCross", timeStop: 63, initStopAtr: 4.0, hardStopPct: 0.20 },
+    { label: "hold63_cap15",        target: "none",    timeStop: 63, hardStopPct: 0.15 },
+    { label: "hold63_cap20",        target: "none",    timeStop: 63, hardStopPct: 0.20 },
   ];
 }
 
