@@ -59,15 +59,16 @@
      2. netlify/functions/quickswing-rescan-background.mjs
      3. netlify/functions/quickswing-watchlist.mjs
      3b. netlify/functions/quickswing-delete.mjs
-     3c. Telegram alert layer (notifications):
+     3c. Background refresh loop (formerly the Telegram alert layer — the outbound
+         texts were retired; the alert-background worker was reduced to a pure
+         5-min re-scorer that keeps the Bounce lists fresh, and the hourly-summary
+         worker/cron were deleted outright):
          netlify/functions/quickswing-alert-cron.mjs
-         netlify/functions/quickswing-alert-background.mjs
-         netlify/functions/quickswing-summary-cron.mjs
-         netlify/functions/quickswing-summary-background.mjs
-         netlify/lib/quickswing-alert.mjs
-         netlify/lib/quickswing-summary.mjs
-         netlify/lib/telegram.mjs
-         (also unset the TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID Netlify env vars)
+         netlify/functions/quickswing-alert-background.mjs   (now refresh-only)
+         netlify/lib/quickswing-alert.mjs   (also the shared ET helpers — see below)
+         netlify/lib/quickswing-summary.mjs (retired; kept only for its unit tests)
+         netlify/lib/telegram.mjs           (retired; kept only for its unit tests)
+         (the TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID Netlify env vars are now unused)
      4. netlify.toml — remove the block between the
         "===== QUICK SWING FEATURE =====" / "===== END QUICK SWING FEATURE ====="
         comment markers
@@ -81,8 +82,11 @@
         "qs-fmp", and "spy-hist" Netlify Blobs stores (Netlify dashboard → Blobs) — stale data,
         not referenced by anything else once the above is gone.
    NOT removable without also touching short-pipeline.mjs (shared, keep):
-     netlify/lib/ta-helpers.mjs, netlify/lib/fmp-client.mjs — short-pipeline.mjs
-     depends on these too; they pre-date nothing here breaking if quickswing
+     netlify/lib/ta-helpers.mjs, netlify/lib/fmp-client.mjs, and
+     netlify/lib/quickswing-alert.mjs — short-pipeline.mjs imports the ET wall-clock
+     helpers (etDateStr/etParts) from quickswing-alert.mjs for its partial-bar
+     guard, so that file can't be deleted with 3c even though its alerting logic is
+     now unused by production. They pre-date nothing here breaking if quickswing
      goes away, just stop being imported by two files instead of one. */
 import {
   getQuickswingFmpCache, putQuickswingFmpCache, deleteQuickswingFmpCache,

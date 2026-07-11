@@ -1,5 +1,12 @@
 /* ===== QUICK SWING FEATURE =====
-   Pure (blob-free, network-free) logic for the HOURLY Telegram summary layer:
+   RETIRED — the hourly Telegram summary was removed along with the rest of the
+   Bounce notification layer; the scheduled worker/cron that consumed these
+   functions (quickswing-summary-{background,cron}.mjs) are deleted. This module
+   is retained only because the unit tests still exercise its pure logic (and
+   formatDailyTop, once used by the daily scan's digest text). Safe to delete
+   outright if you also drop the summary assertions from tests/qs-invariants.
+
+   Pure (blob-free, network-free) logic for the former HOURLY Telegram summary:
      - summaryWindow(now): is this a top-of-hour ET slot we summarize on (weekday
        10:00–16:00 ET, covering the 09:30 open through the 16:00 close)?
      - summaryLabel(hour): the "10:00 AM ET" style label for the message header.
@@ -9,9 +16,7 @@
      - formatSummary(diff, cur, label): the Telegram message body.
 
    Side-effect-free on purpose so the gating + diff rules can be unit-tested with
-   synthetic snapshots and a fake `now`, no FMP / Netlify Blobs / live clock. The
-   worker (quickswing-summary-background.mjs) and scheduler
-   (quickswing-summary-cron.mjs) wire these to real I/O.
+   synthetic snapshots and a fake `now`, no FMP / Netlify Blobs / live clock.
    Removable with the rest of the QUICK SWING FEATURE block. */
 import { etParts } from "./quickswing-alert.mjs";
 import { isMarketHoliday, isHalfDay } from "./market-calendar.mjs";

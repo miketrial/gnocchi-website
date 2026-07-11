@@ -15,12 +15,10 @@
      3. Ranks by buy score, EXCLUDES names already on the manual watchlist (pure
         discovery), caps picks per sector for diversity, keeps the top N, and
         REPLACES the qs-daily list wholesale (yesterday's picks are dropped).
-     4. Sends ONE separate Telegram message (its own header/time — never touches
-        the hourly watchlist summary or the 5-min alerts).
 
-   The kept top-N then ride the existing 5-min alert loop (see
-   quickswing-alert-background.mjs) for live rescoring + verdict alerts until the
-   next morning's scan replaces them.
+   The kept top-N then ride the existing 5-min refresh loop (see
+   quickswing-alert-background.mjs) for live rescoring until the next morning's
+   scan replaces them.
 
    DELIBERATELY NOT recorded into the paper-trade BACKTEST LOG (qs-trades): the
    backtest is scoped to the hand-curated watchlist only (written solely by
@@ -34,9 +32,7 @@ import { getBounceUniverse } from "../lib/qs-universe.mjs";
 import { replaceQsDaily, acquireLock, releaseLock, listQuickswingRows, putQsLastScan, listQsStopMarks } from "../lib/store.mjs";
 import { previousTradingDay } from "../lib/market-calendar.mjs";
 import { fmpCallCount } from "../lib/fmp-client.mjs";
-import { sendTelegram } from "../lib/telegram.mjs";
-import { formatDailyTop } from "../lib/quickswing-summary.mjs";
-import { etDateStr, etClockLabel } from "../lib/quickswing-alert.mjs";
+import { etDateStr } from "../lib/quickswing-alert.mjs";
 
 const TOP_N = Number(process.env.QS_DAILY_TOP_N || 15);   // picks kept + alerted
 const UNIVERSE_N = Number(process.env.QS_DAILY_UNIVERSE_N || 250); // names scanned (quality-filtered most-active)
@@ -170,14 +166,6 @@ export default async (req) => {
     const na = Math.max(0, universe.length - usable);
     const degraded = uni.stale || (universe.length > 0 && na / universe.length > 0.5);
     await putQsLastScan({ day, scanned: scored.length, universe: universe.length, na, degraded }).catch(() => {});
-
-    try {
-      await sendTelegram(formatDailyTop({
-        rows: top, regime, label: etClockLabel(new Date()), scanned: scored.length,
-        universe: universe.length, degraded,
-        stale: !!uni.stale, asOfDay: uni.day,
-      }));
-    } catch (e) { console.error("[qs-daily] telegram failed:", e?.message || e); }
 
     const elapsedS = (Date.now() - started) / 1000;
     const calls = fmpCallCount() - callsBefore;
