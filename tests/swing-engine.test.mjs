@@ -6,9 +6,10 @@
 import assert from "node:assert/strict";
 import {
   recordShortTransition, pruneShortWindow, mergeShortSeed, emptyShortLog, needsShortSeed,
-  shortSpyReturnBetween, annotateShortBenchmarks, sessionComplete,
+  shortSpyReturnBetween, annotateShortBenchmarks, sessionComplete, dailySignalLog,
   SBT_STOP_ATR_MULT, SBT_TIME_STOP_DAYS, SBT_SEED_VERSION,
 } from "../netlify/lib/short-backtest.mjs";
+import { mkHist } from "./swing-helpers.mjs";
 
 let pass = 0, proofs = 0, fail = 0;
 const T = (name, fn) => { try { fn(); pass++; } catch (e) { fail++; console.log("❌ FAIL:", name, "\n   ", e.message); } };
@@ -136,6 +137,17 @@ T("prune preserves seeded/seedVersion metadata", () => {
   assert.equal(out.seeded, true);
   assert.equal(out.seedVersion, SBT_SEED_VERSION);
 });
+T("prune + fold preserve the notifier dailyLog + sym (a rescan must not strip them)", () => {
+  const seeded = { sym: "X", open: null, closed: [], seeded: true, seedVersion: SBT_SEED_VERSION,
+    dailyLog: [{ date: "2026-07-09", action: "BUY", price: 100 }] };
+  const pruned = pruneShortWindow(seeded);
+  assert.deepEqual(pruned.dailyLog, seeded.dailyLog);
+  assert.equal(pruned.sym, "X");
+  // and through a live fold (recordShortTransition on the seeded log)
+  const folded = recordShortTransition("X", sig({ date: "2026-07-10", close: 100, entryStrong: false }), seeded);
+  assert.deepEqual(folded.dailyLog, seeded.dailyLog);
+  assert.equal(folded.sym, "X");
+});
 T("prune caps closed at 200", () => {
   const now = new Date().toISOString();
   const closed = Array.from({ length: 250 }, (_, i) => ({ sym: "X", entryScoredAt: now, pnlPct: i }));
@@ -215,6 +227,31 @@ PROOF("partial-bar proof: an intraday tick on today's date must NOT count as a c
   // let the fold book on the in-progress partial bar — the look-ahead bug.
   assert.equal(sessionComplete("2026-07-08", "2026-07-08", 60 * 11), false); // 11:00 ET, mid-session
 });
+
+/* ---------- dailySignalLog (the 15-day BUY/SELL/HOLD notifier) ---------- */
+{
+  // clean, liquid, monotonic uptrend → a fresh BUY on the first replayed session, then HOLDs.
+  const rise = Array.from({ length: 260 }, (_, i) => Math.round((70 + 50 * ((259 - i) / 259)) * 100) / 100);
+  const hist = mkHist(rise, { vol: 3_000_000 });
+  const spyStr = hist.map(b => ({ date: b.date, strength: 0 }));
+  const secStr = hist.map(b => ({ date: b.date, strength: 0.3 }));
+  const dl = dailySignalLog("X", hist, spyStr, secStr, { sessions: 6, replaySessions: 6 });
+  T("dailySignalLog: fresh BUY on entry then HOLD in a sustained uptrend", () => {
+    assert.equal(dl.days.length, 6);
+    assert.equal(dl.days[0].action, "BUY");
+    assert.ok(dl.days.slice(1).every(d => d.action === "HOLD"));
+    assert.ok(dl.open); // still in the position at window end
+  });
+  T("dailySignalLog: every fired day carries the guardrail-pass + score", () => {
+    assert.ok(dl.days.every(d => d.guardrailPass === true && d.techScore >= 12));
+  });
+  PROOF("dailySignalLog proof: a sub-guardrail name must NOT emit a BUY", () => {
+    const thin = mkHist(rise, { vol: 2_000_000 }); // ~$236M/day < $300M floor
+    const dlThin = dailySignalLog("X", thin, spyStr, secStr, { sessions: 6, replaySessions: 6 });
+    assert.ok(!dlThin.days.some(d => d.action === "BUY")); // guardrail blocks the entry
+    assert.ok(dlThin.days.some(d => d.action === "WATCH")); // shown as strong-but-blocked
+  });
+}
 
 /* ---------- seed gating ---------- */
 T("needsShortSeed: null/old version ⇒ true, current ⇒ false", () => {

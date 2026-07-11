@@ -4,7 +4,7 @@
    off the same numbers the site shows (the "byte-identical" claim in the code).
    Run: node tests/swing-signal.test.mjs */
 import assert from "node:assert/strict";
-import { computeShortSignal, SBT_ENTRY_MIN, SBT_STOP_ATR_MULT } from "../netlify/lib/short-backtest.mjs";
+import { computeShortSignal, SBT_ENTRY_MIN, SBT_STOP_ATR_MULT, SBT_LIQ_FLOOR } from "../netlify/lib/short-backtest.mjs";
 import {
   checkTrend, check3MMomentum, checkNearHigh, checkLiquidity, checkVolumeSurge, checkSectorStrength,
 } from "../netlify/lib/short-pipeline.mjs";
@@ -43,18 +43,34 @@ T("entryStrong FALSE in a downtrend (uptrend gate)", () => {
   const s = computeShortSignal(trendHist(90, 95, 120), { spyStrength: 0, sectorStrength: 0.3 });
   assert.equal(s.entryStrong, false);
 });
-T("entryStrong implies all three gate conditions", () => {
-  // strong, liquid uptrend near a pullback high with a leading sector
-  const closes = seg([[1, 108], [49, 112], [1, 120], [209, 90]]); // 260 bars, high=120 interior, now=108 (10% off)
-  const s = computeShortSignal(mkHist(closes, { vol: 2_000_000 }), { spyStrength: 0, sectorStrength: 0.2 });
-  if (s.entryStrong) {
-    assert.ok(s.techScore >= SBT_ENTRY_MIN, `techScore ${s.techScore} < ${SBT_ENTRY_MIN}`);
-    assert.equal(s.uptrend, true);
-    assert.ok(s.liqPts >= 1);
-  }
+// A clean, liquid, monotonic uptrend (newest-first 120→70) that genuinely clears
+// the entry gate — techScore 14, uptrend, ≥$300M/day at vol 3M.
+const riseCloses = Array.from({ length: 260 }, (_, i) => Math.round((70 + 50 * ((259 - i) / 259)) * 100) / 100);
+T("entryStrong implies all three gate conditions (score, uptrend, guardrail)", () => {
+  const s = computeShortSignal(mkHist(riseCloses, { vol: 3_000_000 }), { spyStrength: 0, sectorStrength: 0.3 });
+  assert.equal(s.entryStrong, true);
+  assert.ok(s.techScore >= SBT_ENTRY_MIN);
+  assert.equal(s.uptrend, true);
+  assert.ok(s.avgDollarVol >= SBT_LIQ_FLOOR);
 });
 PROOF("entry gate proof: a downtrend can never be entryStrong even with max sector RS", () =>
   assert.equal(computeShortSignal(trendHist(90, 95, 120), { spyStrength: -1, sectorStrength: 1 }).entryStrong, false));
+
+/* ---------- liquidity guardrail (≥$300M/day) — the Phase-2 defensive filter ---------- */
+T("guardrail: entryStrong FALSE below $300M/day even when strong + uptrend", () => {
+  const opts = { spyStrength: 0, sectorStrength: 0.3 };
+  const hi = computeShortSignal(mkHist(riseCloses, { vol: 3_000_000 }), opts); // ~$354M/day
+  const lo = computeShortSignal(mkHist(riseCloses, { vol: 2_000_000 }), opts); // ~$236M/day
+  assert.ok(hi.avgDollarVol >= SBT_LIQ_FLOOR && lo.avgDollarVol < SBT_LIQ_FLOOR);
+  assert.equal(hi.techScore, lo.techScore);   // the guardrail must NOT change the score
+  assert.equal(hi.entryStrong, true);
+  assert.equal(lo.entryStrong, false);         // only the liquidity floor flipped it
+});
+PROOF("guardrail proof: it is the $-volume floor (not the score) that blocks the sub-tier name", () => {
+  const lo = computeShortSignal(mkHist(riseCloses, { vol: 2_000_000 }), { spyStrength: 0, sectorStrength: 0.3 });
+  assert.ok(lo.techScore >= SBT_ENTRY_MIN && lo.uptrend); // strong + uptrend...
+  assert.equal(lo.entryStrong, false);                    // ...yet blocked, purely by the guardrail
+});
 
 /* ---------- PARITY: techScore == sum of the live scorer's 6 technical factors ----------
    The whole backtest rests on this: the reconstructed signal must equal what the

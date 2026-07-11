@@ -15,7 +15,7 @@ import { safe, delay } from "../lib/fmp-client.mjs";
 import { cleanHist } from "../lib/quickswing-pipeline.mjs";
 import {
   replayShortTrades, strengthSeriesFor, mergeShortSeed, pruneShortWindow, needsShortSeed,
-  annotateShortBenchmarks, SBT_SEED_VERSION, SBT_WINDOW_DAYS,
+  annotateShortBenchmarks, dailySignalLog, SBT_SEED_VERSION, SBT_WINDOW_DAYS,
 } from "../lib/short-backtest.mjs";
 
 const BATCH = 2; // swing replays are heavier than Bounce's (130-session vs 15) —
@@ -95,6 +95,12 @@ export default async () => {
           next = pruneShortWindow(mergeShortSeed(existing, seed));
         }
         annotateShortBenchmarks(next, spyHist);
+        // Last-15-session daily BUY/SELL/HOLD notifier log — computed from the same
+        // fetched hist + strength series (no extra FMP call), stored alongside the
+        // trade log so the popover can show "what the signal fired recently".
+        const dl = dailySignalLog(sym, hist, spyStr, sectorStr, { sessions: 15 });
+        next.dailyLog = dl.days;
+        next.sym = sym;               // the notifier render keys off this (trade log had no top-level sym)
         next.seeded = true;
         next.seedVersion = SBT_SEED_VERSION;
         await putShortTrades(sym, next);

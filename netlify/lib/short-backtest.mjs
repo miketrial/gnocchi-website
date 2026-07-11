@@ -42,10 +42,17 @@ export const SBT_SEED_SESSIONS = 130;      // trading days replayed on the first
 export const SBT_STOP_ATR_MULT = 4.0;      // catastrophe stop = entry − 4×ATR14 (wide; swing needs room)
 export const SBT_TIME_STOP_DAYS = 63;      // sessions — the outer 3-month swing bound
 export const SBT_ENTRY_MIN = 12;           // technical strong bar (12/18 = same 67% as 22/33 live)
+// Liquidity guardrail: the validation (docs/swing-validation-report.md, Phase 2)
+// showed the swing signal's only positive edge lives in the most-liquid mega-caps
+// (≥$300M/day recent-median $-volume); below ~$300M/day the edge is flat-to-
+// significantly-NEGATIVE. So entries are gated on this floor — a defensive filter
+// that removes a real negative-edge region, NOT an alpha claim.
+export const SBT_LIQ_FLOOR = 300e6;
 // Bump when the entry/exit calibration changes so already-seeded logs re-seed.
 // v1: long-only, entry techScore≥12 & uptrend, exit 4×ATR / 50-200 death-cross / 63d.
 // v2: Near-High factor re-tuned (top mark → 5-18% pullback zone, not pinned at high).
-export const SBT_SEED_VERSION = 2;
+// v3: liquidity guardrail — entries require avgDollarVol ≥ $300M/day (SBT_LIQ_FLOOR).
+export const SBT_SEED_VERSION = 3;
 
 const round2 = x => (x == null ? null : Math.round(x * 100) / 100);
 
@@ -162,8 +169,9 @@ export function computeShortSignal(hist, { spyStrength = null, sectorStrength = 
     techScore, price, sma50: round2(sma50), sma200: round2(sma200), uptrend,
     deathCross: sma50 < sma200,
     atr14: round2(atrFrom(hist, 0, 14)),
-    liqPts,
-    entryStrong: techScore >= SBT_ENTRY_MIN && uptrend && liqPts >= 1,
+    liqPts, avgDollarVol: Math.round(avgDollarVol),
+    // Liquidity guardrail: entries require the mega-cap $-volume floor (see SBT_LIQ_FLOOR).
+    entryStrong: techScore >= SBT_ENTRY_MIN && uptrend && avgDollarVol >= SBT_LIQ_FLOOR,
     bar: { date: b0.date, open: b0.open ?? b0.close, high: b0.high ?? b0.close, low: b0.low ?? b0.close, close: b0.close ?? b0.price },
   };
 }
@@ -179,6 +187,8 @@ export function pruneShortWindow(log, days = SBT_WINDOW_DAYS) {
   const out = { open: log.open ?? null, closed: closed.slice(0, MAX_CLOSED) };
   if (log.seeded) out.seeded = true;
   if (log.seedVersion != null) out.seedVersion = log.seedVersion;
+  if (log.dailyLog) out.dailyLog = log.dailyLog;   // preserve the notifier snapshot
+  if (log.sym) out.sym = log.sym;                   // preserve the ticker key (the render needs it)
   return out;
 }
 
@@ -244,6 +254,10 @@ export function recordShortTransition(sym, sig, prevLog, scoredAt) {
     : emptyShortLog();
   if (prevLog && prevLog.seeded) log.seeded = true;
   if (prevLog && prevLog.seedVersion != null) log.seedVersion = prevLog.seedVersion;
+  // Carry the notifier snapshot + ticker key through the fold so a live rescan
+  // doesn't strip the last-15-session daily log written by the seed.
+  if (prevLog && prevLog.dailyLog) log.dailyLog = prevLog.dailyLog;
+  if (prevLog && prevLog.sym) log.sym = prevLog.sym;
 
   if (!sig || !sig.bar || !(sig.bar.close > 0)) return log; // unscoreable bar — leave open position untouched
   const bar = sig.bar;
@@ -353,5 +367,49 @@ export function replayShortTrades(sym, hist, spyStrSeries, sectorStrSeries, spyH
   }
   annotateShortBenchmarks(log, spyHist);
   return log;
+}
+
+/* ---------- Daily BUY/SELL/HOLD notifier log ----------
+   A per-session view of what the swing signal did — the "notifier" the tab is
+   really for. Replays the full seed window so position state is correct, records
+   the ACTION at every session, and returns the last `sessions` days:
+     BUY  — a fresh entry fired this session (entryStrong transition, guardrail-passed)
+     SELL — an open position exited this session (reason: STOP / TREND / TIME)
+     HOLD — in an open position, trend intact
+     WATCH— flat, and this session was strong-but-blocked (uptrend+score but below
+            the $300M/day guardrail, so no entry — shows why a name didn't fire)
+     FLAT — flat, no setup
+   Honest by construction: it shows the mechanism (which signals fire on real
+   data), NOT a profit claim — the validation found the timing adds no edge. Pure;
+   the caller supplies the fetched hist + precomputed SPY/sector strength series. */
+export function dailySignalLog(sym, hist, spyStrSeries, sectorStrSeries, { sessions = 15, replaySessions = SBT_SEED_SESSIONS } = {}) {
+  if (!Array.isArray(hist) || hist.length < 205) return { sym, days: [], open: null };
+  const dates = hist.slice(0, replaySessions).map(b => b.date).reverse(); // oldest→newest
+  let log = emptyShortLog();
+  const all = [];
+  for (const date of dates) {
+    const hAsOf = hist.filter(d => d.date <= date);
+    if (hAsOf.length < 200) continue;
+    const sig = computeShortSignal(hAsOf, {
+      spyStrength: strengthAsOf(spyStrSeries, date),
+      sectorStrength: strengthAsOf(sectorStrSeries, date),
+    });
+    if (!sig) continue;
+    const hadOpen = !!log.open;
+    log = recordShortTransition(sym, sig, log, `${date}T21:00:00.000Z`);
+    const nowOpen = !!log.open;
+    let action, reason = null;
+    if (!hadOpen && nowOpen) action = "BUY";
+    else if (hadOpen && !nowOpen) { action = "SELL"; reason = log.closed[0]?.exitReason || null; }
+    else if (hadOpen && nowOpen) action = "HOLD";
+    else action = (sig.techScore >= SBT_ENTRY_MIN && sig.uptrend) ? "WATCH" : "FLAT"; // strong-but-below-guardrail vs no setup
+    all.push({
+      date, action, reason,
+      techScore: sig.techScore, price: round2(sig.bar.close), uptrend: sig.uptrend,
+      avgDollarVol: sig.avgDollarVol, guardrailPass: sig.avgDollarVol >= SBT_LIQ_FLOOR,
+      stopPrice: nowOpen ? log.open.stopPrice : null,
+    });
+  }
+  return { sym, days: all.slice(-sessions), open: log.open, seedVersion: SBT_SEED_VERSION };
 }
 /* ===== END SWING BACKTEST FEATURE ===== */

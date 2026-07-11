@@ -1669,7 +1669,7 @@
     <span style="font-size:12px;font-weight:700;letter-spacing:.3px">Swing backtest · as-if trade log</span>
     <span id="stBtClose" style="cursor:pointer;color:#8a95a8;font-size:13px;padding:0 2px">✕</span>
   </div>
-  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px">Go long each time the swing trend signal turns strong (uptrend + 12/18 on the price-based factors) — each exits on a 50/200 death-cross, a 4×ATR stop, or a 63-day cap · rolling ~6.5-month window (an EOD reconstruction of the trend/momentum core of the score, not a live track record) · backfilled the first time you open this</div>
+  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px"><b style="color:#fbbf24">Honest framing:</b> a 2y+ validation across a broad universe found <b>no demonstrated market-timing edge</b> — this is a mega-cap momentum screen that captures market <i>beta</i>, not alpha (the signal's entries slightly trail just holding the same names). Use it as a <b>BUY/SELL notifier</b> of what the swing signal fires on real data, not a profit guarantee. Entries now require <b>≥$300M/day</b> liquidity — the only tier where any edge appeared. · Below: the last 15 sessions' daily signals + the as-if long-only trade log (EOD reconstruction; exits on a 50/200 death-cross, a 4×ATR stop, or a 63-day cap; SPY benchmark) · backfilled the first time you open this.</div>
   <div id="stBtStatus" style="display:none;font-size:10px;color:#fbbf24;margin-bottom:10px">⟳ Backfilling history…</div>
   <div class="qs-bt-layout">
     <aside class="qs-bt-key">
@@ -1688,6 +1688,7 @@
     </aside>
     <div class="qs-bt-main">
       <div id="stBtStats" class="qs-bt-stats"></div>
+      <div id="stBtSignals"></div>
       <div id="stBtChart"></div>
       <div id="stBtOpen"></div>
       <div id="stBtClosed"></div>
@@ -4578,6 +4579,40 @@ function renderStBacktest(){
       stat('Cumulative', dollars(cumDollars), qsBtPnlClass(cumDollars), hasBench ? `SPY same days ${dollars(cumSpy)}` : '');
   }
 
+  // Last-15-session daily BUY/SELL notifier — aggregated across all tickers.
+  const sigEl = document.getElementById('stBtSignals');
+  if (sigEl) {
+    const buys = [], sells = [], watch = [];
+    let lastDate = '';
+    for (const l of stBacktestLogs) {
+      if (!l || !Array.isArray(l.dailyLog) || !l.dailyLog.length) continue;
+      for (const d of l.dailyLog) {
+        if (d.date > lastDate) lastDate = d.date;
+        if (d.action === 'BUY') buys.push({ sym: l.sym, date: d.date, price: d.price });
+        else if (d.action === 'SELL') sells.push({ sym: l.sym, date: d.date, reason: d.reason });
+      }
+      const last = l.dailyLog[l.dailyLog.length - 1];
+      if (last && last.action === 'WATCH') watch.push(l.sym);
+    }
+    if (!buys.length && !sells.length && !watch.length) {
+      sigEl.innerHTML = '';
+    } else {
+      buys.sort((a, b) => b.date.localeCompare(a.date));
+      sells.sort((a, b) => b.date.localeCompare(a.date));
+      const chip = (bg, txt) => `<span style="display:inline-block;background:${bg};border-radius:5px;padding:2px 7px;margin:2px 4px 2px 0;font-size:10px;white-space:nowrap">${txt}</span>`;
+      const buyChips = buys.map(b => chip('rgba(52,211,153,.14)', `<b>${escHtml(b.sym)}</b> ${qsBtDate(b.date+'T21:00:00Z')} · ${qsBtPrice(b.price)}`)).join('') || '<span class="qs-bt-empty">none</span>';
+      const sellChips = sells.map(s => chip('rgba(248,113,113,.14)', `<b>${escHtml(s.sym)}</b> ${qsBtDate(s.date+'T21:00:00Z')} · ${escHtml(s.reason||'')}`)).join('') || '<span class="qs-bt-empty">none</span>';
+      const watchLine = watch.length
+        ? `<div style="margin-top:8px;font-size:9.5px;color:#8a95a8">⛔ Blocked by the ≥$300M/day liquidity guardrail on the latest session (strong setup, too thin to fire): <b>${watch.map(escHtml).join(' ')}</b></div>`
+        : '';
+      sigEl.innerHTML =
+        `<div class="qs-bt-sec-head">Last 15 sessions · daily BUY/SELL notifier${lastDate ? ` (through ${qsBtDate(lastDate+'T21:00:00Z')})` : ''}</div>` +
+        `<div style="margin-bottom:4px"><span style="color:#34d399;font-weight:700;font-size:10px;letter-spacing:.3px">▲ BUY signals (${buys.length})</span><div style="margin:3px 0 8px">${buyChips}</div>` +
+        `<span style="color:#f87171;font-weight:700;font-size:10px;letter-spacing:.3px">▼ SELL signals (${sells.length})</span><div style="margin:3px 0 0">${sellChips}</div></div>` +
+        watchLine;
+    }
+  }
+
   // Open positions (all LONG) — unrealized vs the live row price.
   if (!openTrades.length) {
     openEl.innerHTML = '';
@@ -5396,7 +5431,7 @@ function renderWatchPanel(){
     <div class="wp-head">
       <span class="wp-title" id="wlHelpTrigger" style="cursor:help;border-bottom:1px dashed currentColor">Watchlist ?</span>
       <span class="wp-sub">Click a ticker to see its history · × to clear</span>
-      <span id="backtestBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="As-if you went long each time the swing trend signal turned strong, exiting on a 50/200 death-cross, a 4×ATR stop, or a 63-day cap — rolling ~6.5-month window with a SPY benchmark. An EOD reconstruction, not a live track record.">▢ Backtest log</span>
+      <span id="backtestBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="A mega-cap momentum/beta screen — a 2y+ validation found no demonstrated market-timing edge (the signal trails just holding the same names). A BUY/SELL notifier, not a profit guarantee. Entries require ≥$300M/day liquidity. Long-only EOD reconstruction; exits on a 50/200 death-cross, a 4×ATR stop, or a 63-day cap; SPY benchmark. Shows the last 15 sessions' daily signals + the as-if trade log.">▢ Backtest log</span>
     </div>
     <div class="wp-cards">
       ${section('ready',    '✓ Ready',    ready,    'No stocks ready to trade yet', 'ready')}
