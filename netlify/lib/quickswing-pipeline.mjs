@@ -127,6 +127,37 @@ export function cleanHist(hist) {
   return out;
 }
 
+/* Split/corporate-action back-adjustment. FMP's historical-price-eod/full feed is
+   RAW (no adjClose) — a stock split or breakup halves/rescales the quoted price
+   overnight, which every downstream factor (SMA/ATR/near-high) and the swing exit
+   would otherwise read as a real ~50% gap (the phantom −47% HON "trade": HON split
+   1:2 on 2026-06-29, 464.42 → 232). Cross-reference FMP's /stable/splits calendar
+   ({date, numerator, denominator}) and back-adjust every bar BEFORE a split by the
+   cumulative factor numerator/denominator (post-price = pre-price × num/den), with
+   volume moved inversely. A no-op for the overwhelming majority of names/bars (no
+   split) and for real earnings gaps — it only touches actual corporate-action dates.
+   `hist` newest-first (post-cleanHist); `splits` is FMP's raw splits array. Pure. */
+export function adjustSplits(hist, splits) {
+  if (!Array.isArray(hist) || !hist.length || !Array.isArray(splits) || !splits.length) return hist;
+  const evts = splits
+    .filter(s => s && ISO_DATE_RE.test(s.date || "") && s.numerator > 0 && s.denominator > 0 && s.numerator !== s.denominator)
+    .map(s => ({ date: s.date, factor: s.numerator / s.denominator }));
+  if (!evts.length) return hist;
+  return hist.map(b => {
+    let f = 1;
+    for (const e of evts) if (e.date > b.date) f *= e.factor; // splits AFTER this bar rescale it
+    if (f === 1) return b;
+    return {
+      ...b,
+      open: b.open != null ? b.open * f : b.open,
+      high: b.high != null ? b.high * f : b.high,
+      low: b.low != null ? b.low * f : b.low,
+      close: b.close * f,
+      volume: b.volume != null ? Math.round(b.volume / f) : b.volume,
+    };
+  });
+}
+
 /* Prepend today's in-progress session as a synthetic bar, built from a live
    /stable/quote, so RSI(2)/%B/RS-vs-SPY can react intraday instead of only
    once at close. Only three of the factors get this treatment — the

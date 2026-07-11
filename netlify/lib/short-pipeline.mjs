@@ -16,7 +16,7 @@
 import { getShortFmpCache, putShortFmpCache, deleteShortFmpCache, getSpyHistCache, putSpyHistCache, getSectorHistCache, putSectorHistCache } from "./store.mjs";
 import { round2, na, scored, trueRange, atrFrom } from "./ta-helpers.mjs";
 import { fmp, safe, delay } from "./fmp-client.mjs";
-import { cleanHist, strengthFactor } from "./quickswing-pipeline.mjs";
+import { cleanHist, strengthFactor, adjustSplits } from "./quickswing-pipeline.mjs";
 import { computeShortSignal, sessionComplete } from "./short-backtest.mjs"; // SWING BACKTEST FEATURE
 import { etDateStr, etParts } from "./quickswing-alert.mjs"; // ET wall clock for the partial-bar guard
 
@@ -668,6 +668,7 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
     // downstream reader already falls back `d.price ?? d.close`, so this
     // swap is a drop-in (light returns `price`, full returns `close`).
     d.hist          = await safe("historical-price-eod/full", sym, "&limit=320"); await delay(200);
+    d.splits        = await safe("splits", sym, "&limit=20");                       await delay(200);
     d.quote         = await safe("quote", sym);                                     await delay(200);
     d.keyMetrics    = await safe("key-metrics", sym, "&period=annual&limit=2");     await delay(200);
     d.estimates     = await safe("analyst-estimates", sym, "&period=annual&limit=3"); await delay(200);
@@ -710,6 +711,12 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
       }
     }
     ({ hist, quote, keyMetrics, estimates, cf, bs, inc, profile, earningsHist, ptSummary, grades } = data);
+    // Split/corporate-action back-adjust the RAW EOD feed before ANY factor or the
+    // backtest signal reads it — otherwise a stock split (e.g. HON 1:2 on 2026-06-29)
+    // reads as a phantom ~50% overnight gap and books a spurious −47% swing "trade".
+    if (Array.isArray(hist) && hist.length && Array.isArray(data.splits) && data.splits.length) {
+      hist = adjustSplits(hist, data.splits);
+    }
   } catch (e) {
     console.error(`[short] ${sym} fetch error:`, e?.message || e);
   }

@@ -7,15 +7,18 @@ import assert from "node:assert/strict";
 import {
   recordShortTransition, pruneShortWindow, mergeShortSeed, emptyShortLog, needsShortSeed,
   shortSpyReturnBetween, annotateShortBenchmarks, sessionComplete, dailySignalLog,
-  SBT_STOP_ATR_MULT, SBT_TIME_STOP_DAYS, SBT_SEED_VERSION,
+  SBT_HARD_STOP_PCT, SBT_TIME_STOP_DAYS, SBT_SEED_VERSION,
 } from "../netlify/lib/short-backtest.mjs";
+import { simulateShortExit } from "../netlify/lib/short-study.mjs";
+import { cleanHist, adjustSplits } from "../netlify/lib/quickswing-pipeline.mjs";
 import { mkHist } from "./swing-helpers.mjs";
 
 let pass = 0, proofs = 0, fail = 0;
 const T = (name, fn) => { try { fn(); pass++; } catch (e) { fail++; console.log("❌ FAIL:", name, "\n   ", e.message); } };
 const PROOF = (name, fn) => { try { fn(); proofs++; } catch (e) { fail++; console.log("❌ PROOF BROKEN:", name, "\n   ", e.message); } };
 
-// Minimal signal shape the state machine reads.
+// Minimal signal shape the state machine reads. (v4: deathCross is still computed by
+// the scorer but is NO LONGER an exit trigger — carried here only to prove it's inert.)
 const sig = (o) => ({
   bar: { date: o.date, open: o.open ?? o.close, high: o.high ?? o.close, low: o.low ?? o.close, close: o.close },
   atr14: o.atr14 ?? 2,
@@ -24,13 +27,14 @@ const sig = (o) => ({
 });
 const enter = (date = "2026-01-05", close = 100, atr14 = 2) =>
   recordShortTransition("X", sig({ date, close, atr14, entryStrong: true }), null);
+const STOP_LINE = (entry) => Math.round(entry * (1 - SBT_HARD_STOP_PCT) * 100) / 100; // v4 40% hard cap
 
 /* ---------- ENTRY ---------- */
-T("entry opens a long at close with a 4×ATR stop", () => {
+T("entry opens a long at close with a 40% hard catastrophe stop", () => {
   const log = enter("2026-01-05", 100, 2);
   assert.equal(log.open.side, "long");
   assert.equal(log.open.entryPrice, 100);
-  assert.equal(log.open.stopPrice, 100 - SBT_STOP_ATR_MULT * 2); // 92
+  assert.equal(log.open.stopPrice, STOP_LINE(100)); // 60 = 100 × (1 − 0.40)
   assert.equal(log.open.barsHeld, 0);
   assert.equal(log.closed.length, 0);
 });
@@ -38,52 +42,141 @@ T("no entry when the bar is not entryStrong", () => {
   const log = recordShortTransition("X", sig({ date: "2026-01-05", close: 100, entryStrong: false }), null);
   assert.equal(log.open, null);
 });
-T("null stop when ATR is unavailable", () => {
+T("stop is a fixed % of entry, independent of ATR (v4)", () => {
   const log = recordShortTransition("X", sig({ date: "2026-01-05", close: 100, atr14: 0, entryStrong: true }), null);
-  assert.equal(log.open.stopPrice, null);
+  assert.equal(log.open.stopPrice, STOP_LINE(100)); // ATR unavailable no longer nulls the stop
 });
 
-/* ---------- STOP fills ---------- */
+/* ---------- STOP fills (now the 40% catastrophe line at 60 for a 100 entry) ---------- */
 T("STOP: intraday touch fills at the stop line", () => {
-  const open = enter();
-  const log = recordShortTransition("X", sig({ date: "2026-01-06", close: 95, open: 95, high: 96, low: 90 }), open);
+  const open = enter(); // entry 100, stop 60
+  const log = recordShortTransition("X", sig({ date: "2026-01-06", close: 62, open: 63, high: 64, low: 58 }), open);
   assert.equal(log.open, null);
   assert.equal(log.closed[0].exitReason, "STOP");
-  assert.equal(log.closed[0].exitPrice, 92);       // low 90 ≤ stop 92, open 95 > stop ⇒ fill at stop
-  assert.equal(log.closed[0].pnlPct, -8);
+  assert.equal(log.closed[0].exitPrice, 60);       // low 58 ≤ stop 60, open 63 > stop ⇒ fill at stop
+  assert.equal(log.closed[0].pnlPct, -40);
 });
 T("STOP: gap-through-open fills at the (worse) open", () => {
   const open = enter();
-  const log = recordShortTransition("X", sig({ date: "2026-01-06", close: 88, open: 90, high: 91, low: 87 }), open);
+  const log = recordShortTransition("X", sig({ date: "2026-01-06", close: 53, open: 55, high: 56, low: 52 }), open);
   assert.equal(log.closed[0].exitReason, "STOP");
-  assert.equal(log.closed[0].exitPrice, 90);       // gap: open 90 ≤ stop 92 ⇒ fill at open
-  assert.equal(log.closed[0].pnlPct, -10);
+  assert.equal(log.closed[0].exitPrice, 55);       // gap: open 55 ≤ stop 60 ⇒ fill at open
+  assert.equal(log.closed[0].pnlPct, -45);
 });
 T("STOP: snapshot with no intraday low fills at min(close, stop)", () => {
   const open = enter();
-  const log = recordShortTransition("X", sig({ date: "2026-01-06", close: 90, open: 0, high: 0, low: 0 }), open);
+  const log = recordShortTransition("X", sig({ date: "2026-01-06", close: 58, open: 0, high: 0, low: 0 }), open);
   assert.equal(log.closed[0].exitReason, "STOP");
-  assert.equal(log.closed[0].exitPrice, 90);       // no low ⇒ min(close 90, stop 92)
+  assert.equal(log.closed[0].exitPrice, 58);       // no low ⇒ min(close 58, stop 60)
 });
 PROOF("STOP proof: a gap-down open must NOT be flattered to the stop price", () => {
   const open = enter();
-  const log = recordShortTransition("X", sig({ date: "2026-01-06", close: 88, open: 90, high: 91, low: 87 }), open);
-  assert.notEqual(log.closed[0].exitPrice, 92);    // buggy "always fill at stop" would book −8% not −10%
+  const log = recordShortTransition("X", sig({ date: "2026-01-06", close: 53, open: 55, high: 56, low: 52 }), open);
+  assert.notEqual(log.closed[0].exitPrice, 60);    // buggy "always fill at stop" would book −40% not −45%
 });
 
-/* ---------- TREND (death cross) & priority ---------- */
-T("TREND: death cross exits at the close (trend is over)", () => {
+/* ---------- v4 exit-rule change: death-cross is INERT; the cap bounds the tail ---------- */
+T("death-cross does NOT exit (v4 dropped it) — position HOLDs", () => {
   const open = enter();
   const log = recordShortTransition("X", sig({ date: "2026-01-06", close: 105, low: 104, deathCross: true }), open);
-  assert.equal(log.closed[0].exitReason, "TREND");
-  assert.equal(log.closed[0].exitPrice, 105);
-  assert.equal(log.closed[0].pnlPct, 5);
+  assert.ok(log.open);                             // still open — no TREND exit anymore
+  assert.equal(log.closed.length, 0);
 });
-T("priority: STOP beats TREND when both fire on the same bar", () => {
-  const open = enter();
-  const log = recordShortTransition("X", sig({ date: "2026-01-06", close: 91, low: 90, deathCross: true }), open);
-  assert.equal(log.closed[0].exitReason, "STOP");  // stop is checked first
+PROOF("hard-cap PROOF: a −67% ride-down is impossible once the 40% cap is on", () => {
+  // A hyper-volatile name bleeding down day after day. Under the OLD wide 4×ATR stop it
+  // could ride to a −67% TIME exit; the 40% catastrophe line must cut it at −40% first.
+  let log = enter("2026-01-05", 100, 20);          // atr14 huge — a 4×ATR stop would sit at 20
+  const worst = () => Math.min(...log.closed.map(t => t.pnlPct), log.open ? 0 : 0);
+  for (let d = 1; d <= 63 && log.open; d++) {
+    const close = 100 - d;                          // 99, 98, … slow bleed
+    log = recordShortTransition("X", sig({ date: `2026-03-${String(d).padStart(2, "0")}`, close, open: close + 0.5, high: close + 1, low: close - 1 }), log);
+  }
+  assert.equal(log.closed[0].exitReason, "STOP");   // the cap fired, not a −60% TIME ride
+  assert.ok(log.closed[0].pnlPct >= -40.001);       // bounded at −40%, never −60/−67
 });
+PROOF("hard-cap PROOF: the ONLY way past −40% is a gap-through-open, never an intrabar bleed", () => {
+  // Intrabar: low pierces the line but open is above it → fill AT the line (−40%), not worse.
+  let log = enter();
+  log = recordShortTransition("X", sig({ date: "2026-01-06", close: 61, open: 62, high: 63, low: 55 }), log);
+  assert.equal(log.closed[0].pnlPct, -40);          // intrabar can't book worse than the cap
+  // Gap: open below the line → the (worse) open fill is the ONLY sub-cap outcome (the exempt gap case).
+  let log2 = enter();
+  log2 = recordShortTransition("X", sig({ date: "2026-01-06", close: 50, open: 52, high: 53, low: 49 }), log2);
+  assert.ok(log2.closed[0].pnlPct < -40);           // −48%: a genuine overnight gap, unstoppable
+});
+
+/* ---------- engine ↔ study PARITY (the deployed engine == the offline reconstruction) ----------
+   The offline harness (short-study.mjs::simulateShortExit) is a hand-synced twin of the
+   live engine. Drive identical forward bars through both for the SHIPPED rule and assert
+   the same exit reason + price (±1¢, since the engine round2s and the study does not). */
+{
+  const shipped = { target: "none", timeStop: SBT_TIME_STOP_DAYS, hardStopPct: SBT_HARD_STOP_PCT };
+  const runEngine = (entry, bars) => {
+    let log = recordShortTransition("X", sig({ date: "2026-01-01", close: entry, entryStrong: true }), null);
+    for (const b of bars) { if (!log.open) break; log = recordShortTransition("X", sig(b), log); }
+    if (log.open) return { reason: "OPEN", price: null };
+    return { reason: log.closed[0].exitReason, price: log.closed[0].exitPrice };
+  };
+  const runStudy = (entry, bars) => {
+    const rec = { side: "long", entryClose: entry, entryAtr14: 2, entryDate: "2026-01-01",
+      fwd: bars.map(b => ({ date: b.date, open: b.open ?? b.close, high: b.high ?? b.close, low: b.low ?? b.close, close: b.close, sma50: null, sma200: null, atr14: 2 })) };
+    const r = simulateShortExit(rec, shipped);
+    // study TIME/STOP reasons map onto engine TIME/STOP; TARGET/TRAIL/FLIP are impossible for this rule
+    return { reason: r.reason === "EOD" ? "TIME" : r.reason, price: rec.entryClose * (1 + r.pnl / 100) };
+  };
+  const cases = [
+    { name: "clean 40% intrabar cap", entry: 100, bars: [{ date: "2026-01-02", close: 62, open: 63, high: 64, low: 58 }] },
+    { name: "gap-through-open", entry: 100, bars: [{ date: "2026-01-02", close: 50, open: 52, high: 53, low: 49 }] },
+    { name: "TIME at exactly 63", entry: 100, bars: Array.from({ length: 63 }, (_, i) => ({ date: `2026-04-${String(i + 1).padStart(2, "0")}`, close: 100 + i * 0.1, open: 100 + i * 0.1, high: 101 + i * 0.1, low: 99 + i * 0.1 })) },
+  ];
+  for (const c of cases) {
+    T(`parity: engine == study for "${c.name}"`, () => {
+      const e = runEngine(c.entry, c.bars), s = runStudy(c.entry, c.bars);
+      assert.equal(e.reason, s.reason, `reason ${e.reason} vs ${s.reason}`);
+      assert.ok(Math.abs(e.price - s.price) <= 0.01, `price ${e.price} vs ${s.price}`);
+    });
+  }
+  PROOF("parity PROOF: a study twin WITHOUT the hard cap diverges from the engine", () => {
+    // Mutant study rule (no hardStopPct) rides the 40% intrabar case to EOD instead of STOP —
+    // proving the parity test actually binds the cap in both implementations.
+    const entry = 100, bars = [{ date: "2026-01-02", close: 62, open: 63, high: 64, low: 58 }];
+    const rec = { side: "long", entryClose: entry, entryAtr14: 2, entryDate: "2026-01-01",
+      fwd: bars.map(b => ({ date: b.date, open: b.open, high: b.high, low: b.low, close: b.close, sma50: null, sma200: null, atr14: 2 })) };
+    const mutant = simulateShortExit(rec, { target: "none", timeStop: 63 }); // no cap
+    const engine = runEngine(entry, bars);
+    assert.notEqual(mutant.reason === "EOD" ? "TIME" : mutant.reason, engine.reason); // study EOD vs engine STOP
+  });
+}
+
+/* ---------- split back-adjustment (the phantom −47% HON root-cause fix) ---------- */
+{
+  const HON_SPLIT = [{ date: "2026-06-29", numerator: 1, denominator: 2, splitType: "stock-split" }];
+  const raw = cleanHist([
+    { date: "2026-06-29", open: 241, close: 227.8, high: 252, low: 227, volume: 7_700_000 },
+    { date: "2026-06-26", open: 459, close: 464.42, high: 467, low: 452, volume: 8_900_000 },
+    { date: "2026-06-25", open: 455, close: 462.48, high: 474, low: 455, volume: 2_900_000 },
+  ]);
+  const adj = adjustSplits(raw, HON_SPLIT);
+  const at = (arr, d) => arr.find(b => b.date === d);
+  T("split: pre-split bars are back-adjusted by the ratio (464.42 → 232.21)", () => {
+    assert.ok(Math.abs(at(adj, "2026-06-26").close - 232.21) < 0.01); // × (1/2)
+    assert.ok(Math.abs(at(adj, "2026-06-25").close - 231.24) < 0.01);
+  });
+  T("split: the post-split bar (on/after the ex-date) is untouched", () => {
+    assert.equal(at(adj, "2026-06-29").close, 227.8);
+  });
+  T("split: volume moves inversely (pre-split volume doubled)", () => {
+    assert.equal(at(adj, "2026-06-26").volume, Math.round(8_900_000 / 0.5));
+  });
+  PROOF("split PROOF: back-adjustment ELIMINATES the phantom overnight gap", () => {
+    const gap = (at(adj, "2026-06-29").open - at(adj, "2026-06-26").close) / at(adj, "2026-06-26").close * 100;
+    assert.ok(gap > -10); // raw −48% phantom gap → a real, small move once adjusted
+  });
+  T("split: no-op when there are no splits, and for real (non-split) gaps", () => {
+    assert.deepEqual(adjustSplits(raw, []), raw);
+    assert.deepEqual(adjustSplits(raw, [{ date: "2020-01-01", numerator: 1, denominator: 1 }]), raw); // ratio 1 = no-op
+  });
+}
 
 /* ---------- TIME cap ---------- */
 T("TIME: exits after the 63-session cap", () => {

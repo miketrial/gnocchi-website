@@ -1669,7 +1669,7 @@
     <span style="font-size:12px;font-weight:700;letter-spacing:.3px">Swing backtest · as-if trade log</span>
     <span id="stBtClose" style="cursor:pointer;color:#8a95a8;font-size:13px;padding:0 2px">✕</span>
   </div>
-  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px"><b style="color:#fbbf24">Honest framing:</b> a 2y+ validation across a broad universe found <b>no demonstrated market-timing edge</b> — this is a mega-cap momentum screen that captures market <i>beta</i>, not alpha (the signal's entries slightly trail just holding the same names). Use it as a <b>BUY/SELL notifier</b> of what the swing signal fires on real data, not a profit guarantee. Entries now require <b>≥$300M/day</b> liquidity — the only tier where any edge appeared. · Below: the last 15 sessions' daily signals + the as-if long-only trade log (EOD reconstruction; exits on a 50/200 death-cross, a 4×ATR stop, or a 63-day cap; SPY benchmark) · backfilled the first time you open this.</div>
+  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px"><b style="color:#fbbf24">Honest framing:</b> a 2y+ validation across a broad universe found <b>no demonstrated market-timing edge</b> — this is a mega-cap momentum screen that captures market <i>beta</i>, not alpha (the signal's entries slightly trail just holding the same names). Use it as a <b>BUY/SELL notifier</b> of what the swing signal fires on real data, not a profit guarantee. Entries now require <b>≥$300M/day</b> liquidity — the only tier where any edge appeared. · Below: the last 15 sessions' daily signals + the as-if long-only trade log (EOD reconstruction; a 63-day hold with a loose 40% catastrophe stop — the 50/200 death-cross and tight 4×ATR stop were dropped as they clipped winners; prices are split-adjusted so a stock split no longer books a phantom gap; SPY benchmark) · backfilled the first time you open this.</div>
   <div id="stBtStatus" style="display:none;font-size:10px;color:#fbbf24;margin-bottom:10px">⟳ Backfilling history…</div>
   <div class="qs-bt-layout">
     <aside class="qs-bt-key">
@@ -1682,8 +1682,8 @@
         <dt>Cumulative</dt><dd>Total $ if you'd put a fixed $10,000 into every trade.</dd>
         <dt>Edge vs SPY</dt><dd>Your avg P/L minus what <em>SPY</em> returned over the same trade dates — did riding these trends beat just holding the market? Positive = the signal added value.</dd>
         <dt>Equity curve</dt><dd>Running cumulative $ after each closed trade, in exit order, with <em>SPY</em> buy-and-hold overlaid. Above the dashed SPY line = the strategy is adding value.</dd>
-        <dt>Open</dt><dd>A <em>LONG</em> still running. <em>Now</em> is the live price, <em>Stop</em> the 4×ATR auto-exit line, <em>Unrealized</em> the paper gain so far. A red <em>● STOP</em> means price is at/through the stop.</dd>
-        <dt>Closed</dt><dd>Finished trades, grouped by ticker (best cumulative first). Click a ticker to expand. <em>Exit on</em> is why it closed — <em>TREND</em> (50DMA crossed below 200DMA), <em>STOP</em> (broke its 4×ATR stop), or <em>TIME</em> (hit the 63-day cap).</dd>
+        <dt>Open</dt><dd>A <em>LONG</em> still running. <em>Now</em> is the live price, <em>Stop</em> the 40% catastrophe auto-exit line, <em>Unrealized</em> the paper gain so far. A red <em>● STOP</em> means price is at/through the stop.</dd>
+        <dt>Closed</dt><dd>Finished trades, grouped by ticker (best cumulative first). Click a ticker to expand. <em>Exit on</em> is why it closed — <em>STOP</em> (broke its loose 40% catastrophe stop) or <em>TIME</em> (hit the 63-day hold).</dd>
       </dl>
     </aside>
     <div class="qs-bt-main">
@@ -1694,7 +1694,7 @@
       <div id="stBtClosed"></div>
     </div>
   </div>
-  <div class="qs-bt-note">This is a rolling ~6.5-month window of <em>recent activity</em> — a small sample, not a full track record. The entry signal is the <em>reconstructable</em> price/volume/sector core of the 33-point swing score (Trend, 3-Month Momentum, Near-High, Liquidity, Volume-Surge, Sector-RS); the five fundamental factors (analyst revisions, valuation, quality, leverage, catalyst) can't be reconstructed at a past date, so — like the live tool's own philosophy of buying confirmed strength — the log times entries off the trend core. The seed is a historical replay of those factors at each daily close. Forward datapoints are recorded on each rescan, at the price that scan saw. The 4×ATR stop assumes a fill at the stop (or the day's open on a gap-through). SPY buy-and-hold is the benchmark (opportunity cost of just holding the market those days). No slippage or commissions. Cumulative $ assumes a fixed $10,000 per trade. Long-only: a 2-year study found shorting weak names loses on this universe and blows out the worst-case drawdown — see scripts/run-short-study.mjs.</div>
+  <div class="qs-bt-note">This is a rolling ~6.5-month window of <em>recent activity</em> — a small sample, not a full track record. The entry signal is the <em>reconstructable</em> price/volume/sector core of the 33-point swing score (Trend, 3-Month Momentum, Near-High, Liquidity, Volume-Surge, Sector-RS); the five fundamental factors (analyst revisions, valuation, quality, leverage, catalyst) can't be reconstructed at a past date, so — like the live tool's own philosophy of buying confirmed strength — the log times entries off the trend core. The seed is a historical replay of those factors at each daily close. Forward datapoints are recorded on each rescan, at the price that scan saw. The 40% catastrophe stop assumes a fill at the stop (or the day's open on a gap-through). Prices are split/corporate-action adjusted, so a stock split no longer books a phantom overnight gap (the old −47% HON "trade" was HON's 1:2 split, not a real loss). SPY buy-and-hold is the benchmark (opportunity cost of just holding the market those days). No slippage or commissions. Cumulative $ assumes a fixed $10,000 per trade. Long-only: a 2-year study found shorting weak names loses on this universe and blows out the worst-case drawdown — see scripts/run-short-study.mjs.</div>
 </div>
 <!-- ===== END SWING BACKTEST FEATURE ===== -->
 
@@ -4623,7 +4623,7 @@ function renderStBacktest(){
       const stop = o.stopPrice;
       const breached = (stop > 0 && live > 0 && live <= stop);
       const stopCell = stop > 0
-        ? `<td data-tip="${escHtml('Stop = entry − 4×ATR(14), pinned at entry. The as-if trade auto-exits if price breaks this line.')}">${qsBtPrice(stop)}</td>`
+        ? `<td data-tip="${escHtml('Stop = entry × (1 − 40%), pinned at entry — a loose catastrophe stop. The as-if trade auto-exits if price breaks this line.')}">${qsBtPrice(stop)}</td>`
         : `<td>—</td>`;
       const flag = breached ? ` <span style="color:#f87171;font-weight:700">● STOP</span>` : '';
       return `<tr${breached?' style="background:rgba(248,113,113,.08)"':''}><td>${escHtml(o.sym)} <span class="qs-bt-side qs-bt-side-long">LONG</span></td><td>${qsBtDate(o.entryScoredAt || o.entryAt)}</td>` +
@@ -5431,7 +5431,7 @@ function renderWatchPanel(){
     <div class="wp-head">
       <span class="wp-title" id="wlHelpTrigger" style="cursor:help;border-bottom:1px dashed currentColor">Watchlist ?</span>
       <span class="wp-sub">Click a ticker to see its history · × to clear</span>
-      <span id="backtestBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="A mega-cap momentum/beta screen — a 2y+ validation found no demonstrated market-timing edge (the signal trails just holding the same names). A BUY/SELL notifier, not a profit guarantee. Entries require ≥$300M/day liquidity. Long-only EOD reconstruction; exits on a 50/200 death-cross, a 4×ATR stop, or a 63-day cap; SPY benchmark. Shows the last 15 sessions' daily signals + the as-if trade log.">▢ Backtest log</span>
+      <span id="backtestBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="A mega-cap momentum/beta screen — a 2y+ validation found no demonstrated market-timing edge (the signal trails just holding the same names). A BUY/SELL notifier, not a profit guarantee. Entries require ≥$300M/day liquidity. Long-only EOD reconstruction; a 63-day hold with a loose 40% catastrophe stop (death-cross + 4×ATR dropped); prices split-adjusted; SPY benchmark. Shows the last 15 sessions' daily signals + the as-if trade log.">▢ Backtest log</span>
     </div>
     <div class="wp-cards">
       ${section('ready',    '✓ Ready',    ready,    'No stocks ready to trade yet', 'ready')}

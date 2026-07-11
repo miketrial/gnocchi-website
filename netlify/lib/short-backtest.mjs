@@ -18,11 +18,13 @@
        are NOT in the entry signal — they can't be reconstructed at a past date, so
        — exactly like Bounce — the log keys off the EOD-computable factors so the
        seed replay and forward recording are byte-identical.
-     - Exit priority (calibrated — see the study): (1) 4×ATR14 catastrophe stop,
-       (2) TREND exit on a 50/200 death-cross (the primary "trend is over" signal —
-       highest SPY edge, +1.72pp), (3) a 63-session (~3-month) time cap. No
-       take-profit and no short-side flip: a trend trade's edge IS letting winners
-       run to the trend break, so an early profit target would cap the fat tail.
+     - Exit priority (v4 risk-first calibration — see docs/swing-calibration-report.md):
+       (1) a loose 40% hard catastrophe stop (SBT_HARD_STOP_PCT), (2) a 63-session
+       (~3-month) time cap — now the PRIMARY exit. The old 50/200 death-cross early-exit
+       and the tight 4×ATR stop were DROPPED: both clipped winners and worsened drawdown,
+       and a plain 63-day hold + wide backstop won on OOS expectancy + risk (and matches
+       standard trend-following practice). No take-profit / no short-side flip: a trend
+       trade's edge IS letting winners run, so an early target would cap the fat tail.
 
    Pure functions; the endpoints (short-backtest.mjs / short-backtest-seed.mjs)
    and short-pipeline.mjs's live scorer supply the I/O. Self-contained and
@@ -39,8 +41,11 @@ const MAX_CLOSED = 200;
 // handful of completed multi-week trades visible per ticker.
 export const SBT_WINDOW_DAYS = 195;
 export const SBT_SEED_SESSIONS = 130;      // trading days replayed on the first seed (~6mo)
-export const SBT_STOP_ATR_MULT = 4.0;      // catastrophe stop = entry − 4×ATR14 (wide; swing needs room)
-export const SBT_TIME_STOP_DAYS = 63;      // sessions — the outer 3-month swing bound
+export const SBT_STOP_ATR_MULT = 4.0;      // (legacy v1–v3) prior catastrophe stop = entry − 4×ATR14; superseded by SBT_HARD_STOP_PCT
+export const SBT_HARD_STOP_PCT = 0.40;     // v4 catastrophe stop = entry × (1 − 0.40): a loose, rarely-fired backstop that bounds the
+                                           // single-trade NON-gap tail without choking trend winners. Calibration found a tight stop
+                                           // AND the 50/200 death-cross both hurt (they clip winners) — see docs/swing-calibration-report.md.
+export const SBT_TIME_STOP_DAYS = 63;      // sessions — a 63-day hold is now the PRIMARY exit (canonical momentum window)
 export const SBT_ENTRY_MIN = 12;           // technical strong bar (12/18 = same 67% as 22/33 live)
 // Liquidity guardrail: the validation (docs/swing-validation-report.md, Phase 2)
 // showed the swing signal's only positive edge lives in the most-liquid mega-caps
@@ -52,7 +57,11 @@ export const SBT_LIQ_FLOOR = 300e6;
 // v1: long-only, entry techScore≥12 & uptrend, exit 4×ATR / 50-200 death-cross / 63d.
 // v2: Near-High factor re-tuned (top mark → 5-18% pullback zone, not pinned at high).
 // v3: liquidity guardrail — entries require avgDollarVol ≥ $300M/day (SBT_LIQ_FLOOR).
-export const SBT_SEED_VERSION = 3;
+// v4: risk-first calibration — exit is now a 63-day hold + a loose 40% hard catastrophe
+//     stop; the 50/200 death-cross early-exit and the tight 4×ATR stop are DROPPED (both
+//     clipped winners / worsened drawdown). Prices are now split-adjusted upstream, which
+//     kills the phantom HON −47% split "trade". See docs/swing-calibration-report.md.
+export const SBT_SEED_VERSION = 4;
 
 const round2 = x => (x == null ? null : Math.round(x * 100) / 100);
 
@@ -265,8 +274,10 @@ export function recordShortTransition(sym, sig, prevLog, scoredAt) {
   const nowIso = scoredAt || `${bar.date}T21:00:00.000Z`;
 
   const openPosition = () => {
-    const atr14 = sig.atr14 > 0 ? sig.atr14 : null;
-    const stopPrice = atr14 ? round2(bar.close - SBT_STOP_ATR_MULT * atr14) : null;
+    const atr14 = sig.atr14 > 0 ? sig.atr14 : null; // kept for display/reference only
+    // v4 catastrophe stop: a fixed % below entry (wide, rarely fired). Bounds the
+    // single-trade non-gap loss without the winner-choking of the old 4×ATR/death-cross.
+    const stopPrice = round2(bar.close * (1 - SBT_HARD_STOP_PCT));
     return {
       sym, side: "long",
       entryAt: nowIso, entryScoredAt: nowIso,
@@ -298,9 +309,11 @@ export function recordShortTransition(sym, sig, prevLog, scoredAt) {
     else if (sessionDate > o.lastSessionDate) { o.barsHeld = (o.barsHeld || 0) + 1; o.lastSessionDate = sessionDate; }
   }
 
-  // 1. STOP — a long is cut when the day's LOW pierces the 4×ATR line. A gap
-  //    through the stop at the open fills at the open; an intraday touch fills at
-  //    the stop; a live snapshot with no low fills at min(price, stop).
+  // 1. STOP — a long is cut when the day's LOW pierces the 40% hard catastrophe line.
+  //    A gap through the stop at the open fills at the open (pessimistic); an intraday
+  //    touch fills at the stop; a live snapshot with no low fills at min(price, stop).
+  //    (v4: the 50/200 death-cross early-exit was DROPPED — it clipped winners; a plain
+  //    63-day hold with this loose backstop won on OOS expectancy + risk. See the report.)
   if (o.stopPrice != null) {
     const low = bar.low > 0 ? bar.low : null;
     const breachRef = low != null ? low : bar.close;
@@ -315,24 +328,14 @@ export function recordShortTransition(sym, sig, prevLog, scoredAt) {
     }
   }
 
-  // 2. TREND — the 50DMA has crossed below the 200DMA (death cross): the primary
-  //    uptrend is over. Exit at the close. This is the trend-follow edge — hold
-  //    winners until the trend actually breaks, not on the first red day.
-  if (sig.deathCross) {
-    closePosition(o, bar.close, "TREND");
-    log.open = null;
-    return log;
-  }
-
-  // 3. TIME — a swing that's run the full 3-month window without its trend
-  //    breaking is closed to free the capital.
+  // 2. TIME — the primary exit: a 63-session hold, then close to recycle capital.
   if (o.barsHeld >= SBT_TIME_STOP_DAYS) {
     closePosition(o, bar.close, "TIME");
     log.open = null;
     return log;
   }
 
-  return log; // trend intact, under the time cap, above the stop → hold
+  return log; // under the time cap, above the catastrophe stop → hold
 }
 
 /* ---------- Historical replay → seed log ----------
@@ -374,7 +377,7 @@ export function replayShortTrades(sym, hist, spyStrSeries, sectorStrSeries, spyH
    really for. Replays the full seed window so position state is correct, records
    the ACTION at every session, and returns the last `sessions` days:
      BUY  — a fresh entry fired this session (entryStrong transition, guardrail-passed)
-     SELL — an open position exited this session (reason: STOP / TREND / TIME)
+     SELL — an open position exited this session (reason: STOP / TIME)
      HOLD — in an open position, trend intact
      WATCH— flat, and this session was strong-but-blocked (uptrend+score but below
             the $300M/day guardrail, so no entry — shows why a name didn't fire)

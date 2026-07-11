@@ -4,7 +4,7 @@
    off the same numbers the site shows (the "byte-identical" claim in the code).
    Run: node tests/swing-signal.test.mjs */
 import assert from "node:assert/strict";
-import { computeShortSignal, SBT_ENTRY_MIN, SBT_STOP_ATR_MULT, SBT_LIQ_FLOOR } from "../netlify/lib/short-backtest.mjs";
+import { computeShortSignal, SBT_ENTRY_MIN, SBT_HARD_STOP_PCT, SBT_LIQ_FLOOR } from "../netlify/lib/short-backtest.mjs";
 import {
   checkTrend, check3MMomentum, checkNearHigh, checkLiquidity, checkVolumeSurge, checkSectorStrength,
 } from "../netlify/lib/short-pipeline.mjs";
@@ -103,9 +103,9 @@ PROOF("parity proof: a bar that scores >0 must not silently read as techScore 0"
   assert.ok(sig.techScore > 0);
 });
 
-/* ---------- stop distance wiring ---------- */
-T("stop distance is entry − 4×ATR (via the SBT const)", () => {
-  assert.equal(SBT_STOP_ATR_MULT, 4.0); // guards the calibration constant the log advertises
+/* ---------- stop wiring (v4: a loose 40% hard catastrophe cap, not 4×ATR) ---------- */
+T("catastrophe stop is a fixed 40% of entry (via the SBT const)", () => {
+  assert.equal(SBT_HARD_STOP_PCT, 0.40); // guards the v4 calibration constant the log advertises
 });
 
 console.log(`\n${pass} signal tests passed · ${proofs} negative-control proofs passed · ${fail} failed`);

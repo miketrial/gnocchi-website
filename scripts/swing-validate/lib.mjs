@@ -338,6 +338,8 @@ export const applyCost = (pnlPct, bps) => pnlPct - bps / 100;
    per-trade returns. `costBps` applied per booked trade. */
 export function portfolioSim(records, rule, {
   maxPositions = 8, perSectorMax = 3, costBps = 10, startEquity = 100000,
+  sizing = "equal",       // "equal" = equal-$; "volInverse" = size ∝ 1/atrPct (smaller on hyper-vol names)
+  skipExposure = false,   // skip the O(trades×dates) exposure day-count (for fast bootstrap)
 } = {}) {
   // Build concrete trades with entry/exit dates from the exit rule.
   const trades = [];
@@ -348,9 +350,16 @@ export function portfolioSim(records, rule, {
     trades.push({
       sym: rec.sym, etf: rec.etf || "?", entryDate: rec.entryDate, exitDate: exitBar.date,
       pnl: applyCost(r.pnl, costBps),
+      atrPct: (rec.entryAtr14 > 0 && rec.entryClose > 0) ? rec.entryAtr14 / rec.entryClose : null,
     });
   }
   trades.sort((a, b) => (a.entryDate < b.entryDate ? -1 : a.entryDate > b.entryDate ? 1 : 0));
+
+  // Vol-inverse sizing reference: median atrPct across the trade set. A hyper-vol name
+  // (high atrPct) is sized down; a calm name up — so no single name dominates portfolio
+  // risk. Scale is clamped to [0.4×, 2×] the equal-$ base so it can't over-concentrate.
+  const atrs = trades.map(t => t.atrPct).filter(x => x > 0).sort((a, b) => a - b);
+  const medAtr = atrs.length ? atrs[Math.floor(atrs.length / 2)] : null;
 
   const open = [];            // {exitDate, etf, dollars}
   const booked = [];          // realized per-trade returns (%)
@@ -376,7 +385,10 @@ export function portfolioSim(records, rule, {
     const sectorOpen = open.filter(p => p.etf === t.etf).length;
     if (open.length >= maxPositions) { skippedFull++; continue; }
     if (sectorOpen >= perSectorMax) { skippedSector++; continue; }
-    const dollars = equity / maxPositions;         // equal-$ sizing on current equity
+    let dollars = equity / maxPositions;           // equal-$ base on current equity
+    if (sizing === "volInverse" && medAtr && t.atrPct > 0) {
+      dollars *= Math.max(0.4, Math.min(2, medAtr / t.atrPct)); // ∝ 1/vol, clamped
+    }
     if (dollars > cash) { skippedFull++; continue; }
     cash -= dollars;
     open.push({ exitDate: t.exitDate, etf: t.etf, dollars, pnl: t.pnl });
@@ -386,11 +398,15 @@ export function portfolioSim(records, rule, {
   const lastDate = allDates[allDates.length - 1] || "9999";
   closeDue(lastDate);
 
-  // exposure: fraction of active days with >=1 position (approx via trade spans)
-  for (const d of allDates) {
-    dayCount[d] = trades.filter(t => t.entryDate <= d && t.exitDate > d).length;
+  // exposure: fraction of active days with >=1 position (approx via trade spans).
+  // Skippable for the bootstrap (it's the O(trades×dates) hot loop and CIs don't need it).
+  let activeDays = 0;
+  if (!skipExposure) {
+    for (const d of allDates) {
+      dayCount[d] = trades.filter(t => t.entryDate <= d && t.exitDate > d).length;
+    }
+    activeDays = Object.values(dayCount).filter(c => c > 0).length;
   }
-  const activeDays = Object.values(dayCount).filter(c => c > 0).length;
   const span = allDates.length ? (Date.parse(lastDate) - Date.parse(allDates[0])) / 86400000 : 0;
   const years = span / 365.25;
   const totalReturn = (equity - startEquity) / startEquity;
@@ -414,11 +430,39 @@ export function portfolioSim(records, rule, {
     sharpePerTrade: sharpe(booked),
     sortinoPerTrade: sortino(booked),
     maxDDpct: portMdd * 100,
-    avgConcurrent: mean(Object.values(dayCount)),
-    exposureFrac: allDates.length ? activeDays / allDates.length : null,
+    avgConcurrent: skipExposure ? null : mean(Object.values(dayCount)),
+    exposureFrac: skipExposure ? null : (allDates.length ? activeDays / allDates.length : null),
     nBooked: booked.length,
     years: Math.round(years * 10) / 10,
+    booked,        // realized per-trade returns (%) — for downstream bootstrap
+    equityCurve,   // dated equity levels — for path/DD analysis
   };
+}
+
+/* ---------- Name-clustered portfolio bootstrap ----------
+   The single-path portfolioSim CAGR/maxDD/Sortino are razor-fragile (capital-constrained
+   slot reshuffling makes them jump). Resample NAMES with replacement (block bootstrap —
+   trades within a name are correlated + overlap, so IID resampling of trades understates
+   path risk), re-run the sim per draw, and report the CI. Seeded + deterministic. */
+export function bootstrapPortfolio(records, rule, simOpts = {}, { iters = 500, seed = 4242 } = {}) {
+  const byName = {};
+  for (const r of records) (byName[r.sym] ||= []).push(r);
+  const names = Object.keys(byName);
+  if (names.length < 3) return null;
+  const rng = makeRng(seed);
+  const cagrs = [], mdds = [], sortinos = [];
+  const opts = { ...simOpts, skipExposure: true };
+  for (let it = 0; it < iters; it++) {
+    const draw = [];
+    for (let i = 0; i < names.length; i++) draw.push(...byName[names[Math.floor(rng() * names.length)]]);
+    const p = portfolioSim(draw, rule, opts);
+    if (p.cagr != null) cagrs.push(p.cagr);
+    if (p.maxDDpct != null) mdds.push(p.maxDDpct);
+    if (p.sortinoPerTrade != null) sortinos.push(p.sortinoPerTrade);
+  }
+  const pctile = (arr, q) => { if (!arr.length) return null; const s = [...arr].sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor(q * s.length))]; };
+  const ci = (arr) => ({ median: pctile(arr, 0.5), lo: pctile(arr, 0.05), hi: pctile(arr, 0.95) });
+  return { iters, cagr: ci(cagrs), maxDD: ci(mdds), sortino: ci(sortinos) };
 }
 
 /* ---------- Aggregate a rule net-of-cost (extends aggregateShortRule) ---------- */
