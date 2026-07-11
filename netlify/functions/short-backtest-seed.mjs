@@ -15,12 +15,15 @@ import { safe, delay } from "../lib/fmp-client.mjs";
 import { cleanHist } from "../lib/quickswing-pipeline.mjs";
 import {
   replayShortTrades, strengthSeriesFor, mergeShortSeed, pruneShortWindow, needsShortSeed,
-  annotateShortBenchmarks, SBT_SEED_VERSION, SBT_WINDOW_DAYS,
+  annotateShortBenchmarks, dailySignalLog, SBT_SEED_VERSION, SBT_WINDOW_DAYS,
 } from "../lib/short-backtest.mjs";
 
-const BATCH = 2; // swing replays are heavier than Bounce's (130-session vs 15) —
-                 // keep the batch small so a cold-start call stays well under the
-                 // function timeout; the client loops until nothing is left.
+const BATCH = 5; // seed this many not-yet-seeded tickers per request; the client
+                 // loops until nothing is left. Bumped from 2 → 5 now that the
+                 // per-ticker profile fetch is gone (sector comes from the scored
+                 // row), so 5 tickers stay well under the function timeout while
+                 // roughly halving the total backfill wall-clock for a 127-name
+                 // watchlist (the swing list is far larger than Bounce's ~22).
 
 /* Sector -> ETF map — identical to short-pipeline.mjs's sectorEtfFor(). */
 const INDUSTRY_ETF = { "Semiconductors": "SMH" };
@@ -50,6 +53,7 @@ async function getIndexHist(symbol, memo) {
 export default async () => {
   const rows = await listShortRows().catch(() => []);
   const syms = rows.map(r => r?.sym).filter(Boolean);
+  const rowBySym = new Map(rows.filter(r => r?.sym).map(r => [r.sym, r])); // sector/industry source (skips a per-ticker profile fetch)
 
   const pending = [];
   for (const sym of syms) {
@@ -68,12 +72,12 @@ export default async () => {
 
     for (const sym of batch) {
       try {
-        // Fetch the ticker's own history + profile (for its sector ETF).
-        const rawHist = await safe("historical-price-eod/full", sym, "&limit=420"); await delay(150);
+        // Fetch the ticker's own history. Its sector ETF comes from the already-
+        // scored row (no per-ticker profile fetch → ~half the FMP calls, faster backfill).
+        const rawHist = await safe("historical-price-eod/full", sym, "&limit=420"); await delay(120);
         const hist = cleanHist(rawHist);
-        const profile = await safe("profile", sym); await delay(120);
-        const p0 = profile?.[0] || {};
-        const etf = etfFor(p0.sector, p0.industry);
+        const r0 = rowBySym.get(sym) || {};
+        const etf = etfFor(r0.sector, r0.industry);
 
         let sectorStr = [];
         if (etf) {
@@ -95,6 +99,12 @@ export default async () => {
           next = pruneShortWindow(mergeShortSeed(existing, seed));
         }
         annotateShortBenchmarks(next, spyHist);
+        // Last-15-session daily BUY/SELL/HOLD notifier log — computed from the same
+        // fetched hist + strength series (no extra FMP call), stored alongside the
+        // trade log so the popover can show "what the signal fired recently".
+        const dl = dailySignalLog(sym, hist, spyStr, sectorStr, { sessions: 15 });
+        next.dailyLog = dl.days;
+        next.sym = sym;               // the notifier render keys off this (trade log had no top-level sym)
         next.seeded = true;
         next.seedVersion = SBT_SEED_VERSION;
         await putShortTrades(sym, next);

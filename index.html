@@ -723,75 +723,75 @@
     #qsView tbody td .qs-vdetail{ white-space:normal }
     .qs-meter-inline{ width:80px }
   }
-  /* --- Backtest ("as-if") paper-trade log — lives inside the dark #qsBtPop popover --- */
+  /* --- Backtest ("as-if") paper-trade log — lives inside the dark :is(#qsBtPop,#stBtPop) popover --- */
   /* Two-column layout: left key rail + right content. */
-  #qsBtPop .qs-bt-layout{ display:flex; gap:20px; align-items:flex-start }
-  #qsBtPop .qs-bt-key{ flex:0 0 168px; border-right:1px solid rgba(255,255,255,.08); padding-right:16px }
-  #qsBtPop .qs-bt-main{ flex:1 1 auto; min-width:0 }
-  #qsBtPop .qs-bt-key-title{ font-size:8.5px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+  :is(#qsBtPop,#stBtPop) .qs-bt-layout{ display:flex; gap:20px; align-items:flex-start }
+  :is(#qsBtPop,#stBtPop) .qs-bt-key{ flex:0 0 168px; border-right:1px solid rgba(255,255,255,.08); padding-right:16px }
+  :is(#qsBtPop,#stBtPop) .qs-bt-main{ flex:1 1 auto; min-width:0 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-key-title{ font-size:8.5px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
     color:#8a95a8; margin-bottom:8px }
-  #qsBtPop .qs-bt-key dl{ margin:0 }
-  #qsBtPop .qs-bt-key dt{ font-size:9.5px; font-weight:700; color:#cbd5e1; margin-top:9px }
-  #qsBtPop .qs-bt-key dt:first-child{ margin-top:0 }
-  #qsBtPop .qs-bt-key dd{ margin:1px 0 0; font-size:9px; line-height:1.45; color:#8a95a8 }
-  #qsBtPop .qs-bt-key em{ font-style:normal; color:#aeb6c4; font-weight:600 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-key dl{ margin:0 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-key dt{ font-size:9.5px; font-weight:700; color:#cbd5e1; margin-top:9px }
+  :is(#qsBtPop,#stBtPop) .qs-bt-key dt:first-child{ margin-top:0 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-key dd{ margin:1px 0 0; font-size:9px; line-height:1.45; color:#8a95a8 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-key em{ font-style:normal; color:#aeb6c4; font-weight:600 }
   /* Stats grid — no card box, just a clean row of figures with a divider under it. */
-  #qsBtPop .qs-bt-stats{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px 8px;
+  :is(#qsBtPop,#stBtPop) .qs-bt-stats{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px 8px;
     padding-bottom:12px; margin-bottom:4px; border-bottom:1px solid rgba(255,255,255,.08) }
-  #qsBtPop .qs-bt-stat{ display:flex; flex-direction:column; gap:2px }
-  #qsBtPop .qs-bt-stat .k{ font-size:8.5px; letter-spacing:.4px; text-transform:uppercase; color:#8a95a8 }
-  #qsBtPop .qs-bt-stat .v{ font-size:16px; font-weight:700; color:#e8eaf0 }
-  #qsBtPop .qs-bt-stat .sub{ font-size:8.5px; color:#6b7488; margin-top:1px }
-  #qsBtPop .qs-bt-sec-head{ font-size:9px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+  :is(#qsBtPop,#stBtPop) .qs-bt-stat{ display:flex; flex-direction:column; gap:2px }
+  :is(#qsBtPop,#stBtPop) .qs-bt-stat .k{ font-size:8.5px; letter-spacing:.4px; text-transform:uppercase; color:#8a95a8 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-stat .v{ font-size:16px; font-weight:700; color:#e8eaf0 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-stat .sub{ font-size:8.5px; color:#6b7488; margin-top:1px }
+  :is(#qsBtPop,#stBtPop) .qs-bt-sec-head{ font-size:9px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
     color:#aeb6c4; margin:14px 0 4px }
-  #qsBtPop table.qs-bt-table{ width:100%; border-collapse:collapse; font-size:10px }
-  #qsBtPop table.qs-bt-table th{ text-align:right; padding:3px 8px; color:#8a95a8; font-weight:600;
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table{ width:100%; border-collapse:collapse; font-size:10px }
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table th{ text-align:right; padding:3px 8px; color:#8a95a8; font-weight:600;
     font-size:8.5px; text-transform:uppercase; letter-spacing:.4px; white-space:nowrap;
     border-bottom:1px solid rgba(255,255,255,.1) }
-  #qsBtPop table.qs-bt-table th:first-child{ text-align:left; padding-left:2px }
-  #qsBtPop table.qs-bt-table td{ text-align:right; padding:4px 8px; white-space:nowrap; color:#cbd5e1;
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table th:first-child{ text-align:left; padding-left:2px }
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table td{ text-align:right; padding:4px 8px; white-space:nowrap; color:#cbd5e1;
     border-bottom:1px solid rgba(255,255,255,.05) }
-  #qsBtPop table.qs-bt-table td:first-child{ text-align:left; padding-left:2px; font-weight:700; color:#e8eaf0 }
-  #qsBtPop table.qs-bt-table tr:last-child td{ border-bottom:none }
-  #qsBtPop table.qs-bt-table tbody tr:hover td{ background:rgba(255,255,255,.04) }
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table td:first-child{ text-align:left; padding-left:2px; font-weight:700; color:#e8eaf0 }
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table tr:last-child td{ border-bottom:none }
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table tbody tr:hover td{ background:rgba(255,255,255,.04) }
   /* Kill the global sticky-first-column rule (lines ~140-141) that paints
      these cells with the light --card colour — inside this dark popover the
      columns must stay static and transparent. */
-  #qsBtPop table.qs-bt-table th:nth-child(1), #qsBtPop table.qs-bt-table td:nth-child(1),
-  #qsBtPop table.qs-bt-table th:nth-child(2), #qsBtPop table.qs-bt-table td:nth-child(2){
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table th:nth-child(1), :is(#qsBtPop,#stBtPop) table.qs-bt-table td:nth-child(1),
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table th:nth-child(2), :is(#qsBtPop,#stBtPop) table.qs-bt-table td:nth-child(2){
     position:static; left:auto; z-index:auto; background:transparent; box-shadow:none }
-  #qsBtPop table.qs-bt-table td.qs-bt-pos, #qsBtPop .qs-bt-stat .v.qs-bt-pos{ color:#34d399; font-weight:700 }
-  #qsBtPop table.qs-bt-table td.qs-bt-neg, #qsBtPop .qs-bt-stat .v.qs-bt-neg{ color:#f87171; font-weight:700 }
-  #qsBtPop .qs-bt-reason{ font-size:8.5px; color:#8a95a8; text-transform:uppercase; letter-spacing:.3px }
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table td.qs-bt-pos, :is(#qsBtPop,#stBtPop) .qs-bt-stat .v.qs-bt-pos{ color:#34d399; font-weight:700 }
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table td.qs-bt-neg, :is(#qsBtPop,#stBtPop) .qs-bt-stat .v.qs-bt-neg{ color:#f87171; font-weight:700 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-reason{ font-size:8.5px; color:#8a95a8; text-transform:uppercase; letter-spacing:.3px }
   /* Long/short side badges on open + closed trades (bidirectional log) */
-  #qsBtPop .qs-bt-side{ font-size:8px; font-weight:700; letter-spacing:.4px; padding:1px 4px; border-radius:3px; vertical-align:middle }
-  #qsBtPop .qs-bt-side-long{ background:rgba(52,211,153,.16); color:#34d399 }
-  #qsBtPop .qs-bt-side-short{ background:rgba(248,113,113,.16); color:#f87171 }
-  #qsBtPop .qs-bt-empty{ font-size:11px; color:#8a95a8; padding:14px 4px; line-height:1.5 }
-  #qsBtPop .qs-bt-note{ font-size:9px; color:#6b7488; margin-top:14px; padding-top:10px;
+  :is(#qsBtPop,#stBtPop) .qs-bt-side{ font-size:8px; font-weight:700; letter-spacing:.4px; padding:1px 4px; border-radius:3px; vertical-align:middle }
+  :is(#qsBtPop,#stBtPop) .qs-bt-side-long{ background:rgba(52,211,153,.16); color:#34d399 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-side-short{ background:rgba(248,113,113,.16); color:#f87171 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-empty{ font-size:11px; color:#8a95a8; padding:14px 4px; line-height:1.5 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-note{ font-size:9px; color:#6b7488; margin-top:14px; padding-top:10px;
     border-top:1px solid rgba(255,255,255,.06); line-height:1.5 }
   /* Equity curve (strategy vs SPY) */
-  #qsBtPop .qs-bt-chart{ margin-top:14px }
-  #qsBtPop .qs-bt-chart svg{ display:block; width:100%; height:auto; overflow:visible }
-  #qsBtPop .qs-bt-chart-legend{ display:flex; gap:14px; align-items:center; margin-top:6px; font-size:9px; color:#8a95a8 }
-  #qsBtPop .qs-bt-chart-legend .sw{ display:inline-block; width:14px; height:0; border-top-width:2px; border-top-style:solid; margin-right:5px; vertical-align:middle }
+  :is(#qsBtPop,#stBtPop) .qs-bt-chart{ margin-top:14px }
+  :is(#qsBtPop,#stBtPop) .qs-bt-chart svg{ display:block; width:100%; height:auto; overflow:visible }
+  :is(#qsBtPop,#stBtPop) .qs-bt-chart-legend{ display:flex; gap:14px; align-items:center; margin-top:6px; font-size:9px; color:#8a95a8 }
+  :is(#qsBtPop,#stBtPop) .qs-bt-chart-legend .sw{ display:inline-block; width:14px; height:0; border-top-width:2px; border-top-style:solid; margin-right:5px; vertical-align:middle }
   /* Collapsible per-ticker sections */
-  #qsBtPop details.qs-bt-tk{ border-bottom:1px solid rgba(255,255,255,.06) }
-  #qsBtPop details.qs-bt-tk[open]{ background:rgba(255,255,255,.015) }
-  #qsBtPop details.qs-bt-tk > summary{ list-style:none; cursor:pointer; display:flex; align-items:baseline;
+  :is(#qsBtPop,#stBtPop) details.qs-bt-tk{ border-bottom:1px solid rgba(255,255,255,.06) }
+  :is(#qsBtPop,#stBtPop) details.qs-bt-tk[open]{ background:rgba(255,255,255,.015) }
+  :is(#qsBtPop,#stBtPop) details.qs-bt-tk > summary{ list-style:none; cursor:pointer; display:flex; align-items:baseline;
     gap:10px; padding:7px 4px; font-size:10px; color:#cbd5e1; user-select:none }
-  #qsBtPop details.qs-bt-tk > summary::-webkit-details-marker{ display:none }
-  #qsBtPop details.qs-bt-tk > summary:hover{ background:rgba(255,255,255,.03) }
-  #qsBtPop .qs-bt-tk-chev{ color:#6b7488; font-size:9px; width:9px; transition:transform .12s ease; flex:0 0 auto }
-  #qsBtPop details.qs-bt-tk[open] .qs-bt-tk-chev{ transform:rotate(90deg) }
-  #qsBtPop .qs-bt-tk-sym{ font-weight:700; color:#e8eaf0; flex:0 0 52px }
-  #qsBtPop .qs-bt-tk-m{ color:#8a95a8; flex:0 0 auto }
-  #qsBtPop .qs-bt-tk-spacer{ flex:1 1 auto }
-  #qsBtPop .qs-bt-tk-cum{ font-weight:700; flex:0 0 auto }
-  #qsBtPop details.qs-bt-tk > .qs-bt-tk-body{ padding:2px 4px 10px }
+  :is(#qsBtPop,#stBtPop) details.qs-bt-tk > summary::-webkit-details-marker{ display:none }
+  :is(#qsBtPop,#stBtPop) details.qs-bt-tk > summary:hover{ background:rgba(255,255,255,.03) }
+  :is(#qsBtPop,#stBtPop) .qs-bt-tk-chev{ color:#6b7488; font-size:9px; width:9px; transition:transform .12s ease; flex:0 0 auto }
+  :is(#qsBtPop,#stBtPop) details.qs-bt-tk[open] .qs-bt-tk-chev{ transform:rotate(90deg) }
+  :is(#qsBtPop,#stBtPop) .qs-bt-tk-sym{ font-weight:700; color:#e8eaf0; flex:0 0 52px }
+  :is(#qsBtPop,#stBtPop) .qs-bt-tk-m{ color:#8a95a8; flex:0 0 auto }
+  :is(#qsBtPop,#stBtPop) .qs-bt-tk-spacer{ flex:1 1 auto }
+  :is(#qsBtPop,#stBtPop) .qs-bt-tk-cum{ font-weight:700; flex:0 0 auto }
+  :is(#qsBtPop,#stBtPop) details.qs-bt-tk > .qs-bt-tk-body{ padding:2px 4px 10px }
   #qsBtBtn:hover{ color:var(--ink) }
-  @media (max-width:620px){ #qsBtPop .qs-bt-layout{ flex-direction:column }
-    #qsBtPop .qs-bt-key{ flex-basis:auto; border-right:none; border-bottom:1px solid rgba(255,255,255,.08);
+  @media (max-width:620px){ :is(#qsBtPop,#stBtPop) .qs-bt-layout{ flex-direction:column }
+    :is(#qsBtPop,#stBtPop) .qs-bt-key{ flex-basis:auto; border-right:none; border-bottom:1px solid rgba(255,255,255,.08);
       padding-right:0; padding-bottom:10px } }
   /* ===== END QUICK SWING FEATURE ===== */
   /* Ready sub-tier divider headings (Premium / Standard) */
@@ -1669,7 +1669,7 @@
     <span style="font-size:12px;font-weight:700;letter-spacing:.3px">Swing backtest · as-if trade log</span>
     <span id="stBtClose" style="cursor:pointer;color:#8a95a8;font-size:13px;padding:0 2px">✕</span>
   </div>
-  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px">Go long each time the swing trend signal turns strong (uptrend + 12/18 on the price-based factors) — each exits on a 50/200 death-cross, a 4×ATR stop, or a 63-day cap · rolling ~6.5-month window (an EOD reconstruction of the trend/momentum core of the score, not a live track record) · backfilled the first time you open this</div>
+  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px"><b style="color:#fbbf24">Honest framing:</b> a 2y+ validation across a broad universe found <b>no demonstrated market-timing edge</b> — this is a mega-cap momentum screen that captures market <i>beta</i>, not alpha (the signal's entries slightly trail just holding the same names). Use it as a <b>BUY/SELL notifier</b> of what the swing signal fires on real data, not a profit guarantee. Entries now require <b>≥$300M/day</b> liquidity — the only tier where any edge appeared. · Below: the last 15 sessions' daily signals + the as-if long-only trade log (EOD reconstruction; exits on a 50/200 death-cross, a 4×ATR stop, or a 63-day cap; SPY benchmark) · backfilled the first time you open this.</div>
   <div id="stBtStatus" style="display:none;font-size:10px;color:#fbbf24;margin-bottom:10px">⟳ Backfilling history…</div>
   <div class="qs-bt-layout">
     <aside class="qs-bt-key">
@@ -1688,6 +1688,7 @@
     </aside>
     <div class="qs-bt-main">
       <div id="stBtStats" class="qs-bt-stats"></div>
+      <div id="stBtSignals"></div>
       <div id="stBtChart"></div>
       <div id="stBtOpen"></div>
       <div id="stBtClosed"></div>
@@ -4578,6 +4579,40 @@ function renderStBacktest(){
       stat('Cumulative', dollars(cumDollars), qsBtPnlClass(cumDollars), hasBench ? `SPY same days ${dollars(cumSpy)}` : '');
   }
 
+  // Last-15-session daily BUY/SELL notifier — aggregated across all tickers.
+  const sigEl = document.getElementById('stBtSignals');
+  if (sigEl) {
+    const buys = [], sells = [], watch = [];
+    let lastDate = '';
+    for (const l of stBacktestLogs) {
+      if (!l || !Array.isArray(l.dailyLog) || !l.dailyLog.length) continue;
+      for (const d of l.dailyLog) {
+        if (d.date > lastDate) lastDate = d.date;
+        if (d.action === 'BUY') buys.push({ sym: l.sym, date: d.date, price: d.price });
+        else if (d.action === 'SELL') sells.push({ sym: l.sym, date: d.date, reason: d.reason });
+      }
+      const last = l.dailyLog[l.dailyLog.length - 1];
+      if (last && last.action === 'WATCH') watch.push(l.sym);
+    }
+    if (!buys.length && !sells.length && !watch.length) {
+      sigEl.innerHTML = '';
+    } else {
+      buys.sort((a, b) => b.date.localeCompare(a.date));
+      sells.sort((a, b) => b.date.localeCompare(a.date));
+      const chip = (bg, txt) => `<span style="display:inline-block;background:${bg};border-radius:5px;padding:2px 7px;margin:2px 4px 2px 0;font-size:10px;white-space:nowrap">${txt}</span>`;
+      const buyChips = buys.map(b => chip('rgba(52,211,153,.14)', `<b>${escHtml(b.sym)}</b> ${qsBtDate(b.date+'T21:00:00Z')} · ${qsBtPrice(b.price)}`)).join('') || '<span class="qs-bt-empty">none</span>';
+      const sellChips = sells.map(s => chip('rgba(248,113,113,.14)', `<b>${escHtml(s.sym)}</b> ${qsBtDate(s.date+'T21:00:00Z')} · ${escHtml(s.reason||'')}`)).join('') || '<span class="qs-bt-empty">none</span>';
+      const watchLine = watch.length
+        ? `<div style="margin-top:8px;font-size:9.5px;color:#8a95a8">⛔ Blocked by the ≥$300M/day liquidity guardrail on the latest session (strong setup, too thin to fire): <b>${watch.map(escHtml).join(' ')}</b></div>`
+        : '';
+      sigEl.innerHTML =
+        `<div class="qs-bt-sec-head">Last 15 sessions · daily BUY/SELL notifier${lastDate ? ` (through ${qsBtDate(lastDate+'T21:00:00Z')})` : ''}</div>` +
+        `<div style="margin-bottom:4px"><span style="color:#34d399;font-weight:700;font-size:10px;letter-spacing:.3px">▲ BUY signals (${buys.length})</span><div style="margin:3px 0 8px">${buyChips}</div>` +
+        `<span style="color:#f87171;font-weight:700;font-size:10px;letter-spacing:.3px">▼ SELL signals (${sells.length})</span><div style="margin:3px 0 0">${sellChips}</div></div>` +
+        watchLine;
+    }
+  }
+
   // Open positions (all LONG) — unrealized vs the live row price.
   if (!openTrades.length) {
     openEl.innerHTML = '';
@@ -5396,7 +5431,7 @@ function renderWatchPanel(){
     <div class="wp-head">
       <span class="wp-title" id="wlHelpTrigger" style="cursor:help;border-bottom:1px dashed currentColor">Watchlist ?</span>
       <span class="wp-sub">Click a ticker to see its history · × to clear</span>
-      <span id="backtestBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="As-if you went long each time the swing trend signal turned strong, exiting on a 50/200 death-cross, a 4×ATR stop, or a 63-day cap — rolling ~6.5-month window with a SPY benchmark. An EOD reconstruction, not a live track record.">▢ Backtest log</span>
+      <span id="backtestBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="A mega-cap momentum/beta screen — a 2y+ validation found no demonstrated market-timing edge (the signal trails just holding the same names). A BUY/SELL notifier, not a profit guarantee. Entries require ≥$300M/day liquidity. Long-only EOD reconstruction; exits on a 50/200 death-cross, a 4×ATR stop, or a 63-day cap; SPY benchmark. Shows the last 15 sessions' daily signals + the as-if trade log.">▢ Backtest log</span>
     </div>
     <div class="wp-cards">
       ${section('ready',    '✓ Ready',    ready,    'No stocks ready to trade yet', 'ready')}
