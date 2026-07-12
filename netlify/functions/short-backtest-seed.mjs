@@ -42,7 +42,7 @@ async function getIndexHist(symbol, memo) {
   const isSpy = symbol === "SPY";
   let hist = await (isSpy ? getSpyHistCache() : getSectorHistCache(symbol)).catch(() => null);
   if (!hist) {
-    const raw = await safe("historical-price-eod/full", symbol, "&limit=420"); await delay(150);
+    const raw = await safe("historical-price-eod/full", symbol, "&limit=560"); await delay(150);
     hist = cleanHist(raw);
     if (hist.length >= 200) await (isSpy ? putSpyHistCache(hist) : putSectorHistCache(symbol, hist)).catch(() => {});
   }
@@ -74,7 +74,10 @@ export default async () => {
       try {
         // Fetch the ticker's own history. Its sector ETF comes from the already-
         // scored row (no per-ticker profile fetch → ~half the FMP calls, faster backfill).
-        const rawHist = await safe("historical-price-eod/full", sym, "&limit=420"); await delay(120);
+        // 560 bars = 200-bar signal warmup + the 240-session v6 replay window + slack
+        // (v6 widened SBT_SEED_SESSIONS 130→240 so ~9-month death-cross holds can
+        // complete inside the visible log).
+        const rawHist = await safe("historical-price-eod/full", sym, "&limit=560"); await delay(120);
         // Split/corporate-action back-adjust so the historical replay never books a
         // phantom split gap (e.g. HON 1:2 on 2026-06-29 → a spurious −47% STOP).
         const splits = await safe("splits", sym, "&limit=20").catch(() => []); await delay(120);

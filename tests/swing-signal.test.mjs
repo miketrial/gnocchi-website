@@ -4,7 +4,7 @@
    off the same numbers the site shows (the "byte-identical" claim in the code).
    Run: node tests/swing-signal.test.mjs */
 import assert from "node:assert/strict";
-import { computeShortSignal, SBT_ENTRY_MIN, SBT_HARD_STOP_PCT, SBT_LIQ_FLOOR, SBT_SECRS_MIN } from "../netlify/lib/short-backtest.mjs";
+import { computeShortSignal, SBT_ENTRY_MIN, SBT_HARD_STOP_PCT, SBT_LIQ_FLOOR, SBT_SECRS_MIN, SBT_CONV_DVOL, SBT_CONV_MOM } from "../netlify/lib/short-backtest.mjs";
 import {
   checkTrend, check3MMomentum, checkNearHigh, checkLiquidity, checkVolumeSurge, checkSectorStrength,
 } from "../netlify/lib/short-pipeline.mjs";
@@ -79,6 +79,41 @@ T("v5 gate: a lagging sector (SECRS<2) blocks entryStrong even when liquid + upt
   const lag = computeShortSignal(mkHist(riseCloses, { vol: 10_000_000 }), { spyStrength: 0.3, sectorStrength: -0.2 }); // sector lags SPY
   assert.ok(lead.secPts >= SBT_SECRS_MIN && lead.entryStrong === true);   // sector leads → can fire
   assert.ok(lag.secPts < SBT_SECRS_MIN && lag.entryStrong === false);     // sector lags → blocked
+});
+
+/* ---------- v6 conviction tier: entryStrong AND $-vol≥$3B/day AND 3mo-mom≥40% ---------- */
+// A steep, liquid runner: the newest 63 bars rise 95→140 (mom63 = 140/95−1 ≈ +47%),
+// the older 197 rise 60→95 (keeps a clean px>50DMA>200DMA uptrend). At vol 25M/day
+// (~$3.3B) it clears the $3B conviction floor; at 10M (~$1.3B) it's entryStrong-only.
+const steepCloses = Array.from({ length: 260 }, (_, i) =>
+  Math.round((i <= 62 ? 140 - i * (45 / 62) : 95 - (i - 62) * (35 / 197)) * 100) / 100);
+T("conviction TRUE: strong entry + ≥$3B/day + 3mo momentum ≥40%", () => {
+  const s = computeShortSignal(mkHist(steepCloses, { vol: 25_000_000 }), { spyStrength: 0, sectorStrength: 0.3 });
+  assert.equal(s.entryStrong, true);
+  assert.ok(s.avgDollarVol >= SBT_CONV_DVOL);
+  assert.ok(s.mom63 >= SBT_CONV_MOM);
+  assert.equal(s.conviction, true);
+});
+T("conviction FALSE on the $1–3B liquidity tier (entryStrong still true)", () => {
+  const s = computeShortSignal(mkHist(steepCloses, { vol: 10_000_000 }), { spyStrength: 0, sectorStrength: 0.3 });
+  assert.equal(s.entryStrong, true);                        // clears the $1B entry floor…
+  assert.ok(s.avgDollarVol < SBT_CONV_DVOL);                // …but not the $3B conviction floor
+  assert.equal(s.conviction, false);
+});
+T("conviction FALSE when 3mo momentum < 40% (entryStrong still true)", () => {
+  const s = computeShortSignal(mkHist(riseCloses, { vol: 30_000_000 }), { spyStrength: 0, sectorStrength: 0.3 }); // ~$3.5B/day, mom ≈ +11%
+  assert.equal(s.entryStrong, true);
+  assert.ok(s.avgDollarVol >= SBT_CONV_DVOL);
+  assert.ok(s.mom63 < SBT_CONV_MOM);
+  assert.equal(s.conviction, false);
+});
+PROOF("conviction proof: a blocked entry can NEVER be conviction, even with $3B + 47% momentum", () => {
+  // Same steep liquid runner, but the sector LAGS SPY → entryStrong false → the
+  // tier must not fire (conviction is a sub-tier of valid entries, not a bypass).
+  const s = computeShortSignal(mkHist(steepCloses, { vol: 25_000_000 }), { spyStrength: 0.3, sectorStrength: -0.2 });
+  assert.ok(s.avgDollarVol >= SBT_CONV_DVOL && s.mom63 >= SBT_CONV_MOM); // tier inputs pass…
+  assert.equal(s.entryStrong, false);                                    // …but the gate doesn't
+  assert.equal(s.conviction, false);
 });
 
 /* ---------- PARITY: techScore == sum of the live scorer's 6 technical factors ----------

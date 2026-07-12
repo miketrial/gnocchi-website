@@ -198,6 +198,8 @@
 
   /* data-integrity warning badge */
   .warn-badge{display:inline-block;color:var(--bad-fg);font-size:10px;margin-left:4px;cursor:help;vertical-align:middle;line-height:1}
+  /* v6 conviction tier star (Swing) — $3B/day + 3mo-momentum ≥40% sub-tier */
+  .conv-badge{display:inline-block;color:#fbbf24;font-size:10px;margin-left:4px;cursor:help;vertical-align:middle;line-height:1}
 
   /* momentum column values */
   .mom-hi{color:var(--bad-fg)}
@@ -1037,6 +1039,9 @@
 #viewSwitch button.active{ opacity:1; }
 #viewSwitch button:hover{ opacity:.8 }
 #viewSwitch button.active:hover{ opacity:1 }
+/* Typical-hold note on the Swing tab (avg ~200 calendar days under the v6
+   death-cross exit — see docs/swing-exit-edge-report.md). */
+#viewSwitch .vs-hold{ font-size:8.5px; font-weight:600; opacity:.65; letter-spacing:.2px; vertical-align:1px }
 [data-theme="white"] #viewSwitch{ border-radius:0; border:1px solid #000; background:#fff; }
 [data-theme="white"] #viewSwitch .vs-indicator{ border-radius:0; background:#fff; border:1px solid #000; }
 /* Buttons don't inherit font-family; without this they'd fall back to the UA
@@ -1083,10 +1088,10 @@
 <!-- ================= APP ================= -->
 <div id="app">
   <header class="bar" id="bar">
-    <div id="viewSwitch" title="Switch between Long-Term (full screener) and Swing (1wk-3mo swing setups)">
+    <div id="viewSwitch" title="Switch between Long-Term (full screener), Swing (trend-follow entries; let-winners-run exits — typical hold ~200 days) and Bounce (1-2 day mean reversion)">
       <div class="vs-indicator" id="vsIndicator"></div>
       <button data-v="basic">Long-Term</button>
-      <button data-v="short">Swing</button>
+      <button data-v="short" title="Trend-follow entries; exits let winners run to a 50/200 death-cross (typical hold ~200 days, ~9-month backstop)">Swing <span class="vs-hold">~200d</span></button>
       <!-- ===== QUICK SWING FEATURE ===== -->
       <button data-v="qs" title="1-2 day mean-reversion setups — separate trade philosophy from Swing">Bounce</button>
       <!-- ===== END QUICK SWING FEATURE ===== -->
@@ -1360,7 +1365,7 @@
   </div>
 
   <div class="legend">
-    <div class="ttl">Swing scoring &nbsp;·&nbsp; 11 factors tuned for 1wk-3mo swing trades</div>
+    <div class="ttl">Swing scoring &nbsp;·&nbsp; 11 factors tuned for multi-week to multi-month trend trades</div>
     <span><b style="background:var(--good-bg);color:var(--good-fg)">●</b><span style="color:var(--good-fg);font-weight:600">Green</span> · factor passes</span>
     <span><b style="background:var(--bad-bg);color:var(--bad-fg)">●</b><span style="color:var(--bad-fg);font-weight:600">Red</span> · factor fails</span>
     <span><b style="background:var(--pur-bg);color:var(--pur-fg)">●</b><span style="color:var(--pur-fg);font-weight:600">Purple</span> · data not available from FMP for this ticker</span>
@@ -1669,7 +1674,7 @@
     <span style="font-size:12px;font-weight:700;letter-spacing:.3px">Swing backtest · as-if trade log</span>
     <span id="stBtClose" style="cursor:pointer;color:#8a95a8;font-size:13px;padding:0 2px">✕</span>
   </div>
-  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px"><b style="color:#fbbf24">Honest framing:</b> a 20-year validation (2006–2026, through the 2008 / 2018 / 2020 bears) found <b>no repeatable market-timing edge</b> — this is a mega-cap momentum screen that captures market <i>beta</i>, not alpha, and nothing here protects you buying <i>into</i> a real bear. Use it as a <b>BUY/SELL notifier</b> of what the swing signal fires on real data, not a profit guarantee. Entries now require the deep-tested "best of the best" gate — <b>≥$1B/day</b> liquidity, the name's <b>sector leading SPY</b>, and a strong setup (<b>≥14/18</b>): the only combination whose edge survived out-of-sample <i>and</i> through real bears (raw entry-strength alone was ~0 in-sample). Far fewer names fire by design. · Below: the last 15 sessions' daily signals + the as-if long-only trade log (EOD reconstruction; a 63-day hold with a loose 40% catastrophe stop — the 50/200 death-cross and tight 4×ATR stop were dropped as they clipped winners; prices are split-adjusted so a stock split no longer books a phantom gap; SPY benchmark) · backfilled the first time you open this.</div>
+  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px"><b style="color:#fbbf24">Honest framing:</b> a 20-year validation (2006–2026, through the 2008 / 2018 / 2020 bears) found <b>no repeatable market-timing edge</b> — this is a mega-cap momentum screen that captures market <i>beta</i>, not alpha, and nothing here protects you buying <i>into</i> a real bear. Use it as a <b>BUY/SELL notifier</b> of what the swing signal fires on real data, not a profit guarantee. Entries require the deep-tested "best of the best" gate — <b>≥$1B/day</b> liquidity, the name's <b>sector leading SPY</b>, and a strong setup (<b>≥14/18</b>): the only combination whose edge survived out-of-sample <i>and</i> through real bears (raw entry-strength alone was ~0 in-sample). Far fewer names fire by design. Exits <b>let winners run</b>: a trade closes on a <b>50/200 death-cross</b> (a real trend death), with a loose 40% catastrophe stop and a ~9-month backstop — the old 63-day clock booked AMD's $160→$558 run as four disconnected slices, and given room the death-cross exit was the only rule that captured such runs without adding tail risk (tight/trailing stops whipsawed and were rejected; typical hold now runs ~200 days). A <b style="color:#fbbf24">★</b> marks the <b>conviction tier</b> — entries that also had ≥$3B/day traded and a 3-month run-up ≥40%, the sub-tier with roughly double the historical edge (still beta, not a guarantee). · Below: the last 15 sessions' daily signals + the as-if long-only trade log (EOD reconstruction; prices split-adjusted; SPY benchmark) · backfilled the first time you open this.</div>
   <div id="stBtStatus" style="display:none;font-size:10px;color:#fbbf24;margin-bottom:10px">⟳ Backfilling history…</div>
   <div class="qs-bt-layout">
     <aside class="qs-bt-key">
@@ -1677,13 +1682,13 @@
       <dl>
         <dt>Win rate</dt><dd>Share of closed trades that made money. Trend-following runs a <em>low</em> win rate by design — a few big winners carry it.</dd>
         <dt>Avg P/L</dt><dd>Average % gain/loss per closed trade.</dd>
-        <dt>Median hold</dt><dd>Typical days a trade stayed open (swing trades run weeks).</dd>
+        <dt>Median hold</dt><dd>Typical days a trade stayed open — with the let-winners-run exit these run <em>months</em> (~200 days on average), not weeks.</dd>
         <dt>Best / Worst</dt><dd>Biggest single winner and loser.</dd>
         <dt>Cumulative</dt><dd>Total $ if you'd put a fixed $10,000 into every trade.</dd>
         <dt>Edge vs SPY</dt><dd>Your avg P/L minus what <em>SPY</em> returned over the same trade dates — did riding these trends beat just holding the market? Positive = the signal added value.</dd>
         <dt>Equity curve</dt><dd>Running cumulative $ after each closed trade, in exit order, with <em>SPY</em> buy-and-hold overlaid. Above the dashed SPY line = the strategy is adding value.</dd>
         <dt>Open</dt><dd>A <em>LONG</em> still running. <em>Now</em> is the live price, <em>Stop</em> the 40% catastrophe auto-exit line, <em>Unrealized</em> the paper gain so far. A red <em>● STOP</em> means price is at/through the stop.</dd>
-        <dt>Closed</dt><dd>Finished trades, grouped by ticker (best cumulative first). Click a ticker to expand. <em>Exit on</em> is why it closed — <em>STOP</em> (broke its loose 40% catastrophe stop) or <em>TIME</em> (hit the 63-day hold).</dd>
+        <dt>Closed</dt><dd>Finished trades, grouped by ticker (best cumulative first). Click a ticker to expand. <em>Exit on</em> is why it closed — <em>CROSS</em> (50DMA closed below the 200DMA: the trend died), <em>STOP</em> (broke its loose 40% catastrophe stop) or <em>TIME</em> (the ~9-month backstop). ★ = conviction-tier entry.</dd>
       </dl>
     </aside>
     <div class="qs-bt-main">
@@ -1694,7 +1699,7 @@
       <div id="stBtClosed"></div>
     </div>
   </div>
-  <div class="qs-bt-note">This is a rolling ~6.5-month window of <em>recent activity</em> — a small sample, not a full track record. The entry signal is the <em>reconstructable</em> price/volume/sector core of the 33-point swing score (Trend, 3-Month Momentum, Near-High, Liquidity, Volume-Surge, Sector-RS); the five fundamental factors (analyst revisions, valuation, quality, leverage, catalyst) can't be reconstructed at a past date, so — like the live tool's own philosophy of buying confirmed strength — the log times entries off the trend core. The seed is a historical replay of those factors at each daily close. Forward datapoints are recorded on each rescan, at the price that scan saw. The 40% catastrophe stop assumes a fill at the stop (or the day's open on a gap-through). Prices are split/corporate-action adjusted, so a stock split no longer books a phantom overnight gap (the old −47% HON "trade" was HON's 1:2 split, not a real loss). SPY buy-and-hold is the benchmark (opportunity cost of just holding the market those days). No slippage or commissions. Cumulative $ assumes a fixed $10,000 per trade. Long-only: a 2-year study found shorting weak names loses on this universe and blows out the worst-case drawdown — see scripts/run-short-study.mjs.</div>
+  <div class="qs-bt-note">This is a rolling ~14-month window of <em>recent activity</em> — a small sample, not a full track record. The entry signal is the <em>reconstructable</em> price/volume/sector core of the 33-point swing score (Trend, 3-Month Momentum, Near-High, Liquidity, Volume-Surge, Sector-RS); the five fundamental factors (analyst revisions, valuation, quality, leverage, catalyst) can't be reconstructed at a past date, so — like the live tool's own philosophy of buying confirmed strength — the log times entries off the trend core. The seed is a historical replay of those factors at each daily close. Forward datapoints are recorded on each rescan, at the price that scan saw. The 40% catastrophe stop assumes a fill at the stop (or the day's open on a gap-through). Prices are split/corporate-action adjusted, so a stock split no longer books a phantom overnight gap (the old −47% HON "trade" was HON's 1:2 split, not a real loss). SPY buy-and-hold is the benchmark (opportunity cost of just holding the market those days). No slippage or commissions. Cumulative $ assumes a fixed $10,000 per trade. Long-only: a 2-year study found shorting weak names loses on this universe and blows out the worst-case drawdown — see scripts/run-short-study.mjs.</div>
 </div>
 <!-- ===== END SWING BACKTEST FEATURE ===== -->
 
@@ -4588,7 +4593,7 @@ function renderStBacktest(){
       if (!l || !Array.isArray(l.dailyLog) || !l.dailyLog.length) continue;
       for (const d of l.dailyLog) {
         if (d.date > lastDate) lastDate = d.date;
-        if (d.action === 'BUY') buys.push({ sym: l.sym, date: d.date, price: d.price });
+        if (d.action === 'BUY') buys.push({ sym: l.sym, date: d.date, price: d.price, conviction: !!d.conviction });
         else if (d.action === 'SELL') sells.push({ sym: l.sym, date: d.date, reason: d.reason });
       }
       const last = l.dailyLog[l.dailyLog.length - 1];
@@ -4600,7 +4605,7 @@ function renderStBacktest(){
       buys.sort((a, b) => b.date.localeCompare(a.date));
       sells.sort((a, b) => b.date.localeCompare(a.date));
       const chip = (bg, txt) => `<span style="display:inline-block;background:${bg};border-radius:5px;padding:2px 7px;margin:2px 4px 2px 0;font-size:10px;white-space:nowrap">${txt}</span>`;
-      const buyChips = buys.map(b => chip('rgba(52,211,153,.14)', `<b>${escHtml(b.sym)}</b> ${qsBtDate(b.date+'T21:00:00Z')} · ${qsBtPrice(b.price)}`)).join('') || '<span class="qs-bt-empty">none</span>';
+      const buyChips = buys.map(b => chip('rgba(52,211,153,.14)', `${b.conviction ? '<span style="color:#fbbf24" title="Conviction tier: ≥$3B/day + 3-mo momentum ≥40%">★</span> ' : ''}<b>${escHtml(b.sym)}</b> ${qsBtDate(b.date+'T21:00:00Z')} · ${qsBtPrice(b.price)}`)).join('') || '<span class="qs-bt-empty">none</span>';
       const sellChips = sells.map(s => chip('rgba(248,113,113,.14)', `<b>${escHtml(s.sym)}</b> ${qsBtDate(s.date+'T21:00:00Z')} · ${escHtml(s.reason||'')}`)).join('') || '<span class="qs-bt-empty">none</span>';
       const watchLine = watch.length
         ? `<div style="margin-top:8px;font-size:9.5px;color:#8a95a8">⛔ Blocked by the ≥$1B/day liquidity guardrail on the latest session (strong setup, too thin to fire): <b>${watch.map(escHtml).join(' ')}</b></div>`
@@ -4626,7 +4631,8 @@ function renderStBacktest(){
         ? `<td data-tip="${escHtml('Stop = entry × (1 − 40%), pinned at entry — a loose catastrophe stop. The as-if trade auto-exits if price breaks this line.')}">${qsBtPrice(stop)}</td>`
         : `<td>—</td>`;
       const flag = breached ? ` <span style="color:#f87171;font-weight:700">● STOP</span>` : '';
-      return `<tr${breached?' style="background:rgba(248,113,113,.08)"':''}><td>${escHtml(o.sym)} <span class="qs-bt-side qs-bt-side-long">LONG</span></td><td>${qsBtDate(o.entryScoredAt || o.entryAt)}</td>` +
+      const convStar = o.conviction ? ' <span style="color:#fbbf24" title="Conviction tier at entry: ≥$3B/day + 3-mo momentum ≥40%">★</span>' : '';
+      return `<tr${breached?' style="background:rgba(248,113,113,.08)"':''}><td>${escHtml(o.sym)}${convStar} <span class="qs-bt-side qs-bt-side-long">LONG</span></td><td>${qsBtDate(o.entryScoredAt || o.entryAt)}</td>` +
         `<td>${qsBtPrice(o.entryPrice)}</td><td>${qsBtPrice(live)}</td>${stopCell}` +
         `<td class="${unreal==null?'':qsBtPnlClass(unreal)}">${unreal==null?'—':qsBtPct(unreal)}${flag}</td></tr>`;
     }).join('');
@@ -4652,8 +4658,9 @@ function renderStBacktest(){
     const sections = ordered.map(({ sym, trades, agg }) => {
       const rows = trades.map(t => {
         const reason = t.exitReason ? `<span class="qs-bt-reason">${escHtml(t.exitReason)}</span>` : '';
+        const star = t.conviction ? '<span style="color:#fbbf24" title="Conviction tier at entry: ≥$3B/day + 3-mo momentum ≥40%">★</span> ' : '';
         return `<tr>` +
-          `<td>${qsBtDate(t.entryScoredAt || t.entryAt)}</td><td>${qsBtPrice(t.entryPrice)}</td>` +
+          `<td>${star}${qsBtDate(t.entryScoredAt || t.entryAt)}</td><td>${qsBtPrice(t.entryPrice)}</td>` +
           `<td>${qsBtDate(t.exitScoredAt || t.exitAt)}</td><td>${qsBtPrice(t.exitPrice)}</td>` +
           `<td>${t.holdDays==null?'—':t.holdDays+'d'}</td>` +
           `<td class="${qsBtPnlClass(t.pnlPct)}">${qsBtPct(t.pnlPct)}</td>` +
@@ -6051,6 +6058,14 @@ function renderShortWatchlist(){
     const warnBadge = (r.warnings && r.warnings.length)
       ? `<span class="warn-badge" data-tip="${escHtml('Data-integrity check flagged this row:\n• '+r.warnings.join('\n• ')+'\n\nAffected factors show as purple until a clean rescan. Right-click → Force rescan to retry.')}">⚠</span>`
       : '';
+    // v6 conviction tier ★ — the "best of the best" sub-tier among valid strong
+    // setups: ≥$3B/day traded AND 3-month momentum ≥ +40% (the only entry cut that
+    // roughly doubled historical edge vs SPY — still beta, not a guarantee). Comes
+    // straight off the engine signal (row.bt) so the badge, the backtest log and
+    // the daily notifier can never disagree.
+    const convBadge = (r.bt && r.bt.conviction)
+      ? `<span class="conv-badge" data-tip="${escHtml('Conviction tier — best of the best: ≥$3B/day dollar-volume AND 3-month momentum ≥ +40%, on top of the standard entry gate. Historically ~2× the edge vs SPY of the base gate (2006–2026 study). High-beta mega-cap tilt, not a guarantee.')}">★</span>`
+      : '';
     const wfState = watchFlags[sym] || '';
     // For Ready rows, the flag content is the live TVP green count (0–3)
     // instead of a ✓ — easier to see how close a setup is at a glance.
@@ -6072,7 +6087,7 @@ function renderShortWatchlist(){
       ? `<td class="co-cell">${wfBtn}<span class="sym" style="opacity:0.3">${sym}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
       : isLegacy
         ? `<td class="co-cell">${wfBtn}<span class="sym">${sym}</span><span class="legacy-badge">Legacy</span> <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`
-        : `<td class="co-cell">${wfBtn}<span class="sym">${sym}</span>${warnBadge} <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`;
+        : `<td class="co-cell">${wfBtn}<span class="sym">${sym}</span>${convBadge}${warnBadge} <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`;
     if (justPromoted.has(sym)) tr.classList.add('wflash-promote');
 
     const vCls = k => {
