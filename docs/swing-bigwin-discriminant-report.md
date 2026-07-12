@@ -65,3 +65,17 @@ Both ride to the 189-day backstop; what makes one +33% and the other +6% is how 
 3. **(Exit, not entry — secondary.)** 97.6% of big winners exit on the 189-day TIME backstop *while still trending* — the same clip the old 63-day cap did to AMD, milder. If the goal is bigger wins, loosening/removing the 189 backstop (pure death-cross) captures more tail (cohort avg +16.9% vs +13.1%) at the cost of slower capital turnover. Separate decision from entry.
 
 **Boundary:** survivor-only cohort (upper-bound P/L); pre-2017 has few $1B/$3B names, so liquidity-gate IS cells are thin (flagged, not trusted); IC uses Spearman (robust to the fat forward tails). Same anchor as every prior swing study: post-2017 OOS is bull-heavy; only IS-positive-too rules are trustworthy, and only `spread`/`techScore` clear that bar.
+
+---
+
+## 5. SHIPPED (2026-07-12) — v6.1 fat-tail propensity rank (surface, not gate)
+
+User picked Option 1. The binary v6 conviction ★ becomes a **0-3 score** (`convScore`), one point each for the three live-computable big-win axes:
+
+- **MOMENTUM** — 3-month return ≥ +40% (`SBT_CONV_MOM`)
+- **MEGA-LIQUIDITY** — $-vol ≥ $3B/day (`SBT_CONV_DVOL`)
+- **TREND MATURITY** — 50/200 MA spread ≥ +8% (`SBT_CONV_SPREAD`) — the study's only IS+OOS-robust feature
+
+Computed only on a valid `entryStrong` entry (0 otherwise), so it **ranks, never gates** — an unstarred name still fires. `beta` (a strong but sign-flipping discriminant) is omitted: it needs SPY daily-return history threaded into the live scorer, and it's collinear with the momentum + mega-liquidity axes already counted. `convScore` rides on `computeShortSignal` → stamped on positions/trades/dailyLog and rendered ★/★★/★★★ in the Swing table (per-axis tooltip) + backtest popover. `SBT_SEED_VERSION` 6→7 (re-seeds star metadata only — **exits, entries, and P&L are byte-identical to v6**). Verified offline (`scripts/swing-validate/verify-v6.mjs`): INTC ★★★ +340%, MU ★★ +351%, AMD ★★ open +86%, the CROSS losers BA/GE score 0–1 — with NVDA's ★★★ trade at +20% vs AMD's ★★ at +86% confirming the honest caveat (a tilt, not a per-trade guarantee). 208 tests + proofs green.
+
+The recommendation stands: this is an **attention/sizing aid** — size up the ★★★ names, keep the broad robust list. It does not change what the system buys.

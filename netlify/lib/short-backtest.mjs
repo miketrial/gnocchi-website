@@ -55,12 +55,15 @@ export const SBT_HARD_STOP_PCT = 0.40;     // v4 catastrophe stop = entry × (1 
                                            // single-trade NON-gap tail without choking trend winners. A tight stop (and, tested again
                                            // in v6, ANY trailing stop) clips winners — see docs/swing-exit-edge-report.md.
 export const SBT_TIME_STOP_DAYS = 189;     // sessions — v6: a ~9-month BACKSTOP behind the death-cross exit, no longer the primary
-// v6 conviction tier ("best of the best" among entries — docs/swing-exit-edge-report.md §4):
-// $-volume ≥ $3B/day AND 3-month momentum ≥ +40% roughly DOUBLES the base gate's edge
-// vs SPY out-of-sample (+17.5% / +17.4% vs +8.8% under the death-cross exit). It is a
-// beta/liquidity tilt, not proven alpha — surfaced as a badge + rank, never a guarantee.
-export const SBT_CONV_DVOL = 3e9;
-export const SBT_CONV_MOM = 0.40;
+// v6.1 fat-tail propensity axes (0-3 score — docs/swing-bigwin-discriminant-report.md).
+// The three big-win discriminants that are (a) computable live and (b) each a distinct
+// axis; a name hitting all three produces the fat right tail far more often. Surfaced as
+// ★/★★/★★★ for attention + sizing, NEVER a hard gate (the study showed a momentum/beta
+// gate amplifies beta and goes negative through real bears). MOM+DVOL together were the
+// v6 binary "conviction"; SPREAD is the discriminant study's only IS+OOS-robust feature.
+export const SBT_CONV_DVOL = 3e9;      // MEGA-LIQUIDITY axis: $-vol ≥ $3B/day
+export const SBT_CONV_MOM = 0.40;      // MOMENTUM axis: 3-month return ≥ +40%
+export const SBT_CONV_SPREAD = 0.08;   // TREND-MATURITY axis: (50DMA−200DMA)/200DMA ≥ +8%
 export const SBT_ENTRY_MIN = 14;           // technical strong bar (14/18 ≈ 78%) — raised from 12 in v5 (see below)
 export const SBT_SECRS_MIN = 2;            // v5: entry also requires the name's sector leading SPY (SECRS ≥ 2, i.e. ETF-ROC − SPY-ROC ≥ +0.08)
 // Liquidity guardrail (v5: raised $300M → $1B/day). A deep 20-year study
@@ -94,7 +97,11 @@ export const SBT_LIQ_FLOOR = 1e9;
 //     3mo-mom≥40%) stamped on positions/trades + the daily notifier. Replay window
 //     widened (SBT_SEED_SESSIONS 130→240, SBT_WINDOW_DAYS 195→420) so the longer
 //     holds can complete inside the visible log.
-export const SBT_SEED_VERSION = 6;
+// v6.1: fat-tail propensity score (docs/swing-bigwin-discriminant-report.md). The binary
+//     conviction star becomes a 0-3 rank (MOMENTUM + MEGA-LIQUIDITY + TREND-MATURITY) so
+//     big-win-prone names surface for attention/sizing. EXIT/ENTRY LOGIC AND P&L ARE
+//     UNCHANGED from v6 — the re-seed only recomputes the star metadata on stored trades.
+export const SBT_SEED_VERSION = 7;
 
 const round2 = x => (x == null ? null : Math.round(x * 100) / 100);
 
@@ -214,18 +221,35 @@ export function computeShortSignal(hist, { spyStrength = null, sectorStrength = 
   // either is missing it reads 0, so an unmapped-sector name can't fire — intended.
   const entryStrong = techScore >= SBT_ENTRY_MIN && uptrend
     && avgDollarVol >= SBT_LIQ_FLOOR && secPts >= SBT_SECRS_MIN;
+  // v6.1 fat-tail propensity score (0-3) — the three big-win discriminants that
+  // are computable live (docs/swing-bigwin-discriminant-report.md): a name that is
+  // strongly momentum'd, mega-liquid, AND in an established (not just barely-crossed)
+  // uptrend produces the fat right tail far more often. It RANKS valid entries so
+  // the big-win-prone names surface for attention/sizing — it does NOT gate (a hard
+  // momentum/beta gate amplifies beta and goes negative through real bears; the study
+  // rejected it). Only meaningful on a valid entry (0 otherwise). Axes:
+  //   +1 MOMENTUM       — 3-month return ≥ +40%   (the steep-run star; was v6 "conviction")
+  //   +1 MEGA-LIQUIDITY — $-vol ≥ $3B/day         (flight-to-quality; deep-study's robust lever)
+  //   +1 TREND MATURITY — 50/200 spread ≥ +8%     (the ONLY IS+OOS-robust discriminant)
+  const maSpread = sma200 > 0 ? (sma50 - sma200) / sma200 : 0;
+  const convScore = entryStrong
+    ? (mom63 != null && mom63 >= SBT_CONV_MOM ? 1 : 0)
+      + (avgDollarVol >= SBT_CONV_DVOL ? 1 : 0)
+      + (maSpread >= SBT_CONV_SPREAD ? 1 : 0)
+    : 0;
   return {
     techScore, price, sma50: round2(sma50), sma200: round2(sma200), uptrend,
     deathCross: sma50 < sma200,
     atr14: round2(atrFrom(hist, 0, 14)),
     liqPts, secPts, avgDollarVol: Math.round(avgDollarVol),
     mom63: mom63 == null ? null : Math.round(mom63 * 10000) / 10000,
+    maSpread: Math.round(maSpread * 10000) / 10000,
     entryStrong,
-    // v6 conviction tier — the "best of the best" AMONG valid strong setups:
-    // ≥$3B/day liquidity AND 3-month momentum ≥ +40% (docs/swing-exit-edge-report.md §4).
-    // Rides on the signal so the live row (row.bt), the seed replay, and the daily
-    // notifier all read the identical definition.
-    conviction: entryStrong && avgDollarVol >= SBT_CONV_DVOL && mom63 != null && mom63 >= SBT_CONV_MOM,
+    // 0-3 stars. Rides on the signal so the live row (row.bt), the seed replay and
+    // the daily notifier all read the identical score. `conviction` kept as a
+    // boolean shorthand (≥2 of 3 axes = the elite tier) for copy/back-compat.
+    convScore,
+    conviction: convScore >= 2,
     bar: { date: b0.date, open: b0.open ?? b0.close, high: b0.high ?? b0.close, low: b0.low ?? b0.close, close: b0.close ?? b0.price },
   };
 }
@@ -327,7 +351,7 @@ export function recordShortTransition(sym, sig, prevLog, scoredAt) {
       sym, side: "long",
       entryAt: nowIso, entryScoredAt: nowIso,
       entryPrice: bar.close, atr14, stopPrice,
-      conviction: !!sig.conviction, // v6 tier at ENTRY ($3B/day & 3mo-mom≥40%) — sticky for the trade's life
+      convScore: sig.convScore || 0, // v6.1 fat-tail propensity 0-3 at ENTRY — sticky for the trade's life
       entrySessionDate: sessionDate, lastSessionDate: sessionDate, barsHeld: 0,
     };
   };
@@ -337,7 +361,7 @@ export function recordShortTransition(sym, sig, prevLog, scoredAt) {
       sym: o.sym, side: "long",
       entryAt: o.entryAt, entryScoredAt: o.entryScoredAt, entryPrice: o.entryPrice,
       stopPrice: o.stopPrice ?? null,
-      conviction: o.conviction ?? false,
+      convScore: o.convScore ?? 0,
       exitAt: nowIso, exitScoredAt: nowIso, exitPrice, exitReason,
       pnlPct,
       holdDays: holdDaysBetween(o.entryScoredAt || o.entryAt, nowIso),
@@ -434,7 +458,7 @@ export function replayShortTrades(sym, hist, spyStrSeries, sectorStrSeries, spyH
    really for. Replays the full seed window so position state is correct, records
    the ACTION at every session, and returns the last `sessions` days:
      BUY  — a fresh entry fired this session (entryStrong transition, guardrail-passed;
-            carries `conviction` when the $3B/day & 3mo-mom≥40% tier also passed)
+            carries `convScore` 0-3, the fat-tail propensity rank, for the ★ badge)
      SELL — an open position exited this session (reason: STOP / CROSS / TIME)
      HOLD — in an open position, trend intact
      WATCH— flat, and this session was strong-but-blocked (uptrend+score but below
@@ -468,7 +492,7 @@ export function dailySignalLog(sym, hist, spyStrSeries, sectorStrSeries, { sessi
       date, action, reason,
       techScore: sig.techScore, price: round2(sig.bar.close), uptrend: sig.uptrend,
       avgDollarVol: sig.avgDollarVol, guardrailPass: sig.avgDollarVol >= SBT_LIQ_FLOOR,
-      conviction: !!sig.conviction,
+      convScore: sig.convScore || 0,
       stopPrice: nowOpen ? log.open.stopPrice : null,
     });
   }

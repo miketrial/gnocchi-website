@@ -18,14 +18,14 @@ const T = (name, fn) => { try { fn(); pass++; } catch (e) { fail++; console.log(
 const PROOF = (name, fn) => { try { fn(); proofs++; } catch (e) { fail++; console.log("❌ PROOF BROKEN:", name, "\n   ", e.message); } };
 
 // Minimal signal shape the state machine reads. (v6: deathCross is the PRIMARY
-// exit again — re-added off the long-runway study; conviction is the $3B/day +
-// 3mo-mom≥40% tier stamped on positions at entry.)
+// exit again — re-added off the long-runway study; v6.1: convScore 0-3 is the
+// fat-tail propensity rank stamped on positions at entry.)
 const sig = (o) => ({
   bar: { date: o.date, open: o.open ?? o.close, high: o.high ?? o.close, low: o.low ?? o.close, close: o.close },
   atr14: o.atr14 ?? 2,
   entryStrong: o.entryStrong ?? false,
   deathCross: o.deathCross ?? false,
-  conviction: o.conviction ?? false,
+  convScore: o.convScore ?? 0,
 });
 const enter = (date = "2026-01-05", close = 100, atr14 = 2) =>
   recordShortTransition("X", sig({ date, close, atr14, entryStrong: true }), null);
@@ -94,11 +94,11 @@ PROOF("CROSS proof: the 40% STOP fires FIRST when both trip on the same bar", ()
   assert.equal(log.closed[0].exitReason, "STOP");
   assert.equal(log.closed[0].exitPrice, 60);
 });
-T("conviction: stamped on the position at entry and carried to the closed trade", () => {
-  let log = recordShortTransition("X", sig({ date: "2026-01-05", close: 100, entryStrong: true, conviction: true }), null);
-  assert.equal(log.open.conviction, true);
-  log = recordShortTransition("X", sig({ date: "2026-01-06", close: 105, low: 104, deathCross: true, conviction: false }), log);
-  assert.equal(log.closed[0].conviction, true);    // ENTRY-time tier, sticky for the trade's life
+T("convScore: stamped on the position at entry and carried to the closed trade", () => {
+  let log = recordShortTransition("X", sig({ date: "2026-01-05", close: 100, entryStrong: true, convScore: 3 }), null);
+  assert.equal(log.open.convScore, 3);
+  log = recordShortTransition("X", sig({ date: "2026-01-06", close: 105, low: 104, deathCross: true, convScore: 0 }), log);
+  assert.equal(log.closed[0].convScore, 3);        // ENTRY-time rank, sticky for the trade's life
 });
 PROOF("hard-cap PROOF: a −67% ride-down is impossible once the 40% cap is on", () => {
   // A hyper-volatile name bleeding down day after day. Under the OLD wide 4×ATR stop it

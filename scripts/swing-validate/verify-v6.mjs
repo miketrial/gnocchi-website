@@ -31,8 +31,9 @@ const secStrFor = (sym) => {
   return h.length ? strengthSeriesFor(h) : [];
 };
 
+const stars = n => (n ? "★".repeat(n) : "").padEnd(3);
 const fmtTrade = t =>
-  `  ${t.conviction ? "★" : " "} entry ${t.entryScoredAt.slice(0, 10)} @$${t.entryPrice}  →  exit ${t.exitScoredAt.slice(0, 10)} @$${t.exitPrice}  ${String(t.exitReason).padEnd(5)} ${(t.pnlPct >= 0 ? "+" : "") + t.pnlPct}%`;
+  `  ${stars(t.convScore)} entry ${t.entryScoredAt.slice(0, 10)} @$${t.entryPrice}  →  exit ${t.exitScoredAt.slice(0, 10)} @$${t.exitPrice}  ${String(t.exitReason).padEnd(5)} ${(t.pnlPct >= 0 ? "+" : "") + t.pnlPct}%`;
 
 const SAMPLE = ["AMD", "NVDA", "MU", "CAT", "XOM", "VZ", "INTC", "BA", "LLY", "GE"];
 let crossSeen = 0, timeSeen = 0, stopSeen = 0, openSeen = 0, convSeen = 0;
@@ -42,17 +43,17 @@ for (const sym of SAMPLE) {
   const secStr = secStrFor(sym);
   const log = replayShortTrades(sym, hist, spyStr, secStr, spy560);
   const dl = dailySignalLog(sym, hist, spyStr, secStr, { sessions: 15 });
-  console.log(`${sym} — ${log.closed.length} closed, open=${log.open ? `${log.open.conviction ? "★" : ""}@$${log.open.entryPrice} since ${log.open.entryScoredAt.slice(0, 10)} (${log.open.barsHeld} sessions)` : "none"}`);
+  console.log(`${sym} — ${log.closed.length} closed, open=${log.open ? `${stars(log.open.convScore)}@$${log.open.entryPrice} since ${log.open.entryScoredAt.slice(0, 10)} (${log.open.barsHeld} sessions)` : "none"}`);
   for (const t of [...log.closed].reverse()) console.log(fmtTrade(t));
   for (const t of log.closed) {
     if (t.exitReason === "CROSS") crossSeen++;
     if (t.exitReason === "TIME") timeSeen++;
     if (t.exitReason === "STOP") stopSeen++;
-    if (t.conviction) convSeen++;
+    if (t.convScore) convSeen++;
   }
-  if (log.open) { openSeen++; if (log.open.conviction) convSeen++; }
+  if (log.open) { openSeen++; if (log.open.convScore) convSeen++; }
   const dlBuys = dl.days.filter(d => d.action === "BUY");
-  if (dlBuys.length) console.log(`  dailyLog BUYs: ${dlBuys.map(d => `${d.date}${d.conviction ? "★" : ""}`).join(", ")}`);
+  if (dlBuys.length) console.log(`  dailyLog BUYs: ${dlBuys.map(d => `${d.date}${(d.convScore ? "★".repeat(d.convScore) : "")}`).join(", ")}`);
   console.log("");
 }
 console.log(`exit-reason mix across sample: CROSS=${crossSeen} TIME=${timeSeen} STOP=${stopSeen} · open=${openSeen} · conviction-stamped=${convSeen}`);

@@ -4,7 +4,7 @@
    off the same numbers the site shows (the "byte-identical" claim in the code).
    Run: node tests/swing-signal.test.mjs */
 import assert from "node:assert/strict";
-import { computeShortSignal, SBT_ENTRY_MIN, SBT_HARD_STOP_PCT, SBT_LIQ_FLOOR, SBT_SECRS_MIN, SBT_CONV_DVOL, SBT_CONV_MOM } from "../netlify/lib/short-backtest.mjs";
+import { computeShortSignal, SBT_ENTRY_MIN, SBT_HARD_STOP_PCT, SBT_LIQ_FLOOR, SBT_SECRS_MIN, SBT_CONV_DVOL, SBT_CONV_MOM, SBT_CONV_SPREAD } from "../netlify/lib/short-backtest.mjs";
 import {
   checkTrend, check3MMomentum, checkNearHigh, checkLiquidity, checkVolumeSurge, checkSectorStrength,
 } from "../netlify/lib/short-pipeline.mjs";
@@ -81,38 +81,39 @@ T("v5 gate: a lagging sector (SECRS<2) blocks entryStrong even when liquid + upt
   assert.ok(lag.secPts < SBT_SECRS_MIN && lag.entryStrong === false);     // sector lags → blocked
 });
 
-/* ---------- v6 conviction tier: entryStrong AND $-vol≥$3B/day AND 3mo-mom≥40% ---------- */
-// A steep, liquid runner: the newest 63 bars rise 95→140 (mom63 = 140/95−1 ≈ +47%),
-// the older 197 rise 60→95 (keeps a clean px>50DMA>200DMA uptrend). At vol 25M/day
-// (~$3.3B) it clears the $3B conviction floor; at 10M (~$1.3B) it's entryStrong-only.
+/* ---------- v6.1 fat-tail propensity score (0-3): MOMENTUM + MEGA-LIQUIDITY + TREND-MATURITY ---------- */
+// A steep, liquid runner: the newest 63 bars rise 95→140 (mom63 = 140/95−1 ≈ +47% ≥ 40%),
+// the older 197 rise 60→95 → a big 50/200 spread (≥8%) and a clean uptrend. At vol 25M/day
+// (~$3.3B) it clears the $3B axis; at 10M (~$1.3B) it does not.
 const steepCloses = Array.from({ length: 260 }, (_, i) =>
   Math.round((i <= 62 ? 140 - i * (45 / 62) : 95 - (i - 62) * (35 / 197)) * 100) / 100);
-T("conviction TRUE: strong entry + ≥$3B/day + 3mo momentum ≥40%", () => {
+T("convScore = 3 when all three axes fire (momentum + $3B + trend maturity)", () => {
   const s = computeShortSignal(mkHist(steepCloses, { vol: 25_000_000 }), { spyStrength: 0, sectorStrength: 0.3 });
   assert.equal(s.entryStrong, true);
-  assert.ok(s.avgDollarVol >= SBT_CONV_DVOL);
-  assert.ok(s.mom63 >= SBT_CONV_MOM);
-  assert.equal(s.conviction, true);
+  assert.ok(s.mom63 >= SBT_CONV_MOM && s.avgDollarVol >= SBT_CONV_DVOL && s.maSpread >= SBT_CONV_SPREAD);
+  assert.equal(s.convScore, 3);
+  assert.equal(s.conviction, true);                        // ≥2 axes = the elite boolean
 });
-T("conviction FALSE on the $1–3B liquidity tier (entryStrong still true)", () => {
+T("convScore drops one star on the $1–3B liquidity tier (momentum + maturity still fire)", () => {
   const s = computeShortSignal(mkHist(steepCloses, { vol: 10_000_000 }), { spyStrength: 0, sectorStrength: 0.3 });
-  assert.equal(s.entryStrong, true);                        // clears the $1B entry floor…
-  assert.ok(s.avgDollarVol < SBT_CONV_DVOL);                // …but not the $3B conviction floor
-  assert.equal(s.conviction, false);
+  assert.equal(s.entryStrong, true);
+  assert.ok(s.avgDollarVol < SBT_CONV_DVOL);                // loses the mega-liquidity axis…
+  assert.ok(s.mom63 >= SBT_CONV_MOM && s.maSpread >= SBT_CONV_SPREAD); // …keeps the other two
+  assert.equal(s.convScore, 2);
 });
-T("conviction FALSE when 3mo momentum < 40% (entryStrong still true)", () => {
+T("convScore loses the momentum axis when 3mo momentum < 40%", () => {
   const s = computeShortSignal(mkHist(riseCloses, { vol: 30_000_000 }), { spyStrength: 0, sectorStrength: 0.3 }); // ~$3.5B/day, mom ≈ +11%
   assert.equal(s.entryStrong, true);
-  assert.ok(s.avgDollarVol >= SBT_CONV_DVOL);
-  assert.ok(s.mom63 < SBT_CONV_MOM);
-  assert.equal(s.conviction, false);
+  assert.ok(s.mom63 < SBT_CONV_MOM && s.avgDollarVol >= SBT_CONV_DVOL);
+  assert.ok(s.convScore <= 2 && s.convScore >= 1);          // has $3B (and maybe maturity), not momentum
 });
-PROOF("conviction proof: a blocked entry can NEVER be conviction, even with $3B + 47% momentum", () => {
+PROOF("propensity proof: a blocked entry ALWAYS scores 0, even with all three axes", () => {
   // Same steep liquid runner, but the sector LAGS SPY → entryStrong false → the
-  // tier must not fire (conviction is a sub-tier of valid entries, not a bypass).
+  // rank must be 0 (propensity ranks VALID entries; it is not a bypass).
   const s = computeShortSignal(mkHist(steepCloses, { vol: 25_000_000 }), { spyStrength: 0.3, sectorStrength: -0.2 });
-  assert.ok(s.avgDollarVol >= SBT_CONV_DVOL && s.mom63 >= SBT_CONV_MOM); // tier inputs pass…
+  assert.ok(s.avgDollarVol >= SBT_CONV_DVOL && s.mom63 >= SBT_CONV_MOM && s.maSpread >= SBT_CONV_SPREAD); // all axes pass…
   assert.equal(s.entryStrong, false);                                    // …but the gate doesn't
+  assert.equal(s.convScore, 0);
   assert.equal(s.conviction, false);
 });
 
