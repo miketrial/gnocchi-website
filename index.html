@@ -4907,17 +4907,25 @@ function saveActivity(){
 // Load latest watch state from blob on startup (overrides stale localStorage).
 // Called from init() once API_LIVE is known true — must NOT run at module-eval
 // time, when API_LIVE is still false and the GET would be skipped.
+// True once the shared watch-state blob has loaded (or failed / is offline).
+// The reconcile loop holds off firing Buy/Hold/Sell transitions until this is
+// set, so a fresh page can't fire a flood of BUYs off an empty pre-load
+// heldSyms before the blob's owned set arrives — cold-start seeds from the
+// correct base instead of racing loadWatchState.
+let watchStateLoaded = false;
 function loadWatchState(){
-  if(typeof API_LIVE === 'undefined' || !API_LIVE) return;
+  if(typeof API_LIVE === 'undefined' || !API_LIVE){ watchStateLoaded = true; renderShortWatchlist(); return; }
   api.get('/api/watch-state').then(data => {
-    if(!data) return;
-    if(data.flags      && typeof data.flags      === 'object') { watchFlags    = data.flags;      try{localStorage.setItem('gn_st_watch',    JSON.stringify(watchFlags));}catch(e){} }
-    if(data.demoted    && typeof data.demoted    === 'object') { demotedRecent = data.demoted;    try{localStorage.setItem('gn_st_demoted',  JSON.stringify(demotedRecent));}catch(e){} }
-    if(data.held       && typeof data.held       === 'object') { heldSyms      = data.held;       try{localStorage.setItem('gn_st_held',     JSON.stringify(heldSyms));}catch(e){} }
-    if(Array.isArray(data.activity))                           { activityLog   = data.activity;   try{localStorage.setItem('gn_st_activity', JSON.stringify(activityLog));}catch(e){} }
-    if(data.sigHistory && typeof data.sigHistory === 'object') { sigHistory    = data.sigHistory; try{localStorage.setItem('gn_st_sighist',  JSON.stringify(sigHistory));}catch(e){} }
+    if(data){
+      if(data.flags      && typeof data.flags      === 'object') { watchFlags    = data.flags;      try{localStorage.setItem('gn_st_watch',    JSON.stringify(watchFlags));}catch(e){} }
+      if(data.demoted    && typeof data.demoted    === 'object') { demotedRecent = data.demoted;    try{localStorage.setItem('gn_st_demoted',  JSON.stringify(demotedRecent));}catch(e){} }
+      if(data.held       && typeof data.held       === 'object') { heldSyms      = data.held;       try{localStorage.setItem('gn_st_held',     JSON.stringify(heldSyms));}catch(e){} }
+      if(Array.isArray(data.activity))                           { activityLog   = data.activity;   try{localStorage.setItem('gn_st_activity', JSON.stringify(activityLog));}catch(e){} }
+      if(data.sigHistory && typeof data.sigHistory === 'object') { sigHistory    = data.sigHistory; try{localStorage.setItem('gn_st_sighist',  JSON.stringify(sigHistory));}catch(e){} }
+    }
+    watchStateLoaded = true;
     renderShortWatchlist();
-  }).catch(()=>{});
+  }).catch(()=>{ watchStateLoaded = true; renderShortWatchlist(); });
 }
 function logActivity(sym, type, reason){
   activityLog.unshift({ ts: Date.now(), sym: (sym||'').toUpperCase(), type, reason: reason || '' });
@@ -5898,6 +5906,7 @@ function renderShortWatchlist(){
   // flood of BUY alerts.
   const nowMs = Date.now();
   const coldStart = !localStorage.getItem('gn_st_held_seeded');
+  let sawRows = false;
   for (const sym of Object.keys(shortRowsBySym)) {
     const r = shortRowsBySym[sym];
     if (!r || r.scoring) continue;
@@ -5906,7 +5915,10 @@ function renderShortWatchlist(){
     // (1) entry-eligibility history strip (idempotent per scored_at)
     const scoredAtMs = r.scored_at ? new Date(r.scored_at).getTime() : nowMs;
     if (recordSigHistory(sym, scoredAtMs, c, r.raw?.[0]?.price)) histDirty = true;
-    // (2) Buy / Hold / Sell reconcile
+    // (2) Buy / Hold / Sell reconcile — held off until the shared watch-state
+    //     blob has loaded, so we never fire BUYs off an empty pre-load heldSyms.
+    if (!watchStateLoaded) continue;
+    sawRows = true;
     if (coldStart) {
       if (c.entryStrong && !heldSyms[sym]) {
         heldSyms[sym] = { enteredOnDate: '__seed__', at: nowMs }; // adopt as HOLD, no alert
@@ -5932,7 +5944,7 @@ function renderShortWatchlist(){
       logActivity(sym, 'demote', 'SELL · 50/200 death cross');
     }
   }
-  if (coldStart) { try { localStorage.setItem('gn_st_held_seeded','1'); } catch(e){} }
+  if (coldStart && sawRows) { try { localStorage.setItem('gn_st_held_seeded','1'); } catch(e){} }
   if (flagsDirty)   saveWatchFlags();
   if (demotedDirty) saveDemoted();
   if (heldDirty)    saveHeld();
