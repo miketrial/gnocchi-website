@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import {
   recordShortTransition, pruneShortWindow, mergeShortSeed, emptyShortLog, needsShortSeed,
   shortSpyReturnBetween, annotateShortBenchmarks, sessionComplete, dailySignalLog,
-  SBT_HARD_STOP_PCT, SBT_TIME_STOP_DAYS, SBT_SEED_VERSION,
+  SBT_HARD_STOP_PCT, SBT_TIME_STOP_DAYS, SBT_SEED_VERSION, SBT_ENTRY_MIN,
 } from "../netlify/lib/short-backtest.mjs";
 import { simulateShortExit } from "../netlify/lib/short-study.mjs";
 import { cleanHist, adjustSplits } from "../netlify/lib/quickswing-pipeline.mjs";
@@ -325,9 +325,9 @@ PROOF("partial-bar proof: an intraday tick on today's date must NOT count as a c
 {
   // clean, liquid, monotonic uptrend → a fresh BUY on the first replayed session, then HOLDs.
   const rise = Array.from({ length: 260 }, (_, i) => Math.round((70 + 50 * ((259 - i) / 259)) * 100) / 100);
-  const hist = mkHist(rise, { vol: 3_000_000 });
+  const hist = mkHist(rise, { vol: 10_000_000 }); // ~$1.2B/day — clears the v5 $1B floor
   const spyStr = hist.map(b => ({ date: b.date, strength: 0 }));
-  const secStr = hist.map(b => ({ date: b.date, strength: 0.3 }));
+  const secStr = hist.map(b => ({ date: b.date, strength: 0.3 })); // sector leads SPY → SECRS≥2
   const dl = dailySignalLog("X", hist, spyStr, secStr, { sessions: 6, replaySessions: 6 });
   T("dailySignalLog: fresh BUY on entry then HOLD in a sustained uptrend", () => {
     assert.equal(dl.days.length, 6);
@@ -336,10 +336,10 @@ PROOF("partial-bar proof: an intraday tick on today's date must NOT count as a c
     assert.ok(dl.open); // still in the position at window end
   });
   T("dailySignalLog: every fired day carries the guardrail-pass + score", () => {
-    assert.ok(dl.days.every(d => d.guardrailPass === true && d.techScore >= 12));
+    assert.ok(dl.days.every(d => d.guardrailPass === true && d.techScore >= SBT_ENTRY_MIN));
   });
   PROOF("dailySignalLog proof: a sub-guardrail name must NOT emit a BUY", () => {
-    const thin = mkHist(rise, { vol: 2_000_000 }); // ~$236M/day < $300M floor
+    const thin = mkHist(rise, { vol: 5_000_000 }); // ~$0.6B/day < $1B floor
     const dlThin = dailySignalLog("X", thin, spyStr, secStr, { sessions: 6, replaySessions: 6 });
     assert.ok(!dlThin.days.some(d => d.action === "BUY")); // guardrail blocks the entry
     assert.ok(dlThin.days.some(d => d.action === "WATCH")); // shown as strong-but-blocked

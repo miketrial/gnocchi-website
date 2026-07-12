@@ -4,7 +4,7 @@
    off the same numbers the site shows (the "byte-identical" claim in the code).
    Run: node tests/swing-signal.test.mjs */
 import assert from "node:assert/strict";
-import { computeShortSignal, SBT_ENTRY_MIN, SBT_HARD_STOP_PCT, SBT_LIQ_FLOOR } from "../netlify/lib/short-backtest.mjs";
+import { computeShortSignal, SBT_ENTRY_MIN, SBT_HARD_STOP_PCT, SBT_LIQ_FLOOR, SBT_SECRS_MIN } from "../netlify/lib/short-backtest.mjs";
 import {
   checkTrend, check3MMomentum, checkNearHigh, checkLiquidity, checkVolumeSurge, checkSectorStrength,
 } from "../netlify/lib/short-pipeline.mjs";
@@ -38,38 +38,47 @@ T("atr14 is positive & finite", () => {
   assert.ok(s.atr14 > 0 && isFinite(s.atr14));
 });
 
-/* ---------- entry gate: techScore≥12 AND uptrend AND liqPts≥1 ---------- */
+/* ---------- v5 entry gate: techScore≥14 AND uptrend AND $-vol≥$1B AND Sector-RS≥2 ---------- */
 T("entryStrong FALSE in a downtrend (uptrend gate)", () => {
   const s = computeShortSignal(trendHist(90, 95, 120), { spyStrength: 0, sectorStrength: 0.3 });
   assert.equal(s.entryStrong, false);
 });
-// A clean, liquid, monotonic uptrend (newest-first 120→70) that genuinely clears
-// the entry gate — techScore 14, uptrend, ≥$300M/day at vol 3M.
+// A clean, liquid, monotonic uptrend (newest-first 120→70, close ~$120) that clears
+// the v5 gate — techScore≥14, uptrend, ≥$1B/day at vol 10M (~$1.2B), sector leads SPY.
 const riseCloses = Array.from({ length: 260 }, (_, i) => Math.round((70 + 50 * ((259 - i) / 259)) * 100) / 100);
-T("entryStrong implies all three gate conditions (score, uptrend, guardrail)", () => {
-  const s = computeShortSignal(mkHist(riseCloses, { vol: 3_000_000 }), { spyStrength: 0, sectorStrength: 0.3 });
+T("entryStrong implies all four gate conditions (score, uptrend, $1B floor, sector-RS)", () => {
+  const s = computeShortSignal(mkHist(riseCloses, { vol: 10_000_000 }), { spyStrength: 0, sectorStrength: 0.3 });
   assert.equal(s.entryStrong, true);
   assert.ok(s.techScore >= SBT_ENTRY_MIN);
   assert.equal(s.uptrend, true);
   assert.ok(s.avgDollarVol >= SBT_LIQ_FLOOR);
+  assert.ok(s.secPts >= SBT_SECRS_MIN);
 });
 PROOF("entry gate proof: a downtrend can never be entryStrong even with max sector RS", () =>
   assert.equal(computeShortSignal(trendHist(90, 95, 120), { spyStrength: -1, sectorStrength: 1 }).entryStrong, false));
 
-/* ---------- liquidity guardrail (≥$300M/day) — the Phase-2 defensive filter ---------- */
-T("guardrail: entryStrong FALSE below $300M/day even when strong + uptrend", () => {
+/* ---------- liquidity guardrail (v5: ≥$1B/day) — the deep-study defensive filter ---------- */
+T("guardrail: entryStrong FALSE below $1B/day even when strong + uptrend + sector-leading", () => {
   const opts = { spyStrength: 0, sectorStrength: 0.3 };
-  const hi = computeShortSignal(mkHist(riseCloses, { vol: 3_000_000 }), opts); // ~$354M/day
-  const lo = computeShortSignal(mkHist(riseCloses, { vol: 2_000_000 }), opts); // ~$236M/day
+  const hi = computeShortSignal(mkHist(riseCloses, { vol: 10_000_000 }), opts); // ~$1.2B/day
+  const lo = computeShortSignal(mkHist(riseCloses, { vol: 5_000_000 }), opts);  // ~$0.6B/day
   assert.ok(hi.avgDollarVol >= SBT_LIQ_FLOOR && lo.avgDollarVol < SBT_LIQ_FLOOR);
   assert.equal(hi.techScore, lo.techScore);   // the guardrail must NOT change the score
   assert.equal(hi.entryStrong, true);
   assert.equal(lo.entryStrong, false);         // only the liquidity floor flipped it
 });
 PROOF("guardrail proof: it is the $-volume floor (not the score) that blocks the sub-tier name", () => {
-  const lo = computeShortSignal(mkHist(riseCloses, { vol: 2_000_000 }), { spyStrength: 0, sectorStrength: 0.3 });
-  assert.ok(lo.techScore >= SBT_ENTRY_MIN && lo.uptrend); // strong + uptrend...
+  const lo = computeShortSignal(mkHist(riseCloses, { vol: 5_000_000 }), { spyStrength: 0, sectorStrength: 0.3 });
+  assert.ok(lo.techScore >= SBT_ENTRY_MIN && lo.uptrend && lo.secPts >= SBT_SECRS_MIN); // strong + uptrend + sector-leading...
   assert.equal(lo.entryStrong, false);                    // ...yet blocked, purely by the guardrail
+});
+
+/* ---------- v5 sector-leadership gate (Sector-RS ≥ 2) ---------- */
+T("v5 gate: a lagging sector (SECRS<2) blocks entryStrong even when liquid + uptrend", () => {
+  const lead = computeShortSignal(mkHist(riseCloses, { vol: 10_000_000 }), { spyStrength: 0, sectorStrength: 0.3 });   // sector leads SPY
+  const lag = computeShortSignal(mkHist(riseCloses, { vol: 10_000_000 }), { spyStrength: 0.3, sectorStrength: -0.2 }); // sector lags SPY
+  assert.ok(lead.secPts >= SBT_SECRS_MIN && lead.entryStrong === true);   // sector leads → can fire
+  assert.ok(lag.secPts < SBT_SECRS_MIN && lag.entryStrong === false);     // sector lags → blocked
 });
 
 /* ---------- PARITY: techScore == sum of the live scorer's 6 technical factors ----------

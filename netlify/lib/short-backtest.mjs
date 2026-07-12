@@ -10,14 +10,17 @@
        blows the worst trade from −52% to −150% — shorting weak trend-breakers
        both bleeds return and destroys capital protection. Buying strength is the
        whole Swing thesis; the log honors it.
-     - Entry: a fresh transition into a STRONG swing setup — the reconstructable
-       technical core of the 33-point score (Trend, 3M-Momentum, Near-High,
-       Liquidity, Volume-Surge, Sector-RS → 0-18) at/above the same 67% strong bar
-       the live screener uses (12/18), AND price in a clean uptrend (px>50DMA>200DMA).
-       The 5 fundamental factors (analyst, valuation, quality, leverage, catalyst)
-       are NOT in the entry signal — they can't be reconstructed at a past date, so
-       — exactly like Bounce — the log keys off the EOD-computable factors so the
-       seed replay and forward recording are byte-identical.
+     - Entry (v5 "best of the best" gate — see docs/swing-deep-entry-report.md): a fresh
+       transition into a STRONG swing setup — the reconstructable technical core of the
+       33-point score (Trend, 3M-Momentum, Near-High, Liquidity, Volume-Surge, Sector-RS
+       → 0-18) at/above 14/18 (~78%), price in a clean uptrend (px>50DMA>200DMA), the
+       sector leading SPY (Sector-RS ≥ 2), AND ≥$1B/day dollar-volume. A deep 2006-2026
+       out-of-sample/out-of-regime study found this is the only combo whose edge holds
+       through IS + OOS + real bears; raw entry-strength alone (12/18) was ~0 in-sample.
+       The 5 fundamental factors (analyst, valuation, quality, leverage, catalyst) are
+       NOT in the entry signal — they can't be reconstructed at a past date, so — exactly
+       like Bounce — the log keys off the EOD-computable factors so the seed replay and
+       forward recording are byte-identical.
      - Exit priority (v4 risk-first calibration — see docs/swing-calibration-report.md):
        (1) a loose 40% hard catastrophe stop (SBT_HARD_STOP_PCT), (2) a 63-session
        (~3-month) time cap — now the PRIMARY exit. The old 50/200 death-cross early-exit
@@ -46,13 +49,15 @@ export const SBT_HARD_STOP_PCT = 0.40;     // v4 catastrophe stop = entry × (1 
                                            // single-trade NON-gap tail without choking trend winners. Calibration found a tight stop
                                            // AND the 50/200 death-cross both hurt (they clip winners) — see docs/swing-calibration-report.md.
 export const SBT_TIME_STOP_DAYS = 63;      // sessions — a 63-day hold is now the PRIMARY exit (canonical momentum window)
-export const SBT_ENTRY_MIN = 12;           // technical strong bar (12/18 = same 67% as 22/33 live)
-// Liquidity guardrail: the validation (docs/swing-validation-report.md, Phase 2)
-// showed the swing signal's only positive edge lives in the most-liquid mega-caps
-// (≥$300M/day recent-median $-volume); below ~$300M/day the edge is flat-to-
-// significantly-NEGATIVE. So entries are gated on this floor — a defensive filter
-// that removes a real negative-edge region, NOT an alpha claim.
-export const SBT_LIQ_FLOOR = 300e6;
+export const SBT_ENTRY_MIN = 14;           // technical strong bar (14/18 ≈ 78%) — raised from 12 in v5 (see below)
+export const SBT_SECRS_MIN = 2;            // v5: entry also requires the name's sector leading SPY (SECRS ≥ 2, i.e. ETF-ROC − SPY-ROC ≥ +0.08)
+// Liquidity guardrail (v5: raised $300M → $1B/day). A deep 20-year study
+// (docs/swing-deep-entry-report.md, 2006-2026 incl. the 2008/2018/2020 bears) swept
+// the floor and found edge-vs-SPY is flat-to-NEGATIVE (and bear-negative at EVERY
+// tier) below ~$1B/day, and only turns positive — and bear-robust — at $1B+. The
+// most-liquid mega-caps are a flight-to-quality/defensiveness filter, NOT an alpha
+// claim (still ~1/3 leverage; survivor-only numbers are upper bounds).
+export const SBT_LIQ_FLOOR = 1e9;
 // Bump when the entry/exit calibration changes so already-seeded logs re-seed.
 // v1: long-only, entry techScore≥12 & uptrend, exit 4×ATR / 50-200 death-cross / 63d.
 // v2: Near-High factor re-tuned (top mark → 5-18% pullback zone, not pinned at high).
@@ -61,7 +66,13 @@ export const SBT_LIQ_FLOOR = 300e6;
 //     stop; the 50/200 death-cross early-exit and the tight 4×ATR stop are DROPPED (both
 //     clipped winners / worsened drawdown). Prices are now split-adjusted upstream, which
 //     kills the phantom HON −47% split "trade". See docs/swing-calibration-report.md.
-export const SBT_SEED_VERSION = 4;
+// v5: "best of the best" entry — the deep 2006-2026 out-of-sample/out-of-regime study
+//     (docs/swing-deep-entry-report.md) demoted raw entry-strength (techScore≥15's
+//     in-sample edge was ~0; its headline was post-2017 bull) and found the only rule
+//     positive across IS + OOS + bear was techScore≥14 & $-vol≥$1B/day & sector-RS≥2.
+//     So the entry is tightened to that combo. Honest framing unchanged: high-conviction
+//     mega-cap tilt, not alpha; no protection when buying INTO a real bear.
+export const SBT_SEED_VERSION = 5;
 
 const round2 = x => (x == null ? null : Math.round(x * 100) / 100);
 
@@ -178,9 +189,14 @@ export function computeShortSignal(hist, { spyStrength = null, sectorStrength = 
     techScore, price, sma50: round2(sma50), sma200: round2(sma200), uptrend,
     deathCross: sma50 < sma200,
     atr14: round2(atrFrom(hist, 0, 14)),
-    liqPts, avgDollarVol: Math.round(avgDollarVol),
-    // Liquidity guardrail: entries require the mega-cap $-volume floor (see SBT_LIQ_FLOOR).
-    entryStrong: techScore >= SBT_ENTRY_MIN && uptrend && avgDollarVol >= SBT_LIQ_FLOOR,
+    liqPts, secPts, avgDollarVol: Math.round(avgDollarVol),
+    // v5 "best of the best" entry gate: a strong technical core (≥14/18), a clean
+    // uptrend, the mega-cap $1B/day liquidity floor, AND the sector leading SPY
+    // (SECRS ≥ 2). The only combo that held edge across IS + OOS + real bears
+    // (docs/swing-deep-entry-report.md). secPts needs SPY + sector strength; if
+    // either is missing it reads 0, so an unmapped-sector name can't fire — intended.
+    entryStrong: techScore >= SBT_ENTRY_MIN && uptrend
+      && avgDollarVol >= SBT_LIQ_FLOOR && secPts >= SBT_SECRS_MIN,
     bar: { date: b0.date, open: b0.open ?? b0.close, high: b0.high ?? b0.close, low: b0.low ?? b0.close, close: b0.close ?? b0.price },
   };
 }
