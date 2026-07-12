@@ -198,8 +198,6 @@
 
   /* data-integrity warning badge */
   .warn-badge{display:inline-block;color:var(--bad-fg);font-size:10px;margin-left:4px;cursor:help;vertical-align:middle;line-height:1}
-  /* v6.1 fat-tail propensity ★–★★★ (Swing) — momentum / mega-liquidity / trend-maturity */
-  .conv-badge{display:inline-block;color:#fbbf24;font-size:10px;margin-left:4px;cursor:help;vertical-align:middle;line-height:1;letter-spacing:-0.5px}
 
   /* momentum column values */
   .mom-hi{color:var(--bad-fg)}
@@ -1674,7 +1672,7 @@
     <span style="font-size:12px;font-weight:700;letter-spacing:.3px">Swing backtest · as-if trade log</span>
     <span id="stBtClose" style="cursor:pointer;color:#8a95a8;font-size:13px;padding:0 2px">✕</span>
   </div>
-  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px"><b style="color:#fbbf24">Honest framing:</b> a 20-year validation (2006–2026, through the 2008 / 2018 / 2020 bears) found <b>no repeatable market-timing edge</b> — this is a mega-cap momentum screen that captures market <i>beta</i>, not alpha, and nothing here protects you buying <i>into</i> a real bear. Use it as a <b>BUY/SELL notifier</b> of what the swing signal fires on real data, not a profit guarantee. Entries require the deep-tested "best of the best" gate — <b>≥$1B/day</b> liquidity, the name's <b>sector leading SPY</b>, and a strong setup (<b>≥14/18</b>): the only combination whose edge survived out-of-sample <i>and</i> through real bears (raw entry-strength alone was ~0 in-sample). Far fewer names fire by design. Exits <b>let winners run</b>: a trade closes on a <b>50/200 death-cross</b> (a real trend death), with a loose 40% catastrophe stop and a ~9-month backstop — the old 63-day clock booked AMD's $160→$558 run as four disconnected slices, and given room the death-cross exit was the only rule that captured such runs without adding tail risk (tight/trailing stops whipsawed and were rejected; typical hold now runs ~200 days). <b style="color:#fbbf24">★–★★★</b> is the <b>fat-tail propensity</b> rank — a 0-3 count of the big-win signals an entry hit (<b>momentum</b> ≥ +40% 3-mo, <b>mega-liquidity</b> ≥ $3B/day, <b>trend maturity</b> 50/200 spread ≥ +8%). A 20-year study found win <i>size</i> is mostly hold-length × market path — not entry-selectable — so this <b>ranks</b> the big-win-prone names for attention/sizing; it does <b>not</b> gate (an unstarred name still fires) and it is a beta tilt, not a guarantee. · Below: the last 15 sessions' daily signals + the as-if long-only trade log (EOD reconstruction; prices split-adjusted; SPY benchmark) · backfilled the first time you open this.</div>
+  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px"><b style="color:#fbbf24">Honest framing:</b> a 20-year validation (2006–2026, through the 2008 / 2018 / 2020 bears) found <b>no repeatable market-timing edge</b> — this is a mega-cap momentum screen that captures market <i>beta</i>, not alpha, and nothing here protects you buying <i>into</i> a real bear. Use it as a <b>BUY/SELL notifier</b> of what the swing signal fires on real data, not a profit guarantee. Entries require the deep-tested "best of the best" gate — <b>≥$1B/day</b> liquidity, the name's <b>sector leading SPY</b>, and a strong setup (<b>≥14/18</b>): the only combination whose edge survived out-of-sample <i>and</i> through real bears (raw entry-strength alone was ~0 in-sample). Far fewer names fire by design. Exits <b>let winners run</b>: a trade closes on a <b>50/200 death-cross</b> (a real trend death), with a loose 40% catastrophe stop and a ~9-month backstop — the old 63-day clock booked AMD's $160→$558 run as four disconnected slices, and given room the death-cross exit was the only rule that captured such runs without adding tail risk (tight/trailing stops whipsawed and were rejected; typical hold now runs ~200 days). · Below: the last 15 sessions' daily signals + the as-if long-only trade log (EOD reconstruction; prices split-adjusted; SPY benchmark) · backfilled the first time you open this.</div>
   <div id="stBtStatus" style="display:none;font-size:10px;color:#fbbf24;margin-bottom:10px">⟳ Backfilling history…</div>
   <div class="qs-bt-layout">
     <aside class="qs-bt-key">
@@ -1688,7 +1686,7 @@
         <dt>Edge vs SPY</dt><dd>Your avg P/L minus what <em>SPY</em> returned over the same trade dates — did riding these trends beat just holding the market? Positive = the signal added value.</dd>
         <dt>Equity curve</dt><dd>Running cumulative $ after each closed trade, in exit order, with <em>SPY</em> buy-and-hold overlaid. Above the dashed SPY line = the strategy is adding value.</dd>
         <dt>Open</dt><dd>A <em>LONG</em> still running. <em>Now</em> is the live price, <em>Stop</em> the 40% catastrophe auto-exit line, <em>Unrealized</em> the paper gain so far. A red <em>● STOP</em> means price is at/through the stop.</dd>
-        <dt>Closed</dt><dd>Finished trades, grouped by ticker (best cumulative first). Click a ticker to expand. <em>Exit on</em> is why it closed — <em>CROSS</em> (50DMA closed below the 200DMA: the trend died), <em>STOP</em> (broke its loose 40% catastrophe stop) or <em>TIME</em> (the ~9-month backstop). ★–★★★ = fat-tail propensity at entry (momentum / mega-liquidity / trend-maturity).</dd>
+        <dt>Closed</dt><dd>Finished trades, grouped by ticker (best cumulative first). Click a ticker to expand. <em>Exit on</em> is why it closed — <em>CROSS</em> (50DMA closed below the 200DMA: the trend died), <em>STOP</em> (broke its loose 40% catastrophe stop) or <em>TIME</em> (the ~9-month backstop).</dd>
       </dl>
     </aside>
     <div class="qs-bt-main">
@@ -4593,7 +4591,7 @@ function renderStBacktest(){
       if (!l || !Array.isArray(l.dailyLog) || !l.dailyLog.length) continue;
       for (const d of l.dailyLog) {
         if (d.date > lastDate) lastDate = d.date;
-        if (d.action === 'BUY') buys.push({ sym: l.sym, date: d.date, price: d.price, convScore: d.convScore || 0 });
+        if (d.action === 'BUY') buys.push({ sym: l.sym, date: d.date, price: d.price });
         else if (d.action === 'SELL') sells.push({ sym: l.sym, date: d.date, reason: d.reason });
       }
       const last = l.dailyLog[l.dailyLog.length - 1];
@@ -4605,7 +4603,7 @@ function renderStBacktest(){
       buys.sort((a, b) => b.date.localeCompare(a.date));
       sells.sort((a, b) => b.date.localeCompare(a.date));
       const chip = (bg, txt) => `<span style="display:inline-block;background:${bg};border-radius:5px;padding:2px 7px;margin:2px 4px 2px 0;font-size:10px;white-space:nowrap">${txt}</span>`;
-      const buyChips = buys.map(b => chip('rgba(52,211,153,.14)', `${b.convScore ? `<span style="color:#fbbf24" title="Fat-tail propensity ${b.convScore}/3 (momentum / mega-liquidity / trend-maturity)">${'★'.repeat(b.convScore)}</span> ` : ''}<b>${escHtml(b.sym)}</b> ${qsBtDate(b.date+'T21:00:00Z')} · ${qsBtPrice(b.price)}`)).join('') || '<span class="qs-bt-empty">none</span>';
+      const buyChips = buys.map(b => chip('rgba(52,211,153,.14)', `<b>${escHtml(b.sym)}</b> ${qsBtDate(b.date+'T21:00:00Z')} · ${qsBtPrice(b.price)}`)).join('') || '<span class="qs-bt-empty">none</span>';
       const sellChips = sells.map(s => chip('rgba(248,113,113,.14)', `<b>${escHtml(s.sym)}</b> ${qsBtDate(s.date+'T21:00:00Z')} · ${escHtml(s.reason||'')}`)).join('') || '<span class="qs-bt-empty">none</span>';
       const watchLine = watch.length
         ? `<div style="margin-top:8px;font-size:9.5px;color:#8a95a8">⛔ Blocked by the ≥$1B/day liquidity guardrail on the latest session (strong setup, too thin to fire): <b>${watch.map(escHtml).join(' ')}</b></div>`
@@ -4631,8 +4629,7 @@ function renderStBacktest(){
         ? `<td data-tip="${escHtml('Stop = entry × (1 − 40%), pinned at entry — a loose catastrophe stop. The as-if trade auto-exits if price breaks this line.')}">${qsBtPrice(stop)}</td>`
         : `<td>—</td>`;
       const flag = breached ? ` <span style="color:#f87171;font-weight:700">● STOP</span>` : '';
-      const convStar = o.convScore ? ` <span style="color:#fbbf24" title="Fat-tail propensity ${o.convScore}/3 at entry (momentum / mega-liquidity / trend-maturity)">${'★'.repeat(o.convScore)}</span>` : '';
-      return `<tr${breached?' style="background:rgba(248,113,113,.08)"':''}><td>${escHtml(o.sym)}${convStar} <span class="qs-bt-side qs-bt-side-long">LONG</span></td><td>${qsBtDate(o.entryScoredAt || o.entryAt)}</td>` +
+      return `<tr${breached?' style="background:rgba(248,113,113,.08)"':''}><td>${escHtml(o.sym)} <span class="qs-bt-side qs-bt-side-long">LONG</span></td><td>${qsBtDate(o.entryScoredAt || o.entryAt)}</td>` +
         `<td>${qsBtPrice(o.entryPrice)}</td><td>${qsBtPrice(live)}</td>${stopCell}` +
         `<td class="${unreal==null?'':qsBtPnlClass(unreal)}">${unreal==null?'—':qsBtPct(unreal)}${flag}</td></tr>`;
     }).join('');
@@ -4658,9 +4655,8 @@ function renderStBacktest(){
     const sections = ordered.map(({ sym, trades, agg }) => {
       const rows = trades.map(t => {
         const reason = t.exitReason ? `<span class="qs-bt-reason">${escHtml(t.exitReason)}</span>` : '';
-        const star = t.convScore ? `<span style="color:#fbbf24" title="Fat-tail propensity ${t.convScore}/3 at entry (momentum / mega-liquidity / trend-maturity)">${'★'.repeat(t.convScore)}</span> ` : '';
         return `<tr>` +
-          `<td>${star}${qsBtDate(t.entryScoredAt || t.entryAt)}</td><td>${qsBtPrice(t.entryPrice)}</td>` +
+          `<td>${qsBtDate(t.entryScoredAt || t.entryAt)}</td><td>${qsBtPrice(t.entryPrice)}</td>` +
           `<td>${qsBtDate(t.exitScoredAt || t.exitAt)}</td><td>${qsBtPrice(t.exitPrice)}</td>` +
           `<td>${t.holdDays==null?'—':t.holdDays+'d'}</td>` +
           `<td class="${qsBtPnlClass(t.pnlPct)}">${qsBtPct(t.pnlPct)}</td>` +
@@ -5863,33 +5859,6 @@ function showTickerHistory(sym, anchorEl){
   tickerHist.style.top  = Math.max(8, y) + 'px';
 }
 
-// v6.1 fat-tail propensity ★ (0-3). Renders convScore gold stars with a tooltip
-// breaking down which of the three big-win axes fired. Shared by the Swing table and
-// the backtest popover so they never disagree. `bt` is the engine signal (row.bt) or a
-// closed/open trade carrying convScore (+ optionally mom63/avgDollarVol/maSpread live).
-function stPropensityStars(n){ n = Math.max(0, Math.min(3, n|0)); return n ? '★'.repeat(n) : ''; }
-function stPropensityBadge(bt, { compact = false } = {}){
-  const n = bt && typeof bt.convScore === 'number' ? bt.convScore : 0;
-  if (!n) return '';
-  // Per-axis breakdown when the live fields are present (table rows); the sticky
-  // trade stamp only carries the score, so fall back to a generic tip there.
-  let tip;
-  if (bt.mom63 != null || bt.avgDollarVol != null || bt.maSpread != null){
-    const axis = (on, label) => `${on ? '✓' : '·'} ${label}`;
-    const momOn = bt.mom63 != null && bt.mom63 >= 0.40;
-    const dvOn  = bt.avgDollarVol != null && bt.avgDollarVol >= 3e9;
-    const spOn  = bt.maSpread != null && bt.maSpread >= 0.08;
-    tip = `Fat-tail propensity ${n}/3 — big-win-prone signals (attention/sizing, not a gate):\n`
-      + `${axis(momOn,'Momentum: 3-mo return ≥ +40%')}${bt.mom63!=null?` (${(bt.mom63*100).toFixed(0)}%)`:''}\n`
-      + `${axis(dvOn,'Mega-liquidity: $-vol ≥ $3B/day')}${bt.avgDollarVol!=null?` ($${(bt.avgDollarVol/1e9).toFixed(1)}B)`:''}\n`
-      + `${axis(spOn,'Trend maturity: 50/200 spread ≥ +8%')}${bt.maSpread!=null?` (${(bt.maSpread*100).toFixed(0)}%)`:''}\n\n`
-      + `More stars = statistically bigger right tail (2006–2026 study). Beta/liquidity tilt, not a guarantee — an unstarred name still fires.`;
-  } else {
-    tip = `Fat-tail propensity ${n}/3 at entry — big-win-prone signals (momentum ≥ +40% / $-vol ≥ $3B/day / 50-200 trend spread ≥ +8%). Attention & sizing aid, not a gate or guarantee.`;
-  }
-  return `<span class="conv-badge" data-tip="${escHtml(tip)}">${stPropensityStars(n)}</span>`;
-}
-
 function renderShortWatchlist(){
   const tb = document.getElementById('stBody');
   if (!tb) return;
@@ -6085,11 +6054,6 @@ function renderShortWatchlist(){
     const warnBadge = (r.warnings && r.warnings.length)
       ? `<span class="warn-badge" data-tip="${escHtml('Data-integrity check flagged this row:\n• '+r.warnings.join('\n• ')+'\n\nAffected factors show as purple until a clean rescan. Right-click → Force rescan to retry.')}">⚠</span>`
       : '';
-    // v6.1 fat-tail propensity ★ (0-3) — RANKS valid entries by how big-win-prone
-    // they are (docs/swing-bigwin-discriminant-report.md). Not a gate: an unstarred
-    // name still fires. Three axes off the engine signal (row.bt), so the badge, the
-    // backtest log and the daily notifier can never disagree.
-    const convBadge = stPropensityBadge(r.bt);
     const wfState = watchFlags[sym] || '';
     // For Ready rows, the flag content is the live TVP green count (0–3)
     // instead of a ✓ — easier to see how close a setup is at a glance.
@@ -6111,7 +6075,7 @@ function renderShortWatchlist(){
       ? `<td class="co-cell">${wfBtn}<span class="sym" style="opacity:0.3">${sym}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
       : isLegacy
         ? `<td class="co-cell">${wfBtn}<span class="sym">${sym}</span><span class="legacy-badge">Legacy</span> <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`
-        : `<td class="co-cell">${wfBtn}<span class="sym">${sym}</span>${convBadge}${warnBadge} <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`;
+        : `<td class="co-cell">${wfBtn}<span class="sym">${sym}</span>${warnBadge} <span class="name">${escHtml((name||'').length>16?(name.slice(0,15)+'…'):name)}</span></td>`;
     if (justPromoted.has(sym)) tr.classList.add('wflash-promote');
 
     const vCls = k => {
