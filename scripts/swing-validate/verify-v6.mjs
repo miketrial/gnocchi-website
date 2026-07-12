@@ -1,73 +1,76 @@
-/* v6 offline verification — drive the SHIPPED engine functions (replayShortTrades,
-   dailySignalLog) over real cached bars, exactly as the seed endpoint will, and
-   check the behavior the exit study promised:
-     1. AMD: the Jan/Apr-2026 entries now HOLD through today (no death-cross on the
-        run) instead of TIME-exiting at 63 sessions.
-     2. CROSS exits appear (a name whose 50DMA fell through its 200DMA closes with
-        reason CROSS, at that bar's close).
-     3. Conviction stamps flow: position/trade `.conviction` + dailyLog days.
-     4. Replay window: hist truncated to 560 bars (the live fetch limit) still
-        yields the same trades as full history over the 240-session window.
+/* v6.2 offline verification — drive the SHIPPED engine functions (replayShortTrades,
+   dailySignalLog) over real cached bars, exactly as the seed endpoint will, and check:
+     1. The v6.2 relative-strength gate FIRES (entries still appear) and is THINNER
+        than v6 (rs126≥30pp filters some entries out) — compare v6 vs v6.2 entry counts.
+     2. AMD still HOLDS its run (death-cross exit intact) and no early (<200d) TIME exit.
+     3. Exits still book with CROSS / STOP / TIME reasons.
+     4. Every fired BUY carries rs126 ≥ 0.30 (the gate actually binds).
    Read-only; nothing is written. */
 
 import { readFileSync } from "node:fs";
 import {
-  replayShortTrades, dailySignalLog, strengthSeriesFor,
-  SBT_SEED_SESSIONS, SBT_SEED_VERSION,
+  replayShortTrades, dailySignalLog, strengthSeriesFor, ret126SeriesFor, computeShortSignal,
+  SBT_SEED_SESSIONS, SBT_SEED_VERSION, SBT_RS_MIN,
 } from "../../netlify/lib/short-backtest.mjs";
 
 const CACHE = new URL("../../scratchpad/swing-validate/deep-cache.json", import.meta.url);
 const c = JSON.parse(readFileSync(CACHE, "utf8"));
 const { spyHist, etfBySym, etfHistBySym, histBySym } = c;
-console.log(`deep cache newest bar: ${spyHist[0].date} · SBT_SEED_VERSION=${SBT_SEED_VERSION} · replay=${SBT_SEED_SESSIONS} sessions\n`);
+console.log(`deep cache newest bar: ${spyHist[0].date} · SBT_SEED_VERSION=${SBT_SEED_VERSION} · replay=${SBT_SEED_SESSIONS} · RS floor=+${SBT_RS_MIN * 100}pp\n`);
 
-// Mirror the seed endpoint: per-ticker hist truncated to 560 bars, SPY/ETF to 320
-// (the live scorer's shared cache length).
 const spy560 = spyHist.slice(0, 320);
 const spyStr = strengthSeriesFor(spy560);
-const secStrFor = (sym) => {
-  const etf = etfBySym?.[sym];
-  const h = etf ? (etfHistBySym[etf] || []).slice(0, 320) : [];
-  return h.length ? strengthSeriesFor(h) : [];
-};
+const spyRet126 = ret126SeriesFor(spy560);
+const strengthAsOf = (series, date) => { for (const s of series) if (s.date <= date) return s.strength; return null; };
+const secStrFor = (sym) => { const etf = etfBySym?.[sym]; const h = etf ? (etfHistBySym[etf] || []).slice(0, 320) : []; return h.length ? strengthSeriesFor(h) : []; };
 
-const stars = n => (n ? "★".repeat(n) : "").padEnd(3);
 const fmtTrade = t =>
-  `  ${stars(t.convScore)} entry ${t.entryScoredAt.slice(0, 10)} @$${t.entryPrice}  →  exit ${t.exitScoredAt.slice(0, 10)} @$${t.exitPrice}  ${String(t.exitReason).padEnd(5)} ${(t.pnlPct >= 0 ? "+" : "") + t.pnlPct}%`;
+  `    entry ${t.entryScoredAt.slice(0, 10)} @$${t.entryPrice}  →  exit ${t.exitScoredAt.slice(0, 10)} @$${t.exitPrice}  ${String(t.exitReason).padEnd(5)} ${(t.pnlPct >= 0 ? "+" : "") + t.pnlPct}%`;
 
 const SAMPLE = ["AMD", "NVDA", "MU", "CAT", "XOM", "VZ", "INTC", "BA", "LLY", "GE"];
-let crossSeen = 0, timeSeen = 0, stopSeen = 0, openSeen = 0, convSeen = 0;
+let crossSeen = 0, timeSeen = 0, stopSeen = 0, openSeen = 0;
 for (const sym of SAMPLE) {
   const hist = (histBySym[sym] || []).slice(0, 560);
   if (hist.length < 205) { console.log(`${sym}: insufficient bars`); continue; }
   const secStr = secStrFor(sym);
-  const log = replayShortTrades(sym, hist, spyStr, secStr, spy560);
-  const dl = dailySignalLog(sym, hist, spyStr, secStr, { sessions: 15 });
-  console.log(`${sym} — ${log.closed.length} closed, open=${log.open ? `${stars(log.open.convScore)}@$${log.open.entryPrice} since ${log.open.entryScoredAt.slice(0, 10)} (${log.open.barsHeld} sessions)` : "none"}`);
+  const log = replayShortTrades(sym, hist, spyStr, secStr, spy560, spyRet126);
+  console.log(`${sym} — ${log.closed.length} closed, open=${log.open ? `@$${log.open.entryPrice} since ${log.open.entryScoredAt.slice(0, 10)} (${log.open.barsHeld} sessions)` : "none"}`);
   for (const t of [...log.closed].reverse()) console.log(fmtTrade(t));
-  for (const t of log.closed) {
-    if (t.exitReason === "CROSS") crossSeen++;
-    if (t.exitReason === "TIME") timeSeen++;
-    if (t.exitReason === "STOP") stopSeen++;
-    if (t.convScore) convSeen++;
-  }
-  if (log.open) { openSeen++; if (log.open.convScore) convSeen++; }
-  const dlBuys = dl.days.filter(d => d.action === "BUY");
-  if (dlBuys.length) console.log(`  dailyLog BUYs: ${dlBuys.map(d => `${d.date}${(d.convScore ? "★".repeat(d.convScore) : "")}`).join(", ")}`);
-  console.log("");
+  for (const t of log.closed) { if (t.exitReason === "CROSS") crossSeen++; if (t.exitReason === "TIME") timeSeen++; if (t.exitReason === "STOP") stopSeen++; }
+  if (log.open) openSeen++;
 }
-console.log(`exit-reason mix across sample: CROSS=${crossSeen} TIME=${timeSeen} STOP=${stopSeen} · open=${openSeen} · conviction-stamped=${convSeen}`);
+console.log(`\nexit-reason mix across sample: CROSS=${crossSeen} TIME=${timeSeen} STOP=${stopSeen} · open=${openSeen}`);
+
+// ---- v6 vs v6.2 entry-count comparison + rs126-binds check, on the full sample of names
+let v6Entries = 0, v62Entries = 0, rsViolations = 0, rsChecked = 0;
+for (const sym of Object.keys(histBySym)) {
+  const hist = (histBySym[sym] || []).slice(0, 560);
+  if (hist.length < 260) continue;
+  const secStr = secStrFor(sym);
+  const lastScorable = hist.length - 200;
+  let prevStrong = false;
+  for (let i = 0; i <= lastScorable; i++) {
+    const date = hist[i].date, opts = { spyStrength: strengthAsOf(spyStr, date), sectorStrength: strengthAsOf(secStr, date) };
+    // v6 gate = the same signal WITHOUT the RS floor (rs126 forced to pass)
+    const s62 = computeShortSignal(hist.slice(i, i + 260), { ...opts, spyRet126: strengthAsOf(spyRet126, date) });
+    const s6 = computeShortSignal(hist.slice(i, i + 260), { ...opts, spyRet126: -999 }); // rs126 always ≥ floor
+    if (!s62) continue;
+    if (s6.entryStrong) v6Entries++;
+    if (s62.entryStrong) { v62Entries++; rsChecked++; if (!(s62.rs126 >= SBT_RS_MIN)) rsViolations++; }
+  }
+}
+console.log(`\nentry counts over the sample-name bars: v6 (no RS floor)=${v6Entries}  →  v6.2 (RS≥${SBT_RS_MIN})=${v62Entries}  (kept ${Math.round(100 * v62Entries / (v6Entries || 1))}%)`);
+console.log(`rs126 gate binds: ${rsViolations} of ${rsChecked} fired entries violate rs126≥${SBT_RS_MIN} (must be 0)`);
 
 // ---- assertions
-const amdHist = histBySym.AMD.slice(0, 560);
-const amdLog = replayShortTrades("AMD", amdHist, spyStr, secStrFor("AMD"), spy560);
+const amdLog = replayShortTrades("AMD", histBySym.AMD.slice(0, 560), spyStr, secStrFor("AMD"), spy560, spyRet126);
 const failures = [];
-// 1. AMD must be HOLDING through today — its uptrend never death-crossed on the run.
-if (!amdLog.open) failures.push("AMD expected to be OPEN through the newest bar (no death-cross on the run) — it is not");
-// 2. No AMD TIME exit before ~189 sessions (the old 63-day guillotine must be gone).
+if (!amdLog.open) failures.push("AMD expected to be OPEN through the newest bar — it is not");
 const amdEarlyTime = amdLog.closed.find(t => t.exitReason === "TIME" && (Date.parse(t.exitScoredAt) - Date.parse(t.entryScoredAt)) / 86400000 < 200);
-if (amdEarlyTime) failures.push(`AMD booked an early TIME exit (${JSON.stringify(amdEarlyTime)}) — 63-day cap still active?`);
-// 3. The engine must still be capable of ALL THREE exits somewhere in the sample.
-if (crossSeen === 0 && timeSeen === 0 && stopSeen === 0 && openSeen === 0) failures.push("no trades at all — replay broken");
-console.log(failures.length ? `\n❌ ${failures.length} verification failure(s):\n- ` + failures.join("\n- ") : "\n✅ v6 verification passed: AMD holds the run; no early TIME guillotine; exits book with the new reasons.");
+if (amdEarlyTime) failures.push(`AMD booked an early (<200d) TIME exit — backstop wrong?`);
+if (crossSeen + timeSeen + stopSeen + openSeen === 0) failures.push("no trades at all — replay broken");
+if (v62Entries === 0) failures.push("v6.2 gate fires ZERO entries — RS floor is over-blocking (threading bug?)");
+if (v62Entries >= v6Entries) failures.push("v6.2 is not thinner than v6 — the RS floor isn't binding");
+if (rsViolations > 0) failures.push(`${rsViolations} fired entries violate the rs126 floor — gate not applied`);
+console.log(failures.length ? `\n❌ ${failures.length} failure(s):\n- ` + failures.join("\n- ") : "\n✅ v6.2 verification passed: RS floor binds & thins the book; AMD holds; exits intact.");
 process.exit(failures.length ? 1 : 0);

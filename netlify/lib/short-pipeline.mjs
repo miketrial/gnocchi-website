@@ -799,9 +799,14 @@ export async function scoreTickerShort(ticker, { skipCache = false } = {}) {
   if (cleanedHist.length && !sessionComplete(cleanedHist[0].date, etDateStr(), etParts().minutesOfDay)) {
     cleanedHist = cleanedHist.slice(1);
   }
+  // SPY's trailing 126-session return (newest completed bar), for the v6.2 name
+  // relative-strength entry gate — the name's own 126d return must beat this by ≥30pp.
+  const spyRet126 = (spyHist && spyHist.length > 126 && spyHist[0].close > 0 && spyHist[126].close > 0)
+    ? spyHist[0].close / spyHist[126].close - 1 : null;
   const btSignal = computeShortSignal(cleanedHist, {
     spyStrength: spyHist ? strengthFactor(spyHist) : null,
     sectorStrength: sectorHist ? strengthFactor(sectorHist) : null,
+    spyRet126,
   });
 
   const row = {

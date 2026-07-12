@@ -70,3 +70,15 @@ Three things make this a clean win, not a beta trap:
 **The real lever for "bigger wins" is the exit backstop.** Loosening `SBT_TIME_STOP_DAYS` from 189 toward a pure death-cross (**378–504 sessions**) roughly doubles average P/L and the >100% rate, at the **same** worst-case and **better** capital efficiency, positive in every split but the (already-negative, unchanged) deep in-sample. Cost: the monster-run tail stays open longer (the median hold is unchanged ~9–10 months; only the AMD-type outliers ride 18-24 months) and needs a wider replay/window + fetch to show completed in the log.
 
 **Boundary:** survivor-only cohort (upper-bound P/L); IS pre-2017 has few $3B names (thin cells flagged). Same anchor as every swing study — only IS-positive-too rules are trustworthy; here that's the exit-backstop loosening (neutral IS, dominant elsewhere) and, mildly, the rs126 floor.
+
+---
+
+## 5. SHIPPED (2026-07-12) — v6.2 relative-strength entry floor; exit unchanged
+
+User's pick: **add the rs126 floor to the buy criteria, keep the 189-day exit.** The classifier's verdict stands — there's no clean big-win gate — so this ships the one IS+OOS-positive filter as an honest momentum/leadership tilt, not a detector.
+
+Engine (`short-backtest.mjs`), `SBT_SEED_VERSION` 7→8 (re-seeds; the entry SET changes so trades differ): `entryStrong` now ALSO requires `rs126 = (name 126-session return) − (SPY 126-session return) ≥ +30pp` (`SBT_RS_MIN`). SPY's 126-day return is threaded into `computeShortSignal` as a new `spyRet126` input — via the live scorer (`short-pipeline.mjs`) for the row signal, and via a precomputed `ret126SeriesFor(spyHist)` series through `replayShortTrades` / `dailySignalLog` / the seed endpoint (fetch unchanged at 560 bars — the hold length didn't change). The v6.1 ★ propensity display + `convScore` stamping are **removed** (the user wanted buy-logic, not a tint). Honesty copy updated (five-condition gate; WATCH now names all three buy-side guardrails).
+
+Verified: 205 tests + proofs green (new: rs126 fires/blocks/needs-SPY-data, dailySignalLog RS-block proof). Offline (`scripts/swing-validate/verify-v6.mjs`): the floor **binds** (0/2,114 fired entries violate it), **thins** the book (v6 → v6.2 keeps ~70% of entries over the sample), and AMD still holds its run (+204%) with exits intact.
+
+**Net effect:** fewer, higher-relative-strength names fire; edge vs SPY ~+4.7% → +9.6% on the study cohort (positive in both regimes), at ~half the trade count and higher variance. A dial toward leadership, honestly labeled — not a big-winner detector, which the data says doesn't exist at entry.

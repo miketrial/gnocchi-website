@@ -14,7 +14,7 @@ import { listShortRows, getShortTrades, putShortTrades,
 import { safe, delay } from "../lib/fmp-client.mjs";
 import { cleanHist, adjustSplits } from "../lib/quickswing-pipeline.mjs";
 import {
-  replayShortTrades, strengthSeriesFor, mergeShortSeed, pruneShortWindow, needsShortSeed,
+  replayShortTrades, strengthSeriesFor, ret126SeriesFor, mergeShortSeed, pruneShortWindow, needsShortSeed,
   annotateShortBenchmarks, dailySignalLog, SBT_SEED_VERSION, SBT_WINDOW_DAYS,
 } from "../lib/short-backtest.mjs";
 
@@ -68,6 +68,9 @@ export default async () => {
     const strMemo = new Map();           // symbol -> strength series
     const spyHist = await getIndexHist("SPY", histMemo).catch(() => []);
     const spyStr = spyHist.length ? strengthSeriesFor(spyHist) : [];
+    // SPY's trailing 126-session return series — the SPY leg of the v6.2 name
+    // relative-strength entry gate (computed once per batch, like spyStr).
+    const spyRet126 = spyHist.length ? ret126SeriesFor(spyHist) : [];
     strMemo.set("SPY", spyStr);
 
     for (const sym of batch) {
@@ -92,7 +95,7 @@ export default async () => {
           sectorStr = strMemo.get(etf);
         }
 
-        const seed = replayShortTrades(sym, hist, spyStr, sectorStr, spyHist);
+        const seed = replayShortTrades(sym, hist, spyStr, sectorStr, spyHist, spyRet126);
 
         const existing = await getShortTrades(sym).catch(() => null);
         const isReseed = existing && existing.seedVersion != null && existing.seedVersion !== SBT_SEED_VERSION;
@@ -108,7 +111,7 @@ export default async () => {
         // Last-15-session daily BUY/SELL/HOLD notifier log — computed from the same
         // fetched hist + strength series (no extra FMP call), stored alongside the
         // trade log so the popover can show "what the signal fired recently".
-        const dl = dailySignalLog(sym, hist, spyStr, sectorStr, { sessions: 15 });
+        const dl = dailySignalLog(sym, hist, spyStr, sectorStr, spyRet126, { sessions: 15 });
         next.dailyLog = dl.days;
         next.sym = sym;               // the notifier render keys off this (trade log had no top-level sym)
         next.seeded = true;

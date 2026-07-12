@@ -18,14 +18,12 @@ const T = (name, fn) => { try { fn(); pass++; } catch (e) { fail++; console.log(
 const PROOF = (name, fn) => { try { fn(); proofs++; } catch (e) { fail++; console.log("❌ PROOF BROKEN:", name, "\n   ", e.message); } };
 
 // Minimal signal shape the state machine reads. (v6: deathCross is the PRIMARY
-// exit again — re-added off the long-runway study; v6.1: convScore 0-3 is the
-// fat-tail propensity rank stamped on positions at entry.)
+// exit again — re-added off the long-runway study.)
 const sig = (o) => ({
   bar: { date: o.date, open: o.open ?? o.close, high: o.high ?? o.close, low: o.low ?? o.close, close: o.close },
   atr14: o.atr14 ?? 2,
   entryStrong: o.entryStrong ?? false,
   deathCross: o.deathCross ?? false,
-  convScore: o.convScore ?? 0,
 });
 const enter = (date = "2026-01-05", close = 100, atr14 = 2) =>
   recordShortTransition("X", sig({ date, close, atr14, entryStrong: true }), null);
@@ -93,12 +91,6 @@ PROOF("CROSS proof: the 40% STOP fires FIRST when both trip on the same bar", ()
   const log = recordShortTransition("X", sig({ date: "2026-01-06", close: 62, open: 63, high: 64, low: 58, deathCross: true }), open);
   assert.equal(log.closed[0].exitReason, "STOP");
   assert.equal(log.closed[0].exitPrice, 60);
-});
-T("convScore: stamped on the position at entry and carried to the closed trade", () => {
-  let log = recordShortTransition("X", sig({ date: "2026-01-05", close: 100, entryStrong: true, convScore: 3 }), null);
-  assert.equal(log.open.convScore, 3);
-  log = recordShortTransition("X", sig({ date: "2026-01-06", close: 105, low: 104, deathCross: true, convScore: 0 }), log);
-  assert.equal(log.closed[0].convScore, 3);        // ENTRY-time rank, sticky for the trade's life
 });
 PROOF("hard-cap PROOF: a −67% ride-down is impossible once the 40% cap is on", () => {
   // A hyper-volatile name bleeding down day after day. Under the OLD wide 4×ATR stop it
@@ -360,7 +352,9 @@ PROOF("partial-bar proof: an intraday tick on today's date must NOT count as a c
   const hist = mkHist(rise, { vol: 10_000_000 }); // ~$1.2B/day — clears the v5 $1B floor
   const spyStr = hist.map(b => ({ date: b.date, strength: 0 }));
   const secStr = hist.map(b => ({ date: b.date, strength: 0.3 })); // sector leads SPY → SECRS≥2
-  const dl = dailySignalLog("X", hist, spyStr, secStr, { sessions: 6, replaySessions: 6 });
+  // SPY down ~10% over 126d → the name (+~25% 126d) clears the v6.2 rel-strength floor (+30pp).
+  const spyRet126 = hist.map(b => ({ date: b.date, strength: -0.10 }));
+  const dl = dailySignalLog("X", hist, spyStr, secStr, spyRet126, { sessions: 6, replaySessions: 6 });
   T("dailySignalLog: fresh BUY on entry then HOLD in a sustained uptrend", () => {
     assert.equal(dl.days.length, 6);
     assert.equal(dl.days[0].action, "BUY");
@@ -372,9 +366,14 @@ PROOF("partial-bar proof: an intraday tick on today's date must NOT count as a c
   });
   PROOF("dailySignalLog proof: a sub-guardrail name must NOT emit a BUY", () => {
     const thin = mkHist(rise, { vol: 5_000_000 }); // ~$0.6B/day < $1B floor
-    const dlThin = dailySignalLog("X", thin, spyStr, secStr, { sessions: 6, replaySessions: 6 });
+    const dlThin = dailySignalLog("X", thin, spyStr, secStr, spyRet126, { sessions: 6, replaySessions: 6 });
     assert.ok(!dlThin.days.some(d => d.action === "BUY")); // guardrail blocks the entry
     assert.ok(dlThin.days.some(d => d.action === "WATCH")); // shown as strong-but-blocked
+  });
+  PROOF("dailySignalLog proof: a name that does NOT beat SPY by 30pp must NOT emit a BUY (v6.2 RS gate)", () => {
+    const spyStrong = hist.map(b => ({ date: b.date, strength: 0.30 })); // SPY up ~30% 126d → name loses the RS floor
+    const dlLag = dailySignalLog("X", hist, spyStr, secStr, spyStrong, { sessions: 6, replaySessions: 6 });
+    assert.ok(!dlLag.days.some(d => d.action === "BUY")); // rel-strength floor blocks the entry
   });
 }
 

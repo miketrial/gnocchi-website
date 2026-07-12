@@ -10,13 +10,15 @@
        blows the worst trade from −52% to −150% — shorting weak trend-breakers
        both bleeds return and destroys capital protection. Buying strength is the
        whole Swing thesis; the log honors it.
-     - Entry (v5 "best of the best" gate — see docs/swing-deep-entry-report.md): a fresh
-       transition into a STRONG swing setup — the reconstructable technical core of the
-       33-point score (Trend, 3M-Momentum, Near-High, Liquidity, Volume-Surge, Sector-RS
-       → 0-18) at/above 14/18 (~78%), price in a clean uptrend (px>50DMA>200DMA), the
-       sector leading SPY (Sector-RS ≥ 2), AND ≥$1B/day dollar-volume. A deep 2006-2026
-       out-of-sample/out-of-regime study found this is the only combo whose edge holds
-       through IS + OOS + real bears; raw entry-strength alone (12/18) was ~0 in-sample.
+     - Entry (v5 "best of the best" gate + v6.2 RS floor — see docs/swing-deep-entry-report.md
+       and docs/swing-bigwin-gate-exit-report.md): a fresh transition into a STRONG swing
+       setup — the reconstructable technical core of the 33-point score (Trend, 3M-Momentum,
+       Near-High, Liquidity, Volume-Surge, Sector-RS → 0-18) at/above 14/18 (~78%), price in
+       a clean uptrend (px>50DMA>200DMA), the sector leading SPY (Sector-RS ≥ 2), ≥$1B/day
+       dollar-volume, AND (v6.2) the name's own 126-session return beating SPY's by ≥ +30pp
+       (SBT_RS_MIN — the buy-side classifier's only IS+OOS-positive filter). A deep 2006-2026
+       out-of-sample/out-of-regime study found the v5 combo is the only one whose edge holds
+       through IS + OOS + real bears; the RS floor lifts it further (+4.7% → +9.6%), fewer names.
        The 5 fundamental factors (analyst, valuation, quality, leverage, catalyst) are
        NOT in the entry signal — they can't be reconstructed at a past date, so — exactly
        like Bounce — the log keys off the EOD-computable factors so the seed replay and
@@ -55,15 +57,14 @@ export const SBT_HARD_STOP_PCT = 0.40;     // v4 catastrophe stop = entry × (1 
                                            // single-trade NON-gap tail without choking trend winners. A tight stop (and, tested again
                                            // in v6, ANY trailing stop) clips winners — see docs/swing-exit-edge-report.md.
 export const SBT_TIME_STOP_DAYS = 189;     // sessions — v6: a ~9-month BACKSTOP behind the death-cross exit, no longer the primary
-// v6.1 fat-tail propensity axes (0-3 score — docs/swing-bigwin-discriminant-report.md).
-// The three big-win discriminants that are (a) computable live and (b) each a distinct
-// axis; a name hitting all three produces the fat right tail far more often. Surfaced as
-// ★/★★/★★★ for attention + sizing, NEVER a hard gate (the study showed a momentum/beta
-// gate amplifies beta and goes negative through real bears). MOM+DVOL together were the
-// v6 binary "conviction"; SPREAD is the discriminant study's only IS+OOS-robust feature.
-export const SBT_CONV_DVOL = 3e9;      // MEGA-LIQUIDITY axis: $-vol ≥ $3B/day
-export const SBT_CONV_MOM = 0.40;      // MOMENTUM axis: 3-month return ≥ +40%
-export const SBT_CONV_SPREAD = 0.08;   // TREND-MATURITY axis: (50DMA−200DMA)/200DMA ≥ +8%
+// v6.2 name relative-strength floor. The big-winner classifier (docs/swing-bigwin-gate-
+// exit-report.md) proved big winners and losers are near-indistinguishable at entry
+// (best separator AUC ~0.6) — no clean big-win gate exists. The one filter positive
+// in BOTH the bull OOS and the bear-inclusive in-sample is the name's own 126-session
+// (~6-month) return beating SPY's by ≥ +30 percentage points. It lifts edge vs SPY
+// ~+4.7% → +9.6% at the cost of ~half the trade count. A leadership/momentum TILT (it
+// keeps ~40% losers too), not a big-winner detector — honest framing unchanged.
+export const SBT_RS_MIN = 0.30;            // (name 126d return) − (SPY 126d return) ≥ +30pp
 export const SBT_ENTRY_MIN = 14;           // technical strong bar (14/18 ≈ 78%) — raised from 12 in v5 (see below)
 export const SBT_SECRS_MIN = 2;            // v5: entry also requires the name's sector leading SPY (SECRS ≥ 2, i.e. ETF-ROC − SPY-ROC ≥ +0.08)
 // Liquidity guardrail (v5: raised $300M → $1B/day). A deep 20-year study
@@ -97,11 +98,13 @@ export const SBT_LIQ_FLOOR = 1e9;
 //     3mo-mom≥40%) stamped on positions/trades + the daily notifier. Replay window
 //     widened (SBT_SEED_SESSIONS 130→240, SBT_WINDOW_DAYS 195→420) so the longer
 //     holds can complete inside the visible log.
-// v6.1: fat-tail propensity score (docs/swing-bigwin-discriminant-report.md). The binary
-//     conviction star becomes a 0-3 rank (MOMENTUM + MEGA-LIQUIDITY + TREND-MATURITY) so
-//     big-win-prone names surface for attention/sizing. EXIT/ENTRY LOGIC AND P&L ARE
-//     UNCHANGED from v6 — the re-seed only recomputes the star metadata on stored trades.
-export const SBT_SEED_VERSION = 7;
+// v6.1: fat-tail propensity score — a 0-3 ★ display rank. REMOVED in v6.2 (the user
+//     wanted the buy criteria changed, not a display tint); superseded by the RS floor.
+// v6.2: name relative-strength floor (docs/swing-bigwin-gate-exit-report.md). The entry
+//     gate ALSO requires the name's 126-session return to beat SPY's by ≥ +30pp (SBT_RS_MIN)
+//     — the only buy-side filter positive in-sample AND out-of-sample. Fewer names fire.
+//     The ★ propensity display + convScore stamping are removed.
+export const SBT_SEED_VERSION = 8;
 
 const round2 = x => (x == null ? null : Math.round(x * 100) / 100);
 
@@ -132,7 +135,7 @@ export function needsShortSeed(log) { return !log || log.seedVersion !== SBT_SEE
    sectorStrength are the IBD-style weighted ROC values as of that bar (the caller
    supplies them so this stays pure). Every threshold matches short-pipeline.mjs's
    long-side scoring so the backtest measures the real screener's timing core. */
-export function computeShortSignal(hist, { spyStrength = null, sectorStrength = null } = {}) {
+export function computeShortSignal(hist, { spyStrength = null, sectorStrength = null, spyRet126 = null } = {}) {
   if (!Array.isArray(hist) || hist.length < 200) return null;
   const closes = hist.slice(0, 260).map(d => d.close ?? d.price).filter(p => p != null);
   if (closes.length < 200) return null;
@@ -148,12 +151,18 @@ export function computeShortSignal(hist, { spyStrength = null, sectorStrength = 
   else if (price > sma50)                               trendPts = 1;
   else                                                  trendPts = 0;
 
-  // 2. 3M Momentum (63-day return) — mom63 also feeds the v6 conviction tier
-  let momPts = 0, mom63 = null;
+  // 2. 3M Momentum (63-day return)
+  let momPts = 0;
   if (closes.length >= 63 && closes[62] > 0) {
-    mom63 = price / closes[62] - 1;
-    if (mom63 >= 0.15) momPts = 3; else if (mom63 >= 0.05) momPts = 2; else if (mom63 >= 0) momPts = 1; else momPts = 0;
+    const ret = price / closes[62] - 1;
+    if (ret >= 0.15) momPts = 3; else if (ret >= 0.05) momPts = 2; else if (ret >= 0) momPts = 1; else momPts = 0;
   }
+
+  // v6.2 name relative-strength: the name's own 126-session (~6-month) return minus
+  // SPY's over the same window (spyRet126 supplied by the caller, as of this bar). The
+  // buy-side classifier's only IS+OOS-positive filter (docs/swing-bigwin-gate-exit-report.md).
+  const nameRet126 = (closes.length >= 126 && closes[125] > 0) ? price / closes[125] - 1 : null;
+  const rs126 = (nameRet126 != null && spyRet126 != null) ? nameRet126 - spyRet126 : null;
 
   // 3. Near 52w High — re-tuned to reward the 5-18% "pullback to strength" zone
   //    over being pinned at the high (see checkNearHigh in short-pipeline.mjs).
@@ -219,37 +228,20 @@ export function computeShortSignal(hist, { spyStrength = null, sectorStrength = 
   // (SECRS ≥ 2). The only combo that held edge across IS + OOS + real bears
   // (docs/swing-deep-entry-report.md). secPts needs SPY + sector strength; if
   // either is missing it reads 0, so an unmapped-sector name can't fire — intended.
+  // v6.2 entry gate: the v5 "best of the best" core (techScore≥14, uptrend, ≥$1B/day,
+  // sector-RS≥2) AND the name's own 126-day return beating SPY's by ≥ +30pp. rs126 needs
+  // spyRet126 + ≥126 bars; if either is missing it reads null → the gate can't fire (a
+  // name we can't measure relative strength for is not a "best of the best" entry).
   const entryStrong = techScore >= SBT_ENTRY_MIN && uptrend
-    && avgDollarVol >= SBT_LIQ_FLOOR && secPts >= SBT_SECRS_MIN;
-  // v6.1 fat-tail propensity score (0-3) — the three big-win discriminants that
-  // are computable live (docs/swing-bigwin-discriminant-report.md): a name that is
-  // strongly momentum'd, mega-liquid, AND in an established (not just barely-crossed)
-  // uptrend produces the fat right tail far more often. It RANKS valid entries so
-  // the big-win-prone names surface for attention/sizing — it does NOT gate (a hard
-  // momentum/beta gate amplifies beta and goes negative through real bears; the study
-  // rejected it). Only meaningful on a valid entry (0 otherwise). Axes:
-  //   +1 MOMENTUM       — 3-month return ≥ +40%   (the steep-run star; was v6 "conviction")
-  //   +1 MEGA-LIQUIDITY — $-vol ≥ $3B/day         (flight-to-quality; deep-study's robust lever)
-  //   +1 TREND MATURITY — 50/200 spread ≥ +8%     (the ONLY IS+OOS-robust discriminant)
-  const maSpread = sma200 > 0 ? (sma50 - sma200) / sma200 : 0;
-  const convScore = entryStrong
-    ? (mom63 != null && mom63 >= SBT_CONV_MOM ? 1 : 0)
-      + (avgDollarVol >= SBT_CONV_DVOL ? 1 : 0)
-      + (maSpread >= SBT_CONV_SPREAD ? 1 : 0)
-    : 0;
+    && avgDollarVol >= SBT_LIQ_FLOOR && secPts >= SBT_SECRS_MIN
+    && rs126 != null && rs126 >= SBT_RS_MIN;
   return {
     techScore, price, sma50: round2(sma50), sma200: round2(sma200), uptrend,
     deathCross: sma50 < sma200,
     atr14: round2(atrFrom(hist, 0, 14)),
     liqPts, secPts, avgDollarVol: Math.round(avgDollarVol),
-    mom63: mom63 == null ? null : Math.round(mom63 * 10000) / 10000,
-    maSpread: Math.round(maSpread * 10000) / 10000,
+    rs126: rs126 == null ? null : Math.round(rs126 * 10000) / 10000,
     entryStrong,
-    // 0-3 stars. Rides on the signal so the live row (row.bt), the seed replay and
-    // the daily notifier all read the identical score. `conviction` kept as a
-    // boolean shorthand (≥2 of 3 axes = the elite tier) for copy/back-compat.
-    convScore,
-    conviction: convScore >= 2,
     bar: { date: b0.date, open: b0.open ?? b0.close, high: b0.high ?? b0.close, low: b0.low ?? b0.close, close: b0.close ?? b0.price },
   };
 }
@@ -351,7 +343,6 @@ export function recordShortTransition(sym, sig, prevLog, scoredAt) {
       sym, side: "long",
       entryAt: nowIso, entryScoredAt: nowIso,
       entryPrice: bar.close, atr14, stopPrice,
-      convScore: sig.convScore || 0, // v6.1 fat-tail propensity 0-3 at ENTRY — sticky for the trade's life
       entrySessionDate: sessionDate, lastSessionDate: sessionDate, barsHeld: 0,
     };
   };
@@ -361,7 +352,6 @@ export function recordShortTransition(sym, sig, prevLog, scoredAt) {
       sym: o.sym, side: "long",
       entryAt: o.entryAt, entryScoredAt: o.entryScoredAt, entryPrice: o.entryPrice,
       stopPrice: o.stopPrice ?? null,
-      convScore: o.convScore ?? 0,
       exitAt: nowIso, exitScoredAt: nowIso, exitPrice, exitReason,
       pnlPct,
       holdDays: holdDaysBetween(o.entryScoredAt || o.entryAt, nowIso),
@@ -435,7 +425,21 @@ export function strengthSeriesFor(hist) {
   for (let i = 0; i < hist.length; i++) out.push({ date: hist[i].date, strength: strengthFactor(hist.slice(i)) });
   return out;
 }
-export function replayShortTrades(sym, hist, spyStrSeries, sectorStrSeries, spyHist, { sessions = SBT_SEED_SESSIONS } = {}) {
+/* SPY's trailing 126-session (~6-month) return at each bar (newest-first). Same
+   {date, strength} shape as strengthSeriesFor so strengthAsOf reads it unchanged
+   (the "strength" field just holds the 126d return here). The caller precomputes it
+   once from spyHist; it's the SPY leg of the v6.2 relative-strength entry gate. */
+export function ret126SeriesFor(spyHist) {
+  const out = [];
+  if (!Array.isArray(spyHist)) return out;
+  for (let i = 0; i < spyHist.length; i++) {
+    const now = spyHist[i].close ?? spyHist[i].price;
+    const then = spyHist[i + 126]?.close ?? spyHist[i + 126]?.price;
+    out.push({ date: spyHist[i].date, strength: (now > 0 && then > 0) ? now / then - 1 : null });
+  }
+  return out;
+}
+export function replayShortTrades(sym, hist, spyStrSeries, sectorStrSeries, spyHist, spyRet126Series, { sessions = SBT_SEED_SESSIONS } = {}) {
   let log = emptyShortLog();
   if (!Array.isArray(hist) || hist.length < 205) return log; // need 200 warmup + a few bars
   const dates = hist.slice(0, sessions).map(b => b.date).reverse(); // oldest→newest
@@ -445,6 +449,7 @@ export function replayShortTrades(sym, hist, spyStrSeries, sectorStrSeries, spyH
     const sig = computeShortSignal(hAsOf, {
       spyStrength: strengthAsOf(spyStrSeries, date),
       sectorStrength: strengthAsOf(sectorStrSeries, date),
+      spyRet126: strengthAsOf(spyRet126Series, date),
     });
     if (!sig) continue;
     log = recordShortTransition(sym, sig, log, `${date}T21:00:00.000Z`);
@@ -457,8 +462,7 @@ export function replayShortTrades(sym, hist, spyStrSeries, sectorStrSeries, spyH
    A per-session view of what the swing signal did — the "notifier" the tab is
    really for. Replays the full seed window so position state is correct, records
    the ACTION at every session, and returns the last `sessions` days:
-     BUY  — a fresh entry fired this session (entryStrong transition, guardrail-passed;
-            carries `convScore` 0-3, the fat-tail propensity rank, for the ★ badge)
+     BUY  — a fresh entry fired this session (entryStrong transition, guardrail-passed)
      SELL — an open position exited this session (reason: STOP / CROSS / TIME)
      HOLD — in an open position, trend intact
      WATCH— flat, and this session was strong-but-blocked (uptrend+score but below
@@ -466,8 +470,9 @@ export function replayShortTrades(sym, hist, spyStrSeries, sectorStrSeries, spyH
      FLAT — flat, no setup
    Honest by construction: it shows the mechanism (which signals fire on real
    data), NOT a profit claim — the validation found the timing adds no edge. Pure;
-   the caller supplies the fetched hist + precomputed SPY/sector strength series. */
-export function dailySignalLog(sym, hist, spyStrSeries, sectorStrSeries, { sessions = 15, replaySessions = SBT_SEED_SESSIONS } = {}) {
+   the caller supplies the fetched hist + precomputed SPY/sector strength + SPY-126d
+   return series (the last is the SPY leg of the v6.2 relative-strength gate). */
+export function dailySignalLog(sym, hist, spyStrSeries, sectorStrSeries, spyRet126Series, { sessions = 15, replaySessions = SBT_SEED_SESSIONS } = {}) {
   if (!Array.isArray(hist) || hist.length < 205) return { sym, days: [], open: null };
   const dates = hist.slice(0, replaySessions).map(b => b.date).reverse(); // oldest→newest
   let log = emptyShortLog();
@@ -478,6 +483,7 @@ export function dailySignalLog(sym, hist, spyStrSeries, sectorStrSeries, { sessi
     const sig = computeShortSignal(hAsOf, {
       spyStrength: strengthAsOf(spyStrSeries, date),
       sectorStrength: strengthAsOf(sectorStrSeries, date),
+      spyRet126: strengthAsOf(spyRet126Series, date),
     });
     if (!sig) continue;
     const hadOpen = !!log.open;
@@ -492,7 +498,6 @@ export function dailySignalLog(sym, hist, spyStrSeries, sectorStrSeries, { sessi
       date, action, reason,
       techScore: sig.techScore, price: round2(sig.bar.close), uptrend: sig.uptrend,
       avgDollarVol: sig.avgDollarVol, guardrailPass: sig.avgDollarVol >= SBT_LIQ_FLOOR,
-      convScore: sig.convScore || 0,
       stopPrice: nowOpen ? log.open.stopPrice : null,
     });
   }
