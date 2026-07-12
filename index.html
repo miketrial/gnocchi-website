@@ -753,7 +753,11 @@
     border-bottom:1px solid rgba(255,255,255,.05) }
   :is(#qsBtPop,#stBtPop) table.qs-bt-table td:first-child{ text-align:left; padding-left:2px; font-weight:700; color:#e8eaf0 }
   :is(#qsBtPop,#stBtPop) table.qs-bt-table tr:last-child td{ border-bottom:none }
-  :is(#qsBtPop,#stBtPop) table.qs-bt-table tbody tr:hover td{ background:rgba(255,255,255,.04) }
+  /* Hover highlight must be an OPAQUE dark grey: the global light-theme rule
+     (tbody tr:hover{background:#fafbfc}) paints the row near-white, and a
+     translucent white over it left the light cell text illegible. An opaque
+     slate covers every cell so #cbd5e1/#e8eaf0 text stays readable. */
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table tbody tr:hover td{ background:#323b4d }
   /* Kill the global sticky-first-column rule (lines ~140-141) that paints
      these cells with the light --card colour — inside this dark popover the
      columns must stay static and transparent. */
