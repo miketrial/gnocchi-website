@@ -446,45 +446,50 @@
     transition:all .12s ease;flex-shrink:0;
   }
   .wflag:hover{border-color:#9ca3af;border-style:solid}
-  .wflag.watching{background:#fef3c7;border:1px solid #f59e0b;color:#92400e}
-  .wflag.ready{background:#d1fae5;border:1px solid #10b981;color:#065f46}
-  .wflag.watching::before{content:"●"}
-  /* .ready content is injected per-row as the TVP green count (0–3),
-     so don't use ::before here — the count text lives inside the span. */
+  .wflag.watch{background:#fef3c7;border:1px solid #f59e0b;color:#92400e}
+  .wflag.buy  {background:#d1fae5;border:1px solid #10b981;color:#065f46}
+  .wflag.hold {background:#dbeafe;border:1px solid #3b82f6;color:#1e40af}
+  .wflag.sell {background:#fee2e2;border:1px solid #ef4444;color:#991b1b}
+  /* Flag content (▲ / H / ✕ / gate count) is injected per-row as text,
+     so no ::before — the glyph lives inside the span. */
   @keyframes wflashPromote{
     0%   {background:rgba(209,250,229,0)}
     30%  {background:rgba(209,250,229,.65)}
     100% {background:rgba(209,250,229,0)}
   }
   #shortView tbody tr.wflash-promote td{ animation:wflashPromote 1.6s ease-out }
-  /* Unified watch panel — Ready / Watching / Demoted side-by-side */
+  /* Unified watch panel — Watch / Buy / Hold / Sell side-by-side */
   #watchPanel{ margin:0 0 14px; padding:0 }
   #watchPanel:empty{ display:none }
   .wp-head{ display:flex;align-items:baseline;gap:10px;margin-bottom:8px;padding:0 4px }
   .wp-title{ font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-faint) }
   .wp-sub{ font-size:8.5px;color:#9ca3af }
-  .wp-cards{ display:grid;grid-template-columns:repeat(3,1fr);gap:10px }
-  @media (max-width:760px){ .wp-cards{ grid-template-columns:1fr } }
+  .wp-cards{ display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px }
+  @media (max-width:900px){ .wp-cards{ grid-template-columns:repeat(2,minmax(0,1fr)) } }
+  @media (max-width:520px){ .wp-cards{ grid-template-columns:1fr } }
   .wp-card{
     background:var(--card);border:1px solid #eef0f3;border-left-width:3px;
     border-radius:8px;padding:10px 12px;min-height:60px;
   }
-  .wp-card.wp-ready   { border-left-color:#10b981 }
-  .wp-card.wp-watching{ border-left-color:#f59e0b }
-  .wp-card.wp-demoted { border-left-color:#ef4444 }
+  .wp-card.wp-watch{ border-left-color:#f59e0b }
+  .wp-card.wp-buy  { border-left-color:#10b981 }
+  .wp-card.wp-hold { border-left-color:#3b82f6 }
+  .wp-card.wp-sell { border-left-color:#ef4444 }
   .wp-card-head{
     display:flex;align-items:center;justify-content:space-between;
     font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
     color:var(--ink-soft);margin-bottom:7px;
   }
-  .wp-card.wp-ready    .wp-card-head{ color:#065f46 }
-  .wp-card.wp-watching .wp-card-head{ color:#92400e }
-  .wp-card.wp-demoted  .wp-card-head{ color:#991b1b }
+  .wp-card.wp-watch .wp-card-head{ color:#92400e }
+  .wp-card.wp-buy   .wp-card-head{ color:#065f46 }
+  .wp-card.wp-hold  .wp-card-head{ color:#1e40af }
+  .wp-card.wp-sell  .wp-card-head{ color:#991b1b }
   .wp-count{ font-size:8.5px;font-weight:700;background:#f4f5f7;color:var(--ink-faint);padding:1px 6px;border-radius:8px;font-variant-numeric:tabular-nums }
-  .wp-card.wp-ready    .wp-count{ background:#d1fae5;color:#065f46 }
-  .wp-card.wp-watching .wp-count{ background:#fef3c7;color:#92400e }
-  .wp-card.wp-demoted  .wp-count{ background:#fee2e2;color:#991b1b }
-  .wp-body{ display:flex;flex-wrap:wrap;gap:5px }
+  .wp-card.wp-watch .wp-count{ background:#fef3c7;color:#92400e }
+  .wp-card.wp-buy   .wp-count{ background:#d1fae5;color:#065f46 }
+  .wp-card.wp-hold  .wp-count{ background:#dbeafe;color:#1e40af }
+  .wp-card.wp-sell  .wp-count{ background:#fee2e2;color:#991b1b }
+  .wp-body{ display:flex;flex-wrap:wrap;gap:5px;max-height:230px;overflow-y:auto }
   .wp-empty{ font-size:9px;color:#c2c7ce;font-style:italic }
   .wp-chip{
     display:inline-flex;align-items:center;gap:5px;
@@ -493,18 +498,24 @@
     cursor:pointer;transition:all .1s;
   }
   .wp-chip:hover{ border-color:#9ca3af }
-  .wp-card.wp-ready    .wp-chip{ background:#ecfdf5;border-color:#a7f3d0 }
-  .wp-card.wp-watching .wp-chip{ background:#fffbeb;border-color:#fde68a }
-  .wp-card.wp-demoted  .wp-chip{ background:#fef2f2;border-color:#fecaca }
+  .wp-card.wp-watch .wp-chip{ background:#fffbeb;border-color:#fde68a }
+  .wp-card.wp-buy   .wp-chip{ background:#ecfdf5;border-color:#a7f3d0 }
+  .wp-card.wp-hold  .wp-chip{ background:#eff6ff;border-color:#bfdbfe }
+  .wp-card.wp-sell  .wp-chip{ background:#fef2f2;border-color:#fecaca }
   .wp-chip-reason{ color:var(--ink-faint);font-weight:500;font-size:8.5px;margin-left:3px }
+  .wp-chip-tag{ font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;
+    padding:1px 5px;border-radius:4px;margin-left:2px;white-space:nowrap }
+  .wp-tag-buy { background:#10b981;color:#fff }
+  .wp-tag-hold{ background:#dbeafe;color:#1e40af }
   .wp-chip-date{
     color:var(--ink-faint);font-weight:500;font-size:8px;
     font-variant-numeric:tabular-nums;margin-left:4px;
     padding:1px 5px;border-radius:3px;background:rgba(0,0,0,.04);
   }
-  .wp-card.wp-ready    .wp-chip-date{ background:rgba(16,185,129,.12);color:#047857 }
-  .wp-card.wp-watching .wp-chip-date{ background:rgba(245,158,11,.14);color:#92400e }
-  .wp-card.wp-demoted  .wp-chip-date{ background:rgba(239,68,68,.12);color:#991b1b }
+  .wp-card.wp-watch .wp-chip-date{ background:rgba(245,158,11,.14);color:#92400e }
+  .wp-card.wp-buy   .wp-chip-date{ background:rgba(16,185,129,.12);color:#047857 }
+  .wp-card.wp-hold  .wp-chip-date{ background:rgba(59,130,246,.12);color:#1e40af }
+  .wp-card.wp-sell  .wp-chip-date{ background:rgba(239,68,68,.12);color:#991b1b }
   .wp-x{
     display:inline-flex;align-items:center;justify-content:center;
     width:13px;height:13px;border-radius:3px;background:rgba(0,0,0,.05);
@@ -753,7 +764,11 @@
     border-bottom:1px solid rgba(255,255,255,.05) }
   :is(#qsBtPop,#stBtPop) table.qs-bt-table td:first-child{ text-align:left; padding-left:2px; font-weight:700; color:#e8eaf0 }
   :is(#qsBtPop,#stBtPop) table.qs-bt-table tr:last-child td{ border-bottom:none }
-  :is(#qsBtPop,#stBtPop) table.qs-bt-table tbody tr:hover td{ background:rgba(255,255,255,.04) }
+  /* Hover highlight must be an OPAQUE dark grey: the global light-theme rule
+     (tbody tr:hover{background:#fafbfc}) paints the row near-white, and a
+     translucent white over it left the light cell text illegible. An opaque
+     slate covers every cell so #cbd5e1/#e8eaf0 text stays readable. */
+  :is(#qsBtPop,#stBtPop) table.qs-bt-table tbody tr:hover td{ background:#323b4d }
   /* Kill the global sticky-first-column rule (lines ~140-141) that paints
      these cells with the light --card colour — inside this dark popover the
      columns must stay static and transparent. */
@@ -1037,6 +1052,9 @@
 #viewSwitch button.active{ opacity:1; }
 #viewSwitch button:hover{ opacity:.8 }
 #viewSwitch button.active:hover{ opacity:1 }
+/* Typical-hold note on the Swing tab (avg ~200 calendar days under the v6
+   death-cross exit — see docs/swing-exit-edge-report.md). */
+#viewSwitch .vs-hold{ font-size:8.5px; font-weight:600; opacity:.65; letter-spacing:.2px; vertical-align:1px }
 [data-theme="white"] #viewSwitch{ border-radius:0; border:1px solid #000; background:#fff; }
 [data-theme="white"] #viewSwitch .vs-indicator{ border-radius:0; background:#fff; border:1px solid #000; }
 /* Buttons don't inherit font-family; without this they'd fall back to the UA
@@ -1083,10 +1101,10 @@
 <!-- ================= APP ================= -->
 <div id="app">
   <header class="bar" id="bar">
-    <div id="viewSwitch" title="Switch between Long-Term (full screener) and Swing (1wk-3mo swing setups)">
+    <div id="viewSwitch" title="Switch between Long-Term (full screener), Swing (trend-follow entries; let-winners-run exits — typical hold ~200 days) and Bounce (1-2 day mean reversion)">
       <div class="vs-indicator" id="vsIndicator"></div>
       <button data-v="basic">Long-Term</button>
-      <button data-v="short">Swing</button>
+      <button data-v="short" title="Trend-follow entries; exits let winners run to a 50/200 death-cross (typical hold ~200 days, ~9-month backstop)">Swing <span class="vs-hold">~200d</span></button>
       <!-- ===== QUICK SWING FEATURE ===== -->
       <button data-v="qs" title="1-2 day mean-reversion setups — separate trade philosophy from Swing">Bounce</button>
       <!-- ===== END QUICK SWING FEATURE ===== -->
@@ -1360,7 +1378,7 @@
   </div>
 
   <div class="legend">
-    <div class="ttl">Swing scoring &nbsp;·&nbsp; 11 factors tuned for 1wk-3mo swing trades</div>
+    <div class="ttl">Swing scoring &nbsp;·&nbsp; 11 factors tuned for multi-week to multi-month trend trades</div>
     <span><b style="background:var(--good-bg);color:var(--good-fg)">●</b><span style="color:var(--good-fg);font-weight:600">Green</span> · factor passes</span>
     <span><b style="background:var(--bad-bg);color:var(--bad-fg)">●</b><span style="color:var(--bad-fg);font-weight:600">Red</span> · factor fails</span>
     <span><b style="background:var(--pur-bg);color:var(--pur-fg)">●</b><span style="color:var(--pur-fg);font-weight:600">Purple</span> · data not available from FMP for this ticker</span>
@@ -1610,18 +1628,18 @@
 <!-- Vol Surge column-header info popover -->
 <!-- Watchlist how-to popover -->
 <div id="wlHelp" style="position:fixed;z-index:201;display:none;background:#1e2230;color:#e8eaf0;font-size:9.5px;line-height:1.6;padding:14px 16px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.38);min-width:320px;max-width:400px;pointer-events:none;white-space:normal;border:0.5px solid rgba(255,255,255,.08)">
-  <div style="font-size:11px;font-weight:700;color:#e8eaf0;margin-bottom:4px">The Watch Flag — your entry-trigger alarm</div>
-  <div style="font-size:9px;color:#a8b0bc;margin-bottom:10px">Mark a stock now, get a green flash the moment it becomes actionable.</div>
+  <div style="font-size:11px;font-weight:700;color:#e8eaf0;margin-bottom:4px">The Watchlist — Watch → Buy → Hold → Sell</div>
+  <div style="font-size:9px;color:#a8b0bc;margin-bottom:10px">The columns are the trade the swing backtest would take — they mirror its own BUY/SELL signal, so the watchlist and the Backtest log can't disagree.</div>
   <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:11px">
-    <div style="display:flex;gap:8px"><span style="font-weight:700;color:#e8eaf0;min-width:14px">1</span><span><b style="color:#e8eaf0">Spot a setup</b> — look for Trend, 3M Mom, and Near Hi all green in the table.</span></div>
-    <div style="display:flex;gap:8px"><span style="font-weight:700;color:#e8eaf0;min-width:14px">2</span><span><b style="color:#e8eaf0">Click the flag</b> next to the ticker — it turns yellow (Watching). Saved locally; survives refresh.</span></div>
-    <div style="display:flex;gap:8px"><span style="font-weight:700;color:#e8eaf0;min-width:14px">3</span><span><b style="color:#e8eaf0">Wait for auto-promote</b> — screener checks every render. When score ≥ 22 and any of T/V/P is green, it flips green (Ready) and the row flashes.</span></div>
-    <div style="display:flex;gap:8px"><span style="font-weight:700;color:#e8eaf0;min-width:14px">4</span><span><b style="color:#e8eaf0">Check the 3 dots</b> on the Ready chip — all green means the entry timing is right. Wait for 3/3. Yellow = signal was green within the last 24h, rescan to confirm.</span></div>
+    <div style="display:flex;gap:8px"><span style="font-weight:700;color:#f59e0b;min-width:42px">Watch</span><span>Approaching entry — an uptrend passing ≥ 4 of the 5 gates, plus anything you flag. The chip shows what's still missing (e.g. "RS +18pp · sector 1/3").</span></div>
+    <div style="display:flex;gap:8px"><span style="font-weight:700;color:#10b981;min-width:42px">Buy</span><span>All 5 entry gates just went green — a fresh backtest BUY. Good time to enter. Lights up the day the signal fires.</span></div>
+    <div style="display:flex;gap:8px"><span style="font-weight:700;color:#60a5fa;min-width:42px">Hold</span><span>You're in it, riding the trend. A name stays here even if the entry signal weakens — it only leaves on a real exit.</span></div>
+    <div style="display:flex;gap:8px"><span style="font-weight:700;color:#f87171;min-width:42px">Sell</span><span>A 50/200 death cross fired — the backtest's exit. Good time to sell. The chip notes "death cross" and clears after 24h.</span></div>
   </div>
   <div style="border-top:1px solid rgba(255,255,255,.08);padding-top:8px;display:flex;flex-direction:column;gap:3px;font-size:8.5px;color:#a8b0bc">
-    <div><b style="color:#e8eaf0">Ready requires:</b> Score ≥ 22 · at least one of T/V/P green (or green within last 24h)</div>
-    <div>Demoted = score fell below 22 or all 3 signals lost for 24h. × dismisses the alert.</div>
-    <div>Treat the green flash as a <b style="color:#e8eaf0">"check this now"</b> signal, not an autopilot buy.</div>
+    <div><b style="color:#e8eaf0">The 5 entry gates (T U L S R):</b> Setup ≥ 14/18 · Uptrend (price&gt;50&gt;200DMA) · Liquidity ≥ $1B/day · Sector leads SPY · 6-mo strength ≥ +30pp vs SPY.</div>
+    <div>Flag a ticker to keep it in Watch until it fires; BUY also auto-surfaces from the whole Swing screen. × dismisses a Sell alert or clears a Watch flag.</div>
+    <div>Treat a BUY as a <b style="color:#e8eaf0">"check this now"</b> signal, not an autopilot buy — it's a momentum/beta notifier, not proven alpha.</div>
   </div>
 </div>
 
@@ -1669,7 +1687,7 @@
     <span style="font-size:12px;font-weight:700;letter-spacing:.3px">Swing backtest · as-if trade log</span>
     <span id="stBtClose" style="cursor:pointer;color:#8a95a8;font-size:13px;padding:0 2px">✕</span>
   </div>
-  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px"><b style="color:#fbbf24">Honest framing:</b> a 2y+ validation across a broad universe found <b>no demonstrated market-timing edge</b> — this is a mega-cap momentum screen that captures market <i>beta</i>, not alpha (the signal's entries slightly trail just holding the same names). Use it as a <b>BUY/SELL notifier</b> of what the swing signal fires on real data, not a profit guarantee. Entries now require <b>≥$300M/day</b> liquidity — the only tier where any edge appeared. · Below: the last 15 sessions' daily signals + the as-if long-only trade log (EOD reconstruction; a 63-day hold with a loose 40% catastrophe stop — the 50/200 death-cross and tight 4×ATR stop were dropped as they clipped winners; prices are split-adjusted so a stock split no longer books a phantom gap; SPY benchmark) · backfilled the first time you open this.</div>
+  <div style="font-size:9.5px;color:#8a95a8;margin-bottom:12px"><b style="color:#fbbf24">Honest framing:</b> a 20-year validation (2006–2026, through the 2008 / 2018 / 2020 bears) found <b>no repeatable market-timing edge</b> — this is a mega-cap momentum screen that captures market <i>beta</i>, not alpha, and nothing here protects you buying <i>into</i> a real bear. Use it as a <b>BUY/SELL notifier</b> of what the swing signal fires on real data, not a profit guarantee. Entries require the deep-tested "best of the best" gate — <b>≥$1B/day</b> liquidity, the name's <b>sector leading SPY</b>, a strong setup (<b>≥14/18</b>), and <b>(v6.2)</b> the name <b>beating SPY by ≥30pp</b> over the trailing 6 months: the buy-side filters whose edge survived out-of-sample <i>and</i> through real bears (a big-winner study proved winners and losers are otherwise near-identical at entry — this relative-strength floor was the only add that helped in both regimes). Far fewer names fire by design. Exits <b>let winners run</b>: a trade closes on a <b>50/200 death-cross</b> (a real trend death), with a loose 40% catastrophe stop and a ~9-month backstop — the old 63-day clock booked AMD's $160→$558 run as four disconnected slices, and given room the death-cross exit was the only rule that captured such runs without adding tail risk (tight/trailing stops whipsawed and were rejected; typical hold now runs ~200 days). · Below: the last 15 sessions' daily signals + the as-if long-only trade log (EOD reconstruction; prices split-adjusted; SPY benchmark) · backfilled the first time you open this.</div>
   <div id="stBtStatus" style="display:none;font-size:10px;color:#fbbf24;margin-bottom:10px">⟳ Backfilling history…</div>
   <div class="qs-bt-layout">
     <aside class="qs-bt-key">
@@ -1677,13 +1695,13 @@
       <dl>
         <dt>Win rate</dt><dd>Share of closed trades that made money. Trend-following runs a <em>low</em> win rate by design — a few big winners carry it.</dd>
         <dt>Avg P/L</dt><dd>Average % gain/loss per closed trade.</dd>
-        <dt>Median hold</dt><dd>Typical days a trade stayed open (swing trades run weeks).</dd>
+        <dt>Median hold</dt><dd>Typical days a trade stayed open — with the let-winners-run exit these run <em>months</em> (~200 days on average), not weeks.</dd>
         <dt>Best / Worst</dt><dd>Biggest single winner and loser.</dd>
         <dt>Cumulative</dt><dd>Total $ if you'd put a fixed $10,000 into every trade.</dd>
         <dt>Edge vs SPY</dt><dd>Your avg P/L minus what <em>SPY</em> returned over the same trade dates — did riding these trends beat just holding the market? Positive = the signal added value.</dd>
         <dt>Equity curve</dt><dd>Running cumulative $ after each closed trade, in exit order, with <em>SPY</em> buy-and-hold overlaid. Above the dashed SPY line = the strategy is adding value.</dd>
         <dt>Open</dt><dd>A <em>LONG</em> still running. <em>Now</em> is the live price, <em>Stop</em> the 40% catastrophe auto-exit line, <em>Unrealized</em> the paper gain so far. A red <em>● STOP</em> means price is at/through the stop.</dd>
-        <dt>Closed</dt><dd>Finished trades, grouped by ticker (best cumulative first). Click a ticker to expand. <em>Exit on</em> is why it closed — <em>STOP</em> (broke its loose 40% catastrophe stop) or <em>TIME</em> (hit the 63-day hold).</dd>
+        <dt>Closed</dt><dd>Finished trades, grouped by ticker (best cumulative first). Click a ticker to expand. <em>Exit on</em> is why it closed — <em>CROSS</em> (50DMA closed below the 200DMA: the trend died), <em>STOP</em> (broke its loose 40% catastrophe stop) or <em>TIME</em> (the ~9-month backstop).</dd>
       </dl>
     </aside>
     <div class="qs-bt-main">
@@ -1694,7 +1712,7 @@
       <div id="stBtClosed"></div>
     </div>
   </div>
-  <div class="qs-bt-note">This is a rolling ~6.5-month window of <em>recent activity</em> — a small sample, not a full track record. The entry signal is the <em>reconstructable</em> price/volume/sector core of the 33-point swing score (Trend, 3-Month Momentum, Near-High, Liquidity, Volume-Surge, Sector-RS); the five fundamental factors (analyst revisions, valuation, quality, leverage, catalyst) can't be reconstructed at a past date, so — like the live tool's own philosophy of buying confirmed strength — the log times entries off the trend core. The seed is a historical replay of those factors at each daily close. Forward datapoints are recorded on each rescan, at the price that scan saw. The 40% catastrophe stop assumes a fill at the stop (or the day's open on a gap-through). Prices are split/corporate-action adjusted, so a stock split no longer books a phantom overnight gap (the old −47% HON "trade" was HON's 1:2 split, not a real loss). SPY buy-and-hold is the benchmark (opportunity cost of just holding the market those days). No slippage or commissions. Cumulative $ assumes a fixed $10,000 per trade. Long-only: a 2-year study found shorting weak names loses on this universe and blows out the worst-case drawdown — see scripts/run-short-study.mjs.</div>
+  <div class="qs-bt-note">This is a rolling ~14-month window of <em>recent activity</em> — a small sample, not a full track record. The entry signal is the <em>reconstructable</em> price/volume/sector core of the 33-point swing score (Trend, 3-Month Momentum, Near-High, Liquidity, Volume-Surge, Sector-RS); the five fundamental factors (analyst revisions, valuation, quality, leverage, catalyst) can't be reconstructed at a past date, so — like the live tool's own philosophy of buying confirmed strength — the log times entries off the trend core. The seed is a historical replay of those factors at each daily close. Forward datapoints are recorded on each rescan, at the price that scan saw. The 40% catastrophe stop assumes a fill at the stop (or the day's open on a gap-through). Prices are split/corporate-action adjusted, so a stock split no longer books a phantom overnight gap (the old −47% HON "trade" was HON's 1:2 split, not a real loss). SPY buy-and-hold is the benchmark (opportunity cost of just holding the market those days). No slippage or commissions. Cumulative $ assumes a fixed $10,000 per trade. Long-only: a 2-year study found shorting weak names loses on this universe and blows out the worst-case drawdown — see scripts/run-short-study.mjs.</div>
 </div>
 <!-- ===== END SWING BACKTEST FEATURE ===== -->
 
@@ -1919,21 +1937,22 @@ function applyStSort() {
   // newly-added ticker is easy to find while its score is loading. Cleared
   // on the next Rescan.
   const sinkJustAdded = (a, b) => (a.justAdded?1:0) - (b.justAdded?1:0);
-  // Default sort (no user column picked): TVP green count desc, score desc.
-  // Pushes 3/3 to the top, then 2/3, then 1/3, then 0/3 — score breaks ties.
+  // Default sort (no user column picked): backtest signal first. Entries (all
+  // 5 gates) rank top, then healthy near-misses (uptrend, no death cross),
+  // then the rest — tech setup then relative-strength break ties.
   if (!stSortCol) {
     watchlist.sort((a,b) => {
       const ja = sinkJustAdded(a, b);
       if (ja !== 0) return ja;
       const ra = shortRowsBySym[(a.sym||'').toUpperCase()];
       const rb = shortRowsBySym[(b.sym||'').toUpperCase()];
-      const ga = tvpFor(ra); const gb = tvpFor(rb);
-      const ca = ga ? (ga.T?1:0)+(ga.V?1:0)+(ga.P?1:0) : -1;
-      const cb = gb ? (gb.T?1:0)+(gb.V?1:0)+(gb.P?1:0) : -1;
-      if (ca !== cb) return cb - ca;
-      const sa = ra?.score ? parseInt(ra.score) || 0 : -1;
-      const sb = rb?.score ? parseInt(rb.score) || 0 : -1;
-      return sb - sa;
+      const ga = btClass(ra), gb = btClass(rb);
+      const rankOf = g => !g ? -1 : g.entryStrong ? 2 : (g.gUp && !g.deathCross) ? 1 : 0;
+      const pa = rankOf(ga), pb = rankOf(gb);
+      if (pa !== pb) return pb - pa;
+      const ta = ga?.techScore ?? -1, tb = gb?.techScore ?? -1;
+      if (ta !== tb) return tb - ta;
+      return (gb?.rs126 ?? -9) - (ga?.rs126 ?? -9);
     });
     return;
   }
@@ -4603,7 +4622,7 @@ function renderStBacktest(){
       const buyChips = buys.map(b => chip('rgba(52,211,153,.14)', `<b>${escHtml(b.sym)}</b> ${qsBtDate(b.date+'T21:00:00Z')} · ${qsBtPrice(b.price)}`)).join('') || '<span class="qs-bt-empty">none</span>';
       const sellChips = sells.map(s => chip('rgba(248,113,113,.14)', `<b>${escHtml(s.sym)}</b> ${qsBtDate(s.date+'T21:00:00Z')} · ${escHtml(s.reason||'')}`)).join('') || '<span class="qs-bt-empty">none</span>';
       const watchLine = watch.length
-        ? `<div style="margin-top:8px;font-size:9.5px;color:#8a95a8">⛔ Blocked by the ≥$300M/day liquidity guardrail on the latest session (strong setup, too thin to fire): <b>${watch.map(escHtml).join(' ')}</b></div>`
+        ? `<div style="margin-top:8px;font-size:9.5px;color:#8a95a8">⛔ Strong setup on the latest session but blocked by a buy-side guardrail (≥$1B/day liquidity, sector leadership, or the 6-month relative-strength floor): <b>${watch.map(escHtml).join(' ')}</b></div>`
         : '';
       sigEl.innerHTML =
         `<div class="qs-bt-sec-head">Last 15 sessions · daily BUY/SELL notifier${lastDate ? ` (through ${qsBtDate(lastDate+'T21:00:00Z')})` : ''}</div>` +
@@ -4826,6 +4845,15 @@ let demotedRecent = (() => {
   try { return JSON.parse(localStorage.getItem('gn_st_demoted') || '{}'); }
   catch(e) { return {}; }
 })();
+// heldSyms = { SYM: { enteredOnDate, at } } — the OWNED set (Buy + Hold).
+// A name enters on a fresh backtest BUY (entryStrong) and leaves on the
+// death-cross SELL. It shows in BUY while the row's bar.date still equals
+// enteredOnDate, else HOLD. Shared site-wide via /api/watch-state (held) so
+// the auto-surfaced discovery feed is common across visitors.
+let heldSyms = (() => {
+  try { return JSON.parse(localStorage.getItem('gn_st_held') || '{}'); }
+  catch(e) { return {}; }
+})();
 // Activity log — last 50 state transitions across all watched stocks.
 // Schema: [{ ts, sym, type: 'promote'|'demote'|'add'|'clear', reason? }]
 let activityLog = (() => {
@@ -4848,15 +4876,6 @@ function saveSigHistory(){
   try { localStorage.setItem('gn_st_sighist', JSON.stringify(sigHistory)); } catch(e){}
   scheduleWatchSave();
 }
-// Most recent ts where the signal was true. Computed from sigHistory.
-function lastGreenAt(sym, signal){
-  const h = sigHistory[sym];
-  if (!h || !h.length) return null;
-  for (let i = h.length - 1; i >= 0; i--) {
-    if (h[i][signal]) return h[i].ts;
-  }
-  return null;
-}
 
 // Debounced blob save — batches rapid changes into one PUT
 let _watchSaveTimer = null;
@@ -4865,7 +4884,7 @@ function scheduleWatchSave(){
   _watchSaveTimer = setTimeout(()=>{
     _watchSaveTimer = null;
     if(typeof API_LIVE !== 'undefined' && API_LIVE)
-      api.send('/api/watch-state','PUT',{flags:watchFlags,demoted:demotedRecent,activity:activityLog,sigHistory}).catch(()=>{});
+      api.send('/api/watch-state','PUT',{flags:watchFlags,demoted:demotedRecent,activity:activityLog,sigHistory,held:heldSyms}).catch(()=>{});
   }, 800);
 }
 function saveWatchFlags(){
@@ -4876,6 +4895,10 @@ function saveDemoted(){
   try { localStorage.setItem('gn_st_demoted', JSON.stringify(demotedRecent)); } catch(e){}
   scheduleWatchSave();
 }
+function saveHeld(){
+  try { localStorage.setItem('gn_st_held', JSON.stringify(heldSyms)); } catch(e){}
+  scheduleWatchSave();
+}
 function saveActivity(){
   try { localStorage.setItem('gn_st_activity', JSON.stringify(activityLog)); } catch(e){}
   scheduleWatchSave();
@@ -4884,16 +4907,25 @@ function saveActivity(){
 // Load latest watch state from blob on startup (overrides stale localStorage).
 // Called from init() once API_LIVE is known true — must NOT run at module-eval
 // time, when API_LIVE is still false and the GET would be skipped.
+// True once the shared watch-state blob has loaded (or failed / is offline).
+// The reconcile loop holds off firing Buy/Hold/Sell transitions until this is
+// set, so a fresh page can't fire a flood of BUYs off an empty pre-load
+// heldSyms before the blob's owned set arrives — cold-start seeds from the
+// correct base instead of racing loadWatchState.
+let watchStateLoaded = false;
 function loadWatchState(){
-  if(typeof API_LIVE === 'undefined' || !API_LIVE) return;
+  if(typeof API_LIVE === 'undefined' || !API_LIVE){ watchStateLoaded = true; renderShortWatchlist(); return; }
   api.get('/api/watch-state').then(data => {
-    if(!data) return;
-    if(data.flags      && typeof data.flags      === 'object') { watchFlags    = data.flags;      try{localStorage.setItem('gn_st_watch',    JSON.stringify(watchFlags));}catch(e){} }
-    if(data.demoted    && typeof data.demoted    === 'object') { demotedRecent = data.demoted;    try{localStorage.setItem('gn_st_demoted',  JSON.stringify(demotedRecent));}catch(e){} }
-    if(Array.isArray(data.activity))                           { activityLog   = data.activity;   try{localStorage.setItem('gn_st_activity', JSON.stringify(activityLog));}catch(e){} }
-    if(data.sigHistory && typeof data.sigHistory === 'object') { sigHistory    = data.sigHistory; try{localStorage.setItem('gn_st_sighist',  JSON.stringify(sigHistory));}catch(e){} }
+    if(data){
+      if(data.flags      && typeof data.flags      === 'object') { watchFlags    = data.flags;      try{localStorage.setItem('gn_st_watch',    JSON.stringify(watchFlags));}catch(e){} }
+      if(data.demoted    && typeof data.demoted    === 'object') { demotedRecent = data.demoted;    try{localStorage.setItem('gn_st_demoted',  JSON.stringify(demotedRecent));}catch(e){} }
+      if(data.held       && typeof data.held       === 'object') { heldSyms      = data.held;       try{localStorage.setItem('gn_st_held',     JSON.stringify(heldSyms));}catch(e){} }
+      if(Array.isArray(data.activity))                           { activityLog   = data.activity;   try{localStorage.setItem('gn_st_activity', JSON.stringify(activityLog));}catch(e){} }
+      if(data.sigHistory && typeof data.sigHistory === 'object') { sigHistory    = data.sigHistory; try{localStorage.setItem('gn_st_sighist',  JSON.stringify(sigHistory));}catch(e){} }
+    }
+    watchStateLoaded = true;
     renderShortWatchlist();
-  }).catch(()=>{});
+  }).catch(()=>{ watchStateLoaded = true; renderShortWatchlist(); });
 }
 function logActivity(sym, type, reason){
   activityLog.unshift({ ts: Date.now(), sym: (sym||'').toUpperCase(), type, reason: reason || '' });
@@ -4929,74 +4961,102 @@ function dismissDemoted(sym){
   saveDemoted();
   renderShortWatchlist();
 }
-// Compute the live T/V/P booleans for a row. Returns null if the row isn't
-// scored yet. These three signals drive both the Ready/Watching/Demoted state
-// transitions AND the badge colors. A signal is "currently green" only when
-// its boolean is true here; the yellow badge comes from history (see
-// lastGreenAt). V also has a separate "warn" red-distribution state.
-function tvpFor(r){
-  if (!r || !r.verdicts) return null;
-  const v = r.verdicts;
-  const reasons = r.reasons || [];
-  const trendOk = v[0] === 'good' || v[0] === 'ok';
-  const volUp   = (reasons[9] || '').includes('↑');
-  const volWarn = (reasons[9] || '').includes('↓');
-  const volGood = v[9] === 'good' || v[9] === 'ok';
-  const raw0    = r.raw?.[0];
-  const pctAbove50 = (raw0?.price != null && raw0?.sma50 != null)
-    ? (raw0.price - raw0.sma50) / raw0.sma50 * 100
-    : NaN;
-  const near50 = !isNaN(pctAbove50) && pctAbove50 >= 0 && pctAbove50 <= 5;
-  // Parse the surge multiplier from reasons[9] (e.g. "↑1.16 vs 200d avg" → 1.16).
-  // Used to color-grade the V badge by conviction level.
-  const volMatch = (reasons[9] || '').match(/[↑↓]\s*([\d.]+)/);
-  const volMult  = volMatch ? parseFloat(volMatch[1]) : null;
+// ── Backtest entry/exit classifier ─────────────────────────────────────
+// Reads the precomputed row.bt — the SAME entryStrong / deathCross the swing
+// backtest engine uses (short-backtest.mjs) — so the watchlist columns and the
+// backtest log can never disagree. Returns null when the row isn't scored or
+// lacks bt (insufficient history). Thresholds mirror the engine constants.
+const SWING_GATE = { TECH: 14, LIQ: 1e9, SEC: 2, RS: 0.30 };
+function btClass(r){
+  const bt = r && r.bt;
+  if (!bt) return null;
+  const techScore = +bt.techScore;
+  const rs126 = (bt.rs126 == null || !isFinite(+bt.rs126)) ? null : +bt.rs126;
+  const secPts = +bt.secPts || 0;
+  const adv    = +bt.avgDollarVol || 0;
+  const gTech = isFinite(techScore) && techScore >= SWING_GATE.TECH;   // setup ≥ 14/18
+  const gUp   = !!bt.uptrend;                                          // price > 50 > 200
+  const gLiq  = adv >= SWING_GATE.LIQ;                                 // ≥ $1B/day
+  const gSec  = secPts >= SWING_GATE.SEC;                              // sector leads SPY
+  const gRs   = rs126 != null && rs126 >= SWING_GATE.RS;               // 6-mo RS ≥ +30pp
   return {
-    T: trendOk,
-    V: volGood && volUp && !volWarn,
-    P: near50,
-    volWarn,
-    volMult,
-    pctAbove50: isNaN(pctAbove50) ? null : pctAbove50,
+    gTech, gUp, gLiq, gSec, gRs,
+    techScore: isFinite(techScore) ? techScore : null,
+    rs126, secPts, avgDollarVol: adv,
+    sma50: +bt.sma50, sma200: +bt.sma200,
+    // BUY = all 5 gates recomputed from the same fields the engine uses. This
+    // is byte-identical to the engine's entryStrong when bt is complete, but
+    // degrades safely if a stale/older-shape row is missing a gate field
+    // (a missing field fails its gate rather than trusting a hardcoded flag),
+    // so the Buy decision and the gate dots can never disagree.
+    entryStrong: gTech && gUp && gLiq && gSec && gRs,
+    deathCross:  !!bt.deathCross,    // 50/200 death cross (SELL)
+    passCount: (gTech?1:0)+(gUp?1:0)+(gLiq?1:0)+(gSec?1:0)+(gRs?1:0),
+    barDate: (bt.bar && bt.bar.date) || null,
   };
 }
-// Append a new sigHistory entry for sym when scored_at advances. Returns true
-// if anything was written (so callers know to persist).
-function recordSigHistory(sym, scoredAtMs, tvp, price){
-  if (!sym || !scoredAtMs || !tvp) return false;
+// The failing entry gates as short human strings — powers the Watching
+// "what's missing" reason and the sell/shortfall fallback text.
+function gateShortfalls(c){
+  if (!c) return [];
+  const out = [];
+  if (!c.gTech) out.push(`tech ${c.techScore==null?'?':c.techScore}/18`);
+  if (!c.gUp)   out.push('below 50/200');
+  if (!c.gLiq)  out.push(`liq $${(c.avgDollarVol/1e9).toFixed(1)}B`);
+  if (!c.gSec)  out.push(`sector ${c.secPts}/3`);
+  if (!c.gRs)   out.push(c.rs126==null ? 'RS n/a' : `RS ${c.rs126>=0?'+':''}${Math.round(c.rs126*100)}pp`);
+  return out;
+}
+// Resolve a symbol's watchlist column: buy / hold come from the owned set
+// (heldSyms), sell from a recent death-cross exit (demotedRecent), watch from
+// a manual flag OR a live near-miss (uptrend, ≥4/5 gates, not yet firing).
+function swingState(sym){
+  sym = (sym || '').toUpperCase();
+  if (heldSyms[sym]) {
+    const r = shortRowsBySym[sym];
+    const c = r ? btClass(r) : null;
+    const ed = heldSyms[sym].enteredOnDate;
+    // BUY only on the session it entered (never the seed sentinel); else HOLD.
+    if (c && c.barDate && ed && ed !== '__seed__' && c.barDate === ed) return 'buy';
+    return 'hold';
+  }
+  if (demotedRecent[sym]) return 'sell';
+  if (watchFlags[sym] === 'watching') return 'watch';
+  const r = shortRowsBySym[sym];
+  const c = r ? btClass(r) : null;
+  if (c && c.gUp && !c.entryStrong && !c.deathCross && c.passCount >= 4) return 'watch';
+  return null;
+}
+// Append a sigHistory entry when scored_at advances (entry-eligibility strip).
+// Stores { ts, buy, cross, price }: buy = all 5 gates green, cross = death
+// cross. Returns true if written (so callers know to persist).
+function recordSigHistory(sym, scoredAtMs, c, price){
+  if (!sym || !scoredAtMs || !c) return false;
   const arr = sigHistory[sym] || (sigHistory[sym] = []);
   const last = arr[arr.length - 1];
   if (last && last.ts === scoredAtMs) return false; // already recorded this scan
-  const entry = { ts: scoredAtMs, T: !!tvp.T, V: !!tvp.V, P: !!tvp.P };
+  const entry = { ts: scoredAtMs, buy: !!c.entryStrong, cross: !!c.deathCross };
   if (typeof price === 'number' && isFinite(price)) entry.price = price;
   arr.push(entry);
   if (arr.length > SIG_HIST_CAP) arr.splice(0, arr.length - SIG_HIST_CAP);
   return true;
 }
 function readyFailureReasons(r){
-  const tvp = tvpFor(r);
-  if (!tvp) return ['no data'];
-  const scoreNum = parseInt(r.score) || 0;
-  if (scoreNum < 24) return [`score ${scoreNum}/33 below 24 threshold`];
-  const lost = [];
-  if (!tvp.T) lost.push('T');
-  if (!tvp.V) lost.push(tvp.volWarn ? 'V (distribution)' : 'V');
-  if (!tvp.P) lost.push('P');
-  return lost.length === 3
-    ? ['all 3 entry signals lost for 24h — T, V, P']
-    : lost.length
-      ? [`entry signals lost — ${lost.join(', ')}`]
-      : ['—'];
+  const c = btClass(r);
+  if (!c) return ['no data'];
+  if (c.deathCross) return ['death cross'];
+  const miss = gateShortfalls(c);
+  return miss.length ? miss : ['—'];
 }
 // Click handler: ticker chip opens per-ticker history popover.
-// X button dismisses (demoted) or clears (watching/ready).
+// X button dismisses a Sell alert, or clears a Watch flag.
 document.addEventListener('click', e => {
   const x = e.target.closest('.wp-x');
   if (x) {
     e.stopPropagation();
     const sym = x.dataset.sym;
     const kind = x.dataset.kind;
-    if (kind === 'demoted') dismissDemoted(sym);
+    if (kind === 'sell' || kind === 'demoted') dismissDemoted(sym);
     else toggleWatchFlag(sym);
     return;
   }
@@ -5033,9 +5093,9 @@ function lastEventTs(sym, types){
 }
 function chipDate(sym, kind){
   let ts = null;
-  if (kind === 'demoted')      ts = demotedRecent[sym]?.at ?? null;
-  else if (kind === 'ready')   ts = lastEventTs(sym, ['promote']);
-  else if (kind === 'watching')ts = lastEventTs(sym, ['add','demote']);
+  if (kind === 'sell')                        ts = demotedRecent[sym]?.at ?? null;
+  else if (kind === 'buy' || kind === 'hold') ts = heldSyms[sym]?.at ?? lastEventTs(sym, ['promote']);
+  else if (kind === 'watch')                  ts = lastEventTs(sym, ['add']);
   return ts;
 }
 function fmtChipDate(ts){
@@ -5045,58 +5105,29 @@ function fmtChipDate(ts){
   const d = new Date(ts);
   return d.toLocaleDateString(undefined, { month:'short', day:'numeric' });
 }
-// Entry signal dots for Ready chips: Trend (idx 0), Vol Surge (idx 9)
-// Near-50DMA: parse raw[0] which is the vs50 percent string from reasons
-function entrySigs(sym){
+// Five entry-gate dots — T U L S R (Setup, Uptrend, Liquidity, Sector-RS,
+// Relative-strength). Green when the gate passes, grey when it doesn't; the
+// tooltip carries the live value + threshold. Reads the same row.bt the
+// backtest gate reads, so the dots and the Buy signal always agree.
+function gateDots(sym){
   const r = shortRowsBySym[sym];
-  if (!r) return null;
-  const tvp = tvpFor(r);
-  if (!tvp) return null;
-  // Yellow = the signal was green within the last 24h but isn't now. We
-  // read that from sigHistory rather than the row itself so the colour
-  // persists across renders even after the signal flips off.
-  const now = Date.now();
-  const recentLossT = !tvp.T && (lastGreenAt(sym, 'T') ?? 0) > now - SIG_STALE_MS;
-  const recentLossV = !tvp.V && (lastGreenAt(sym, 'V') ?? 0) > now - SIG_STALE_MS;
-  const recentLossP = !tvp.P && (lastGreenAt(sym, 'P') ?? 0) > now - SIG_STALE_MS;
-  return { ...tvp, recentLossT, recentLossV, recentLossP };
-}
-function sigDots(sym){
-  const s = entrySigs(sym);
-  if (!s) return '';
-  // Each signal: green if currently met; yellow if it was green within
-  // the last 24h but isn't now; red if active distribution warning (V
-  // only); grey otherwise.
-  const trendCls = s.T ? 'sig-on' : (s.recentLossT ? 'sig-stale' : 'sig-off');
-  // V intensity: <1.5x = mild, 1.5-2.5x = normal, >2.5x = strong (glow)
-  const volIntensity = s.V && s.volMult != null
-    ? (s.volMult > 2.5 ? ' sig-on-strong' : s.volMult < 1.5 ? ' sig-on-mild' : '')
-    : '';
-  const volCls   = s.volWarn ? 'sig-warn'
-                : s.V        ? ('sig-on' + volIntensity)
-                : s.recentLossV ? 'sig-stale'
-                                : 'sig-off';
-  const nearCls  = s.P ? 'sig-on' : (s.recentLossP ? 'sig-stale' : 'sig-off');
-  const trendTip = s.T ? 'Trend: price above 50DMA ✓'
-                 : s.recentLossT ? 'Trend: was above 50DMA recently — rescan to confirm'
-                                 : 'Trend: below 50DMA — avoid entry';
-  const volMultStr = s.volMult != null ? ` (${s.volMult.toFixed(2)}x avg vol)` : '';
-  const intensityStr = s.V && s.volMult != null
-    ? (s.volMult > 2.5 ? ' — strong conviction'
-      : s.volMult < 1.5 ? ' — mild'
-      : '')
-    : '';
-  const volTip   = s.volWarn ? `Vol Surge: down-day distribution ✗${volMultStr}`
-                 : s.V       ? `Vol Surge: up-day accumulation ✓${volMultStr}${intensityStr}`
-                 : s.recentLossV ? 'Vol Surge: accumulation lost — rescan to confirm'
-                                 : 'Vol Surge: no strong signal yet';
-  const nearTip  = s.P ? 'Near 50DMA: pullback zone — good entry risk/reward ✓'
-                 : s.recentLossP ? 'Near 50DMA: pullback zone lost — rescan to confirm'
-                                 : 'Not near 50DMA — may be extended';
+  const c = r ? btClass(r) : null;
+  if (!c) return '';
+  const dot = (on, label, tip) =>
+    `<span class="wp-sig-dot ${on ? 'sig-on' : 'sig-off'}" data-tip="${escHtml(tip)}">${label}</span>`;
+  const techTip = `Setup ${c.techScore==null?'?':c.techScore}/18 — need ≥ 14`;
+  const upTip   = c.gUp ? 'Uptrend: price > 50DMA > 200DMA ✓' : 'Not in a 50 > 200 uptrend';
+  const liqTip  = `Liquidity $${(c.avgDollarVol/1e9).toFixed(1)}B/day — need ≥ $1B`;
+  const secTip  = `Sector vs SPY ${c.secPts}/3 — need ≥ 2 (sector leading SPY)`;
+  const rsTip   = c.rs126==null
+    ? 'Relative strength: n/a'
+    : `6-mo strength ${c.rs126>=0?'+':''}${Math.round(c.rs126*100)}pp vs SPY — need ≥ +30pp`;
   return `<span class="wp-sig">` +
-    `<span class="wp-sig-dot ${trendCls}" data-tip="${escHtml(trendTip)}">T</span>` +
-    `<span class="wp-sig-dot ${volCls}"   data-tip="${escHtml(volTip)}">V</span>` +
-    `<span class="wp-sig-dot ${nearCls}"  data-tip="${escHtml(nearTip)}">P</span>` +
+    dot(c.gTech,'T',techTip) +
+    dot(c.gUp,  'U',upTip) +
+    dot(c.gLiq, 'L',liqTip) +
+    dot(c.gSec, 'S',secTip) +
+    dot(c.gRs,  'R',rsTip) +
     `</span>`;
 }
 // Trade card for Premium-tier Ready tickers: a vertical price ladder that
@@ -5147,13 +5178,13 @@ function sanitizePriceHist(raw){
 function tradeCard(sym, opts){
   opts = opts || {};
   const r = shortRowsBySym[sym];
-  const tvp = r ? tvpFor(r) : null;
+  const c = r ? btClass(r) : null;
   const price  = r?.raw?.[0]?.price;
   const sma50  = r?.raw?.[0]?.sma50;
   const sma200 = r?.raw?.[0]?.sma200;
   const high52 = r?.raw?.[2]?.high;
   const atr14  = r?.raw?.[0]?.atr14;
-  if (!price || !sma50 || !sma200 || !tvp) return null;
+  if (!price || !sma50 || !sma200 || !c) return null;
   // Stop distance scales with the stock's own volatility (1.5x its 14-day
   // ATR) instead of a flat percentage — a sleepy utility and a high-beta
   // chip name get different stop distances instead of the same 3%. Falls
@@ -5166,10 +5197,10 @@ function tradeCard(sym, opts){
   const upside = (target - price) / price * 100;
   const downside = (price - stop) / price * 100;
   const rr = downside > 0 ? upside / downside : 0;
-  const ts = chipDate(sym, 'ready');
+  const ts = heldSyms[sym]?.at ?? chipDate(sym, 'buy');
   const days = ts ? Math.floor((Date.now() - ts) / 86400000) : 0;
-  const greens = (tvp.T?1:0)+(tvp.V?1:0)+(tvp.P?1:0);
-  const score = r.score ? parseInt(r.score) || 0 : 0;
+  const stLabel = ({ buy:'BUY', hold:'HOLD', sell:'SELL', watch:'WATCH' })[swingState(sym)]
+                || (c.entryStrong ? 'BUY' : c.deathCross ? 'SELL' : '—');
   // "Now" is drawn as a 15-day price path ending in a dot, not a flat
   // reference line — lets you see the run-up/pullback that produced today's
   // price relative to the other levels, instead of just a static snapshot.
@@ -5281,7 +5312,7 @@ function tradeCard(sym, opts){
   }).join('');
   const rrColor = rr >= 2 ? '#10b981' : rr >= 1.5 ? '#f59e0b' : '#ef4444';
   const rrLabel = rr >= 2 ? 'good' : rr >= 1.5 ? 'ok' : 'weak';
-  const sigPills = sigDots(sym);
+  const sigPills = gateDots(sym);
   const daysBadge = days >= 3 ? `<span class="wp-chip-days" data-tip="In Ready ${days}d — consider entering or clearing">${days}d</span>` : '';
   // Earnings-proximity flag: a stock can gap through the stop or target
   // overnight on an earnings print, so surface how close the next report is.
@@ -5312,7 +5343,7 @@ function tradeCard(sym, opts){
   return `${outerOpen}
     <div class="wp-tc-head">
       <span class="wp-tc-sym">${sym}</span>
-      <span class="wp-tc-sub">${score}/33 · ${greens}/3 ${sigPills} ${daysBadge}${earnBadge}</span>
+      <span class="wp-tc-sub">${stLabel} · ${c.passCount}/5 gates ${sigPills} ${daysBadge}${earnBadge}</span>
       ${closeBtn}
     </div>
     <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;margin:4px 0 0">
@@ -5335,108 +5366,95 @@ function renderWatchPanel(){
   const el = document.getElementById('watchPanel');
   if (!el) return;
   pruneDemoted();
-  const readyPremium = [], readyStandard = [], watching = [], demoted = [];
-  // Sort key per ready sym: { sym, greens, score } so we can rank chips
-  // within each tier by green count desc, then score desc.
-  const readyMeta = {};
-  for (const sym of Object.keys(watchFlags)) {
-    if (watchFlags[sym] === 'ready') {
-      const r = shortRowsBySym[sym];
-      const tvp = r ? tvpFor(r) : null;
-      const greens = tvp ? (tvp.T?1:0)+(tvp.V?1:0)+(tvp.P?1:0) : 0;
-      const score  = r?.score ? parseInt(r.score) || 0 : 0;
-      readyMeta[sym] = { greens, score };
-      // Premium = high-conviction setup: either a full 3/3 hit, OR ≥2 greens
-      // with a strong score (≥29). Standard = everything else still in Ready.
-      const isPremium = greens === 3 || (greens >= 2 && score >= 29);
-      if (isPremium) readyPremium.push(sym);
-      else readyStandard.push(sym);
-    }
-    else if (watchFlags[sym] === 'watching') watching.push(sym);
-  }
-  // Rank within each tier: greens desc, then score desc.
-  const rankReady = (a, b) => {
-    const ma = readyMeta[a], mb = readyMeta[b];
-    if (mb.greens !== ma.greens) return mb.greens - ma.greens;
-    return mb.score - ma.score;
+  const buy = [], hold = [], watch = [], sell = [];
+  const meta = {};                                   // sym -> {passCount, rs126} for ranking
+  const seen = new Set();
+  const noteMeta = sym => {
+    const c = shortRowsBySym[sym] ? btClass(shortRowsBySym[sym]) : null;
+    meta[sym] = { passCount: c ? c.passCount : -1, rs126: c ? (c.rs126 ?? -9) : -9 };
   };
-  readyPremium.sort(rankReady);
-  readyStandard.sort(rankReady);
-  const ready = [...readyPremium, ...readyStandard];
-  for (const sym of Object.keys(demotedRecent)) demoted.push(sym);
-  // Hide entirely when there's nothing to show — no flags AND no history
-  if (!ready.length && !watching.length && !demoted.length && !activityLog.length) {
+  // Owned set → Buy (entered this session) vs Hold (riding).
+  for (const sym of Object.keys(heldSyms)) {
+    if (!shortRowsBySym[sym]) continue;              // pruned in the reconcile pass
+    noteMeta(sym);
+    (swingState(sym) === 'buy' ? buy : hold).push(sym);
+    seen.add(sym);
+  }
+  // Sell → recent death-cross exits (24h TTL).
+  for (const sym of Object.keys(demotedRecent)) { if (!seen.has(sym)) { sell.push(sym); seen.add(sym); } }
+  // Watching → manual flags + live near-misses (uptrend, ≥4/5 gates, not firing).
+  const addWatch = sym => { if (!seen.has(sym)) { noteMeta(sym); watch.push(sym); seen.add(sym); } };
+  for (const sym of Object.keys(watchFlags)) if (watchFlags[sym] === 'watching' && shortRowsBySym[sym]) addWatch(sym);
+  for (const sym of Object.keys(shortRowsBySym)) {
+    if (seen.has(sym)) continue;
+    const c = btClass(shortRowsBySym[sym]);
+    if (c && c.gUp && !c.entryStrong && !c.deathCross && c.passCount >= 4) addWatch(sym);
+  }
+  const rank = (a, b) => (meta[b].passCount - meta[a].passCount) || (meta[b].rs126 - meta[a].rs126);
+  buy.sort(rank); hold.sort(rank); watch.sort(rank);
+  // Hide entirely when there's nothing to show — no state AND no history.
+  if (!buy.length && !hold.length && !watch.length && !sell.length && !activityLog.length) {
     el.innerHTML = '';
     return;
   }
-  const chip = (sym, kind, reason) => {
-    const reasonHtml = reason ? `<span class="wp-chip-reason">${escHtml(reason)}</span>` : '';
-    const ts = chipDate(sym, kind);
+  const chipTs = (sym, col) =>
+    col === 'sell' ? (demotedRecent[sym]?.at ?? null)
+    : (col === 'buy' || col === 'hold') ? (heldSyms[sym]?.at ?? null)
+    : lastEventTs(sym, ['add']);
+  const chip = (sym, col) => {
+    const c = shortRowsBySym[sym] ? btClass(shortRowsBySym[sym]) : null;
+    const ts = chipTs(sym, col);
     const dateHtml = ts
       ? `<span class="wp-chip-date" data-tip="${escHtml(new Date(ts).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}">${fmtChipDate(ts)}</span>`
       : '';
-    const dotsHtml = kind === 'ready' ? sigDots(sym) : '';
-    // Days-in-Ready badge: warn when a Ready setup has been sitting > 3 days
-    // without being acted on — either you missed the entry or the signal is stale.
-    let daysBadge = '';
-    if (kind === 'ready' && ts) {
-      const days = Math.floor((Date.now() - ts) / 86400000);
-      if (days >= 3) daysBadge = `<span class="wp-chip-days" data-tip="${escHtml(`In Ready ${days}d — consider entering or clearing`)}">${days}d</span>`;
+    let tag = '', reason = '', extra = '', xBtn = '';
+    if (col === 'buy') {
+      tag = `<span class="wp-chip-tag wp-tag-buy" data-tip="All 5 backtest entry gates green — a fresh BUY. Good time to enter.">▲ enter</span>`;
+    } else if (col === 'hold') {
+      const days = ts ? Math.max(0, Math.floor((Date.now() - ts) / 86400000)) : 0;
+      tag = `<span class="wp-chip-tag wp-tag-hold" data-tip="Owned since the entry fired — rides until a 50/200 death cross (or the 40% stop / time backstop).">hold ${days}d</span>`;
+    } else if (col === 'watch') {
+      const miss = c ? gateShortfalls(c) : [];
+      reason = miss.length ? `<span class="wp-chip-reason">${escHtml(miss.join(' · '))}</span>` : '';
+      xBtn = `<span class="wp-x" data-sym="${sym}" data-kind="watch" data-tip="Clear watch flag">×</span>`;
+    } else if (col === 'sell') {
+      const why = (demotedRecent[sym]?.reasons || []).join(', ') || 'death cross';
+      reason = `<span class="wp-chip-reason">✕ ${escHtml(why)}</span>`;
+      extra = renderMiniSigHistory(sym);
+      xBtn = `<span class="wp-x" data-sym="${sym}" data-kind="sell" data-tip="Dismiss this sell alert">×</span>`;
     }
-    const miniHist = kind === 'demoted' ? renderMiniSigHistory(sym) : '';
-    return `<span class="wp-chip" data-sym="${sym}" data-tip="${escHtml('Click for '+sym+' history · entered this state '+(ts?relTime(ts)+' ago':'recently'))}">${sym}${dateHtml}${dotsHtml}${daysBadge}${miniHist}${reasonHtml}<span class="wp-x" data-sym="${sym}" data-kind="${kind}" data-tip="${escHtml(kind==='demoted'?'Dismiss this alert':'Clear watchlist flag')}">×</span></span>`;
+    const dotsHtml = col === 'sell' ? '' : gateDots(sym);
+    return `<span class="wp-chip" data-sym="${sym}" data-tip="${escHtml('Click for '+sym+' history'+(ts?' · '+relTime(ts)+' ago':''))}">${sym}${dateHtml}${tag}${dotsHtml}${reason}${extra}${xBtn}</span>`;
   };
-  const section = (cls, label, items, emptyMsg, kind) => {
-    const renderItems = list => list.map(s => {
-      const reason = kind === 'demoted' ? (demotedRecent[s]?.reasons || []).join(', ') : '';
-      return chip(s, kind, reason);
-    }).join('');
-    let body;
-    if (kind === 'ready' && items.length) {
-      // Split Ready into Premium (3/3 + score≥29) and Standard sub-groups.
-      // Both render as compact TVP chips — the full price-ladder trade card
-      // is too tall to show inline for every Premium ticker at once, so it's
-      // reserved for the click-through popover (showTickerHistory).
-      const prem = renderItems(readyPremium);
-      const std  = renderItems(readyStandard);
-      const premHead = readyPremium.length
-        ? `<div class="wp-tier-head wp-tier-prem">★ Premium <span class="wp-tier-sub">3/3 · or 2/3 with score ≥ 29</span><span class="wp-tier-count">${readyPremium.length}</span></div>${prem}`
-        : '';
-      const stdHead = readyStandard.length
-        ? `<div class="wp-tier-head wp-tier-std">Standard <span class="wp-tier-sub">1–2 green with score 24–28</span><span class="wp-tier-count">${readyStandard.length}</span></div>${std}`
-        : '';
-      body = premHead + stdHead;
-    } else {
-      body = items.length ? renderItems(items) : `<span class="wp-empty">${emptyMsg}</span>`;
-    }
-    return `<div class="wp-card wp-${cls}">
+  const section = (col, label, items, emptyMsg) => {
+    const body = items.length ? items.map(s => chip(s, col)).join('') : `<span class="wp-empty">${emptyMsg}</span>`;
+    return `<div class="wp-card wp-${col}">
       <div class="wp-card-head">${label}<span class="wp-count">${items.length}</span></div>
       <div class="wp-body">${body}</div>
     </div>`;
   };
   const sigKey = `<div class="wp-key">
-    <span style="font-weight:700;color:var(--ink-soft)">3/3 green = enter.</span>
-    <span data-tip="Price above 50DMA, AND 50DMA above 200DMA — confirms an established uptrend (50DMA crossing above 200DMA = &quot;golden cross&quot;). Without the 50&gt;200 ordering, an above-50DMA move is just a bounce inside a longer downtrend."><span class="wp-key-dot" style="background:#10b981">T</span>Trend: 50DMA &gt; 200DMA</span>
-    <span data-tip="Today's volume is above the 20-day average AND price closed up — institutional buyers stepping in. Multiplier shows conviction (e.g. 2.5x = heavy accumulation).">​<span class="wp-key-dot" style="background:#10b981">V</span>Vol Surge ↑ accumulation</span>
-    <span data-tip="Price sits 0–5% above 50DMA. In an uptrend the 50DMA acts as dynamic support — buying near it gives the best risk/reward: a tight stop just below 50DMA and lots of upside before the next resistance. Buying way above 50DMA means chasing an extended move with no clear stop."><span class="wp-key-dot" style="background:#10b981">P</span>Pullback to 50DMA zone</span>
-    <span><span class="wp-key-dot" style="background:#f59e0b">T</span>Signal changed — rescan</span>
-    <span><span class="wp-key-dot" style="background:#ef4444">V</span>Distribution warning</span>
-    <span><span class="wp-key-dot" style="background:#d1d5db;color:#9ca3af"> </span>Signal not met</span>
-    <span data-tip="V badge intensity reflects the volume-surge multiplier — pale = mild surge under 1.5x avg vol; solid = normal 1.5–2.5x; bright with glow = strong conviction >2.5x avg vol.">
-      <span class="wp-key-dot" style="background:#a7f3d0;color:#065f46;box-shadow:inset 0 0 0 1px #34d399">V</span><span class="wp-key-dot" style="background:#10b981">V</span><span class="wp-key-dot" style="background:#059669;box-shadow:0 0 0 2px #ecfdf5,0 0 0 3px #10b981,0 0 10px rgba(5,150,105,.55);margin-left:4px">V</span>
-      V intensity: &lt;1.5x · 1.5–2.5x · &gt;2.5x
-    </span>
+    <span style="font-weight:700;color:var(--ink-soft)">Watch → Buy → Hold → Sell — the trade the backtest would take. All 5 gates green = BUY.</span>
+    <span data-tip="Technical setup score ≥ 14 of 18 — trend + 3-month momentum + proximity to the 52-week high + liquidity + volume + sector strength."><span class="wp-key-dot" style="background:#10b981">T</span>Setup ≥ 14/18</span>
+    <span data-tip="Price above the 50-day MA and the 50-day above the 200-day — an established uptrend."><span class="wp-key-dot" style="background:#10b981">U</span>Uptrend: price &gt; 50 &gt; 200DMA</span>
+    <span data-tip="20-day average dollar volume ≥ $1B/day — mega-cap liquidity (the only tier where the backtest edge held)."><span class="wp-key-dot" style="background:#10b981">L</span>Liquidity ≥ $1B/day</span>
+    <span data-tip="The stock's sector (its ETF) is outperforming SPY — be in a leading sector, not a laggard."><span class="wp-key-dot" style="background:#10b981">S</span>Sector leads SPY</span>
+    <span data-tip="The name's 6-month return beats SPY's by at least 30 percentage points — the relative-strength entry floor."><span class="wp-key-dot" style="background:#10b981">R</span>6-mo strength ≥ +30pp vs SPY</span>
+    <span><span class="wp-key-dot" style="background:#d1d5db;color:#9ca3af"> </span>Gate not met — Watching shows what's missing</span>
+    <span data-tip="Exit: the 50-day MA crossing below the 200-day (death cross) closes the position → moves to Sell. The −40% catastrophe stop and 189-day time backstop are position-level and only show in the backtest log.">⚑ Sell = 50/200 death cross</span>
+    <span style="color:var(--ink-faint)">A mega-cap momentum/beta screen — a BUY/SELL notifier, not alpha; nothing protects a buy into a real bear.</span>
   </div>`;
   el.innerHTML = `
     <div class="wp-head">
       <span class="wp-title" id="wlHelpTrigger" style="cursor:help;border-bottom:1px dashed currentColor">Watchlist ?</span>
       <span class="wp-sub">Click a ticker to see its history · × to clear</span>
-      <span id="backtestBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="A mega-cap momentum/beta screen — a 2y+ validation found no demonstrated market-timing edge (the signal trails just holding the same names). A BUY/SELL notifier, not a profit guarantee. Entries require ≥$300M/day liquidity. Long-only EOD reconstruction; a 63-day hold with a loose 40% catastrophe stop (death-cross + 4×ATR dropped); prices split-adjusted; SPY benchmark. Shows the last 15 sessions' daily signals + the as-if trade log.">▢ Backtest log</span>
+      <span id="backtestBtn" style="margin-left:auto;cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:6px;color:var(--ink-soft);user-select:none;white-space:nowrap" data-tip="A mega-cap momentum/beta screen — a 20-year validation (2006–2026, through the 2008/2018/2020 bears) found no repeatable market-timing edge (the signal trails just holding the same names). A BUY/SELL notifier, not a profit guarantee. Entries require all 5 gates: ≥$1B/day liquidity + sector leading SPY + strong setup (≥14/18) + 6-mo relative strength ≥ +30pp vs SPY. Long-only EOD reconstruction; a death-cross primary exit with a loose 40% catastrophe stop and a ~189-day time backstop; prices split-adjusted; SPY benchmark. Shows the last 15 sessions' daily signals + the as-if trade log.">▢ Backtest log</span>
     </div>
     <div class="wp-cards">
-      ${section('ready',    '✓ Ready',    ready,    'No stocks ready to trade yet', 'ready')}
-      ${section('watching', '● Watching', watching, 'Click a flag in the table to add', 'watching')}
-      ${section('demoted',  '⚠ Demoted',  demoted,  'Nothing fell out recently',     'demoted')}
+      ${section('watch', '◐ Watching', watch, 'No names approaching entry')}
+      ${section('buy',   '▲ Buy',      buy,   'No fresh entries firing')}
+      ${section('hold',  '◆ Hold',     hold,  'Nothing held right now')}
+      ${section('sell',  '✕ Sell',     sell,  'No recent exits')}
     </div>
     ${sigKey}`;
 }
@@ -5722,21 +5740,18 @@ document.getElementById('tickerHistJump').addEventListener('click', () => {
 document.addEventListener('click', e => {
   if (e.target.id === 'backtestBtn') openStBacktest();
 });
-// Inline mini-history for demoted chips: returns an SVG sparkline string
-// (last ~12 scans) showing T/V/P state at each scan so you can see at a
-// glance which signal died and roughly when.
+// Inline mini-history for sell chips: an SVG strip of the last ~14 scans —
+// green = entry-eligible (all 5 gates), red = the death-cross session, grey
+// otherwise — so you can see at a glance how the setup decayed into the exit.
 function renderMiniSigHistory(sym){
-  const arr = (sigHistory[sym] || []).slice(-12);
+  const arr = (sigHistory[sym] || []).slice(-14);
   if (!arr.length) return '';
-  const W = 56, rowH = 4, gap = 1, cellW = Math.max(2, W / arr.length);
-  const color = b => b ? '#10b981' : '#cbd5e1';
-  const row = (sig, y) => arr.map((e,i) =>
-    `<rect x="${i*cellW}" y="${y}" width="${cellW-0.3}" height="${rowH}" fill="${color(e[sig])}" rx="0.5"/>`
+  const W = 56, H = 5, cellW = Math.max(2, W / arr.length);
+  const color = e => e.cross ? '#ef4444' : e.buy ? '#10b981' : '#cbd5e1';
+  const cells = arr.map((e,i) =>
+    `<rect x="${i*cellW}" y="0" width="${cellW-0.3}" height="${H}" fill="${color(e)}" rx="0.5"/>`
   ).join('');
-  const H = rowH*3 + gap*2;
-  return `<svg class="wp-chip-mini" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" data-tip="${escHtml(`Last ${arr.length} scans · T / V / P`)}" style="vertical-align:middle;margin:0 4px;display:inline-block">
-    ${row('T', 0)}${row('V', rowH+gap)}${row('P', (rowH+gap)*2)}
-  </svg>`;
+  return `<svg class="wp-chip-mini" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" data-tip="${escHtml(`Last ${arr.length} scans · green = entry-eligible · red = death cross`)}" style="vertical-align:middle;margin:0 4px;display:inline-block">${cells}</svg>`;
 }
 function renderSigHistoryChart(sym){
   const el = document.getElementById('tickerHistChart');
@@ -5746,38 +5761,25 @@ function renderSigHistoryChart(sym){
     el.innerHTML = `<div style="font-size:8.5px;color:#6b7280;padding:6px 0">No scan history yet — rescan to start the timeline.</div>`;
     return;
   }
-  const W = 360, H = 56, labelW = 16, padR = 4, rowH = 14, rowGap = 4;
+  const W = 360, H = 20, labelW = 30, padR = 4, rowH = 14;
   const cellsW = W - labelW - padR;
   const cellW  = Math.max(2, cellsW / arr.length);
-  const colorFor = (entry, signal, idx) => {
-    if (entry[signal]) return '#10b981';
-    // Was this signal green within 24h leading up to this scan?
-    const cutoff = entry.ts - SIG_STALE_MS;
-    for (let i = idx - 1; i >= 0; i--) {
-      if (arr[i].ts < cutoff) break;
-      if (arr[i][signal]) return '#f59e0b';
-    }
-    return '#3a3e4a';
-  };
-  const rowSvg = (signal, rowIdx) => {
-    const y = rowIdx * (rowH + rowGap);
-    const cells = arr.map((e, i) =>
-      `<rect x="${labelW + i * cellW}" y="${y}" width="${cellW - 0.5}" height="${rowH}" fill="${colorFor(e, signal, i)}" rx="1"/>`
-    ).join('');
-    return `<text x="0" y="${y + rowH - 3}" font-size="9" font-weight="700" fill="#a8b0bc">${signal}</text>${cells}`;
-  };
+  // Single entry-eligibility row: green = all 5 gates (BUY-eligible), red =
+  // the death-cross session, dark = neither.
+  const colorFor = e => e.cross ? '#ef4444' : e.buy ? '#10b981' : '#3a3e4a';
+  const cells = arr.map((e, i) =>
+    `<rect x="${labelW + i * cellW}" y="0" width="${cellW - 0.5}" height="${rowH}" fill="${colorFor(e)}" rx="1"/>`
+  ).join('');
   const oldest = new Date(arr[0].ts);
   const newest = new Date(arr[arr.length - 1].ts);
   const fmt = d => d.toLocaleDateString(undefined, { month:'short', day:'numeric' });
   el.innerHTML = `
     <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block">
-      ${rowSvg('T', 0)}
-      ${rowSvg('V', 1)}
-      ${rowSvg('P', 2)}
+      <text x="0" y="${rowH - 3}" font-size="9" font-weight="700" fill="#a8b0bc">entry</text>${cells}
     </svg>
     <div style="display:flex;justify-content:space-between;font-size:8px;color:#6b7280;margin-top:2px;padding:0 ${padR}px 0 ${labelW}px">
       <span>${fmt(oldest)}</span>
-      <span>${arr.length} scans</span>
+      <span>${arr.length} scans · green = BUY-eligible · red = death cross</span>
       <span>${fmt(newest)}</span>
     </div>`;
 }
@@ -5791,23 +5793,21 @@ function showTickerHistory(sym, anchorEl){
   // the ladder. Anything else (Watching, Demoted, or missing data) just
   // shows the timeline with no left column.
   const cardEl = document.getElementById('tickerHistCard');
-  const cardHtml = watchFlags[sym] === 'ready' ? tradeCard(sym, { compact: true }) : null;
+  const cardHtml = heldSyms[sym] ? tradeCard(sym, { compact: true }) : null;
   cardEl.innerHTML = cardHtml || '';
   cardEl.style.display = cardHtml ? '' : 'none';
   const events = activityLog.filter(e => e.sym === sym);
 
-  // Stats summary
-  const promotions = events.filter(e => e.type === 'promote').length;
-  const demotions  = events.filter(e => e.type === 'demote').length;
+  // Stats summary — 'promote' events are BUYs, 'demote' events are SELLs.
+  const buys  = events.filter(e => e.type === 'promote').length;
+  const sells = events.filter(e => e.type === 'demote').length;
   const oldest = events.length ? events[events.length - 1].ts : null;
   const spanDays = oldest ? Math.max(1, Math.ceil((Date.now() - oldest) / 86400000)) : 0;
-  const currentState = watchFlags[sym]
-    ? (watchFlags[sym] === 'ready' ? '✓ Ready' : '● Watching')
-    : (demotedRecent[sym] ? '⚠ Demoted' : 'Not flagged');
+  const currentState = ({ buy:'▲ Buy', hold:'◆ Hold', sell:'✕ Sell', watch:'◐ Watching' })[swingState(sym)] || 'Not tracked';
 
   document.getElementById('tickerHistTitle').textContent = `${sym} · ${currentState}`;
   document.getElementById('tickerHistStats').textContent = events.length
-    ? `${promotions} promotion${promotions===1?'':'s'} · ${demotions} demotion${demotions===1?'':'s'} · ${spanDays}d`
+    ? `${buys} buy${buys===1?'':'s'} · ${sells} sell${sells===1?'':'s'} · ${spanDays}d`
     : 'No history yet';
 
   // Event rows
@@ -5869,6 +5869,7 @@ function renderShortWatchlist(){
   const justPromoted = new Set();
   let flagsDirty = false;
   let demotedDirty = false;
+  let heldDirty = false;
   let histDirty = false;
   // Orphan sweep: every Ready/Watching/Demoted chip must correspond to a row
   // in the Screener table. Prune flags + demotedRecent whose sym is not in
@@ -5883,66 +5884,71 @@ function renderShortWatchlist(){
     for (const sym of Object.keys(demotedRecent)) {
       if (!live.has(sym)) { delete demotedRecent[sym]; demotedDirty = true; }
     }
+    for (const sym of Object.keys(heldSyms)) {
+      if (!live.has(sym)) { delete heldSyms[sym]; heldDirty = true; }
+    }
   }
-  // Record TVP + price for EVERY scored ticker (not just flagged ones) so the
-  // shared backtest sample grows across rescans regardless of whether the user
-  // has added the stock to their watchlist. recordSigHistory dedupes on
-  // scored_at, so re-running this is idempotent within a single scan. The
-  // shared blob (saveSigHistory → /api/watch-state) makes this visible to
-  // anyone who opens the site.
+  // Migrate legacy 'ready' watch flags (old model) to plain watch-tracking —
+  // the owned state now lives in heldSyms, not in watchFlags.
+  for (const sym of Object.keys(watchFlags)) {
+    if (watchFlags[sym] === 'ready') { watchFlags[sym] = 'watching'; flagsDirty = true; }
+  }
+  // One pass over every scored ticker: (1) grow the shared entry-eligibility
+  // history, and (2) reconcile the Buy/Hold/Sell state against the live
+  // backtest signal on row.bt — the SAME entryStrong/deathCross the backtest
+  // uses, so the watchlist and the backtest log can't disagree.
+  //   • fresh entryStrong, not yet owned → open a position  → BUY
+  //   • owned + death cross              → close it (sold)   → SELL
+  //   • owned + no death cross           → keep it (rides)   → HOLD
+  // A weakening entry signal never sells — mirrors the engine (it sells only on
+  // the death cross / 40% stop / time backstop). Cold-start silently adopts the
+  // current entries as HOLD once per device so a fresh load doesn't fire a
+  // flood of BUY alerts.
+  const nowMs = Date.now();
+  const coldStart = !localStorage.getItem('gn_st_held_seeded');
+  let sawRows = false;
   for (const sym of Object.keys(shortRowsBySym)) {
     const r = shortRowsBySym[sym];
     if (!r || r.scoring) continue;
-    const tvp = tvpFor(r);
-    if (!tvp) continue;
-    const scoredAtMs = r.scored_at ? new Date(r.scored_at).getTime() : Date.now();
-    const price = r.raw?.[0]?.price;
-    if (recordSigHistory(sym, scoredAtMs, tvp, price)) histDirty = true;
-  }
-  for (const sym of Object.keys(watchFlags)) {
-    const state = watchFlags[sym];
-    if (!state) continue;
-    const r = shortRowsBySym[sym];
-    if (!r || r.scoring) continue;
-    const wl = watchlist.find(w => (w.sym || '').toUpperCase() === sym);
-    if (wl && wl.legacy) continue;
-    const tvp = tvpFor(r);
-    if (!tvp) continue;
-    // Ready criteria, in priority order:
-    //   1. score ≥ 24 (quality gate — junk tickers can't sit in Ready)
-    //   2. ≥1 of T/V/P is currently green OR was green within the last 24h
-    //      (yellow counts: gives the user a 24h alert window to react before
-    //      the stock auto-demotes).
-    // Promote only happens on a currently-green signal — yellow can keep a
-    // stock in Ready but can't pull a Watching stock up.
-    const greenCount = (tvp.T?1:0) + (tvp.V?1:0) + (tvp.P?1:0);
-    const now = Date.now();
-    const yellowCount =
-      (!tvp.T && (lastGreenAt(sym,'T') ?? 0) > now - SIG_STALE_MS ? 1 : 0) +
-      (!tvp.V && (lastGreenAt(sym,'V') ?? 0) > now - SIG_STALE_MS ? 1 : 0) +
-      (!tvp.P && (lastGreenAt(sym,'P') ?? 0) > now - SIG_STALE_MS ? 1 : 0);
-    // r.score is "NN/33" (string) from the pipeline — parse before comparing.
-    const scoreNum = parseInt(r.score) || 0;
-    const scoreOk = scoreNum >= 24;
-    const qualifiesReady = scoreOk && (greenCount >= 1 || yellowCount >= 1);
-    if (state === 'watching' && scoreOk && greenCount >= 1) {
-      watchFlags[sym] = 'ready';
-      justPromoted.add(sym);
-      flagsDirty = true;
-      if (demotedRecent[sym]) { delete demotedRecent[sym]; demotedDirty = true; }
-      logActivity(sym, 'promote', `${greenCount}/3 entry signals · score ${scoreNum}/33`);
-    } else if (state === 'ready' && !qualifiesReady) {
-      watchFlags[sym] = 'watching';
-      flagsDirty = true;
-      const reasons = readyFailureReasons(r);
-      demotedRecent[sym] = { at: Date.now(), reasons };
+    const c = btClass(r);
+    if (!c) continue;
+    // (1) entry-eligibility history strip (idempotent per scored_at)
+    const scoredAtMs = r.scored_at ? new Date(r.scored_at).getTime() : nowMs;
+    if (recordSigHistory(sym, scoredAtMs, c, r.raw?.[0]?.price)) histDirty = true;
+    // (2) Buy / Hold / Sell reconcile — held off until the shared watch-state
+    //     blob has loaded, so we never fire BUYs off an empty pre-load heldSyms.
+    if (!watchStateLoaded) continue;
+    sawRows = true;
+    if (coldStart) {
+      if (c.entryStrong && !heldSyms[sym]) {
+        heldSyms[sym] = { enteredOnDate: '__seed__', at: nowMs }; // adopt as HOLD, no alert
+        heldDirty = true;
+      }
+      continue;
+    }
+    if (!heldSyms[sym]) {
+      if (c.entryStrong) {                        // BUY — a fresh entry fired
+        heldSyms[sym] = { enteredOnDate: c.barDate, at: nowMs };
+        heldDirty = true;
+        justPromoted.add(sym);
+        if (demotedRecent[sym]) { delete demotedRecent[sym]; demotedDirty = true; }
+        logActivity(sym, 'promote',
+          `BUY · all 5 gates (tech ${c.techScore}/18, RS ${c.rs126>=0?'+':''}${Math.round(c.rs126*100)}pp, sector ${c.secPts}/3, $${(c.avgDollarVol/1e9).toFixed(1)}B/day)`);
+      }
+    } else if (c.deathCross) {                    // SELL — 50/200 death cross
+      delete heldSyms[sym];
+      heldDirty = true;
+      demotedRecent[sym] = { at: nowMs, reasons: ['death cross'] };
       demotedDirty = true;
-      logActivity(sym, 'demote', reasons.join(', '));
+      if (watchFlags[sym] === 'ready') { watchFlags[sym] = 'watching'; flagsDirty = true; }
+      logActivity(sym, 'demote', 'SELL · 50/200 death cross');
     }
   }
-  if (flagsDirty)  saveWatchFlags();
+  if (coldStart && sawRows) { try { localStorage.setItem('gn_st_held_seeded','1'); } catch(e){} }
+  if (flagsDirty)   saveWatchFlags();
   if (demotedDirty) saveDemoted();
-  if (histDirty)   saveSigHistory();
+  if (heldDirty)    saveHeld();
+  if (histDirty)    saveSigHistory();
 
   // Pin order is sacred — flags never reorder rows. The watch panel above
   // surfaces Ready / Watching / Demoted; the table just highlights in place.
@@ -6051,23 +6057,21 @@ function renderShortWatchlist(){
     const warnBadge = (r.warnings && r.warnings.length)
       ? `<span class="warn-badge" data-tip="${escHtml('Data-integrity check flagged this row:\n• '+r.warnings.join('\n• ')+'\n\nAffected factors show as purple until a clean rescan. Right-click → Force rescan to retry.')}">⚠</span>`
       : '';
-    const wfState = watchFlags[sym] || '';
-    // For Ready rows, the flag content is the live TVP green count (0–3)
-    // instead of a ✓ — easier to see how close a setup is at a glance.
-    let wfContent = '';
-    let wfTipExtra = '';
-    if (wfState === 'ready') {
-      const tvpRow = tvpFor(r);
-      const greensRow = tvpRow ? (tvpRow.T?1:0)+(tvpRow.V?1:0)+(tvpRow.P?1:0) : 0;
-      wfContent = String(greensRow);
-      wfTipExtra = ` (currently ${greensRow}/3 entry signals green)`;
-    }
-    const wfTitle = wfState === 'ready'
-      ? 'Ready to trade — criteria met. Click to clear.' + wfTipExtra
-      : wfState === 'watching'
-        ? 'Watching — auto-promotes to Ready when score ≥24 and Catalyst + Vol Surge are healthy. Click to clear.'
-        : 'Click to add to watch list — get a green flash when entry criteria fire.';
-    const wfBtn = `<span class="wflag ${wfState}" data-wflag="${sym}" data-tip="${escHtml(wfTitle)}">${wfContent}</span>`;
+    // The flag doubles as a live state note on the ticker: BUY / HOLD / SELL /
+    // WATCH, mirroring the backtest signal (row.bt). For names approaching
+    // entry it shows the live gate count (n/5) so you can see how close it is.
+    const wfSt = swingState(sym);            // 'buy'|'hold'|'sell'|'watch'|null
+    const cRow = btClass(r);
+    let wfContent = '', wfTipExtra = '';
+    if (wfSt === 'buy')        { wfContent = '▲'; wfTipExtra = ' — all 5 entry gates green (BUY). Good time to enter.'; }
+    else if (wfSt === 'hold')  { wfContent = 'H'; wfTipExtra = ' — owned, riding until a 50/200 death cross.'; }
+    else if (wfSt === 'sell')  { wfContent = '✕'; wfTipExtra = ' — 50/200 death cross fired (SELL). Good time to exit.'; }
+    else if (wfSt === 'watch' && cRow) { wfContent = String(cRow.passCount); wfTipExtra = ` — ${cRow.passCount}/5 entry gates green.`; }
+    const wfLabel = ({ buy:'Buy', hold:'Hold', sell:'Sell', watch:'Watching' })[wfSt] || '';
+    const wfTitle = wfSt
+      ? `${wfLabel}${wfTipExtra} Click to toggle your watch flag.`
+      : 'Click to add to your watch list — get a green flash when the BUY signal fires.';
+    const wfBtn = `<span class="wflag ${wfSt || ''}" data-wflag="${sym}" data-tip="${escHtml(wfTitle)}">${wfContent}</span>`;
     const coCell = isScoring
       ? `<td class="co-cell">${wfBtn}<span class="sym" style="opacity:0.3">${sym}</span><div class="typing-overlay"><span class="typing-text"></span><span class="typing-cursor">█</span></div></td>`
       : isLegacy

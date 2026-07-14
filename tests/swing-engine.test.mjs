@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import {
   recordShortTransition, pruneShortWindow, mergeShortSeed, emptyShortLog, needsShortSeed,
   shortSpyReturnBetween, annotateShortBenchmarks, sessionComplete, dailySignalLog,
-  SBT_HARD_STOP_PCT, SBT_TIME_STOP_DAYS, SBT_SEED_VERSION,
+  SBT_HARD_STOP_PCT, SBT_TIME_STOP_DAYS, SBT_SEED_VERSION, SBT_ENTRY_MIN,
 } from "../netlify/lib/short-backtest.mjs";
 import { simulateShortExit } from "../netlify/lib/short-study.mjs";
 import { cleanHist, adjustSplits } from "../netlify/lib/quickswing-pipeline.mjs";
@@ -17,8 +17,8 @@ let pass = 0, proofs = 0, fail = 0;
 const T = (name, fn) => { try { fn(); pass++; } catch (e) { fail++; console.log("❌ FAIL:", name, "\n   ", e.message); } };
 const PROOF = (name, fn) => { try { fn(); proofs++; } catch (e) { fail++; console.log("❌ PROOF BROKEN:", name, "\n   ", e.message); } };
 
-// Minimal signal shape the state machine reads. (v4: deathCross is still computed by
-// the scorer but is NO LONGER an exit trigger — carried here only to prove it's inert.)
+// Minimal signal shape the state machine reads. (v6: deathCross is the PRIMARY
+// exit again — re-added off the long-runway study.)
 const sig = (o) => ({
   bar: { date: o.date, open: o.open ?? o.close, high: o.high ?? o.close, low: o.low ?? o.close, close: o.close },
   atr14: o.atr14 ?? 2,
@@ -75,12 +75,22 @@ PROOF("STOP proof: a gap-down open must NOT be flattered to the stop price", () 
   assert.notEqual(log.closed[0].exitPrice, 60);    // buggy "always fill at stop" would book −40% not −45%
 });
 
-/* ---------- v4 exit-rule change: death-cross is INERT; the cap bounds the tail ---------- */
-T("death-cross does NOT exit (v4 dropped it) — position HOLDs", () => {
+/* ---------- v6 exit-rule change: death-cross is the PRIMARY exit (re-added) ---------- */
+T("CROSS: a 50/200 death-cross exits at the close (v6 primary exit)", () => {
   const open = enter();
   const log = recordShortTransition("X", sig({ date: "2026-01-06", close: 105, low: 104, deathCross: true }), open);
-  assert.ok(log.open);                             // still open — no TREND exit anymore
-  assert.equal(log.closed.length, 0);
+  assert.equal(log.open, null);
+  assert.equal(log.closed[0].exitReason, "CROSS");
+  assert.equal(log.closed[0].exitPrice, 105);      // at the close, not intrabar
+  assert.equal(log.closed[0].pnlPct, 5);
+});
+PROOF("CROSS proof: the 40% STOP fires FIRST when both trip on the same bar", () => {
+  // Day's low pierces the catastrophe line AND the bar carries a death-cross:
+  // the risk event must win (STOP fill at the line, not a CROSS fill at the close).
+  const open = enter(); // entry 100, stop 60
+  const log = recordShortTransition("X", sig({ date: "2026-01-06", close: 62, open: 63, high: 64, low: 58, deathCross: true }), open);
+  assert.equal(log.closed[0].exitReason, "STOP");
+  assert.equal(log.closed[0].exitPrice, 60);
 });
 PROOF("hard-cap PROOF: a −67% ride-down is impossible once the 40% cap is on", () => {
   // A hyper-volatile name bleeding down day after day. Under the OLD wide 4×ATR stop it
@@ -110,7 +120,11 @@ PROOF("hard-cap PROOF: the ONLY way past −40% is a gap-through-open, never an 
    live engine. Drive identical forward bars through both for the SHIPPED rule and assert
    the same exit reason + price (±1¢, since the engine round2s and the study does not). */
 {
-  const shipped = { target: "none", timeStop: SBT_TIME_STOP_DAYS, hardStopPct: SBT_HARD_STOP_PCT };
+  // v6 shipped rule in study terms: maCross target (the death-cross exit) + the
+  // 189-session backstop + the 40% hard cap. The study reads the cross off the fwd
+  // bars' sma50/sma200; the engine reads sig.deathCross — the parity cases drive
+  // both from the same per-bar deathCross flag.
+  const shipped = { target: "maCross", timeStop: SBT_TIME_STOP_DAYS, hardStopPct: SBT_HARD_STOP_PCT };
   const runEngine = (entry, bars) => {
     let log = recordShortTransition("X", sig({ date: "2026-01-01", close: entry, entryStrong: true }), null);
     for (const b of bars) { if (!log.open) break; log = recordShortTransition("X", sig(b), log); }
@@ -119,15 +133,25 @@ PROOF("hard-cap PROOF: the ONLY way past −40% is a gap-through-open, never an 
   };
   const runStudy = (entry, bars) => {
     const rec = { side: "long", entryClose: entry, entryAtr14: 2, entryDate: "2026-01-01",
-      fwd: bars.map(b => ({ date: b.date, open: b.open ?? b.close, high: b.high ?? b.close, low: b.low ?? b.close, close: b.close, sma50: null, sma200: null, atr14: 2 })) };
+      fwd: bars.map(b => ({ date: b.date, open: b.open ?? b.close, high: b.high ?? b.close, low: b.low ?? b.close, close: b.close,
+        sma50: b.deathCross ? 90 : 110, sma200: 100, atr14: 2 })) }; // sma50<sma200 exactly on deathCross bars
     const r = simulateShortExit(rec, shipped);
-    // study TIME/STOP reasons map onto engine TIME/STOP; TARGET/TRAIL/FLIP are impossible for this rule
-    return { reason: r.reason === "EOD" ? "TIME" : r.reason, price: rec.entryClose * (1 + r.pnl / 100) };
+    // study reasons map onto engine reasons: EOD→TIME (bars ran out at the cap),
+    // TARGET (the maCross target) → CROSS. TRAIL/FLIP are impossible for this rule.
+    const map = { EOD: "TIME", TARGET: "CROSS" };
+    return { reason: map[r.reason] || r.reason, price: rec.entryClose * (1 + r.pnl / 100) };
   };
+  // Valid ascending ISO dates for long runs (a naive "2026-04-<n>" template breaks
+  // lexicographic ordering past two digits, which would freeze barsHeld).
+  const dateAt = (i) => new Date(Date.parse("2026-01-02T00:00:00Z") + i * 86400000).toISOString().slice(0, 10);
+  const flatBars = (n) => Array.from({ length: n }, (_, i) => ({
+    date: dateAt(i), close: 100 + i * 0.1, open: 100 + i * 0.1, high: 101 + i * 0.1, low: 99 + i * 0.1 }));
   const cases = [
     { name: "clean 40% intrabar cap", entry: 100, bars: [{ date: "2026-01-02", close: 62, open: 63, high: 64, low: 58 }] },
     { name: "gap-through-open", entry: 100, bars: [{ date: "2026-01-02", close: 50, open: 52, high: 53, low: 49 }] },
-    { name: "TIME at exactly 63", entry: 100, bars: Array.from({ length: 63 }, (_, i) => ({ date: `2026-04-${String(i + 1).padStart(2, "0")}`, close: 100 + i * 0.1, open: 100 + i * 0.1, high: 101 + i * 0.1, low: 99 + i * 0.1 })) },
+    { name: `TIME backstop at exactly ${SBT_TIME_STOP_DAYS}`, entry: 100, bars: flatBars(SBT_TIME_STOP_DAYS) },
+    { name: "death-cross exits at the close", entry: 100,
+      bars: [...flatBars(5), { date: dateAt(5), close: 104, open: 104, high: 105, low: 103, deathCross: true }] },
   ];
   for (const c of cases) {
     T(`parity: engine == study for "${c.name}"`, () => {
@@ -178,8 +202,8 @@ PROOF("hard-cap PROOF: the ONLY way past −40% is a gap-through-open, never an 
   });
 }
 
-/* ---------- TIME cap ---------- */
-T("TIME: exits after the 63-session cap", () => {
+/* ---------- TIME backstop ---------- */
+T("TIME: exits after the 189-session backstop", () => {
   const open = enter();
   open.open.barsHeld = SBT_TIME_STOP_DAYS - 1;      // one session short of the cap
   open.open.lastSessionDate = "2026-04-01";
@@ -325,10 +349,12 @@ PROOF("partial-bar proof: an intraday tick on today's date must NOT count as a c
 {
   // clean, liquid, monotonic uptrend → a fresh BUY on the first replayed session, then HOLDs.
   const rise = Array.from({ length: 260 }, (_, i) => Math.round((70 + 50 * ((259 - i) / 259)) * 100) / 100);
-  const hist = mkHist(rise, { vol: 3_000_000 });
+  const hist = mkHist(rise, { vol: 10_000_000 }); // ~$1.2B/day — clears the v5 $1B floor
   const spyStr = hist.map(b => ({ date: b.date, strength: 0 }));
-  const secStr = hist.map(b => ({ date: b.date, strength: 0.3 }));
-  const dl = dailySignalLog("X", hist, spyStr, secStr, { sessions: 6, replaySessions: 6 });
+  const secStr = hist.map(b => ({ date: b.date, strength: 0.3 })); // sector leads SPY → SECRS≥2
+  // SPY down ~10% over 126d → the name (+~25% 126d) clears the v6.2 rel-strength floor (+30pp).
+  const spyRet126 = hist.map(b => ({ date: b.date, strength: -0.10 }));
+  const dl = dailySignalLog("X", hist, spyStr, secStr, spyRet126, { sessions: 6, replaySessions: 6 });
   T("dailySignalLog: fresh BUY on entry then HOLD in a sustained uptrend", () => {
     assert.equal(dl.days.length, 6);
     assert.equal(dl.days[0].action, "BUY");
@@ -336,13 +362,18 @@ PROOF("partial-bar proof: an intraday tick on today's date must NOT count as a c
     assert.ok(dl.open); // still in the position at window end
   });
   T("dailySignalLog: every fired day carries the guardrail-pass + score", () => {
-    assert.ok(dl.days.every(d => d.guardrailPass === true && d.techScore >= 12));
+    assert.ok(dl.days.every(d => d.guardrailPass === true && d.techScore >= SBT_ENTRY_MIN));
   });
   PROOF("dailySignalLog proof: a sub-guardrail name must NOT emit a BUY", () => {
-    const thin = mkHist(rise, { vol: 2_000_000 }); // ~$236M/day < $300M floor
-    const dlThin = dailySignalLog("X", thin, spyStr, secStr, { sessions: 6, replaySessions: 6 });
+    const thin = mkHist(rise, { vol: 5_000_000 }); // ~$0.6B/day < $1B floor
+    const dlThin = dailySignalLog("X", thin, spyStr, secStr, spyRet126, { sessions: 6, replaySessions: 6 });
     assert.ok(!dlThin.days.some(d => d.action === "BUY")); // guardrail blocks the entry
     assert.ok(dlThin.days.some(d => d.action === "WATCH")); // shown as strong-but-blocked
+  });
+  PROOF("dailySignalLog proof: a name that does NOT beat SPY by 30pp must NOT emit a BUY (v6.2 RS gate)", () => {
+    const spyStrong = hist.map(b => ({ date: b.date, strength: 0.30 })); // SPY up ~30% 126d → name loses the RS floor
+    const dlLag = dailySignalLog("X", hist, spyStr, secStr, spyStrong, { sessions: 6, replaySessions: 6 });
+    assert.ok(!dlLag.days.some(d => d.action === "BUY")); // rel-strength floor blocks the entry
   });
 }
 

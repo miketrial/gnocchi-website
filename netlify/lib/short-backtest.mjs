@@ -10,21 +10,31 @@
        blows the worst trade from −52% to −150% — shorting weak trend-breakers
        both bleeds return and destroys capital protection. Buying strength is the
        whole Swing thesis; the log honors it.
-     - Entry: a fresh transition into a STRONG swing setup — the reconstructable
-       technical core of the 33-point score (Trend, 3M-Momentum, Near-High,
-       Liquidity, Volume-Surge, Sector-RS → 0-18) at/above the same 67% strong bar
-       the live screener uses (12/18), AND price in a clean uptrend (px>50DMA>200DMA).
-       The 5 fundamental factors (analyst, valuation, quality, leverage, catalyst)
-       are NOT in the entry signal — they can't be reconstructed at a past date, so
-       — exactly like Bounce — the log keys off the EOD-computable factors so the
-       seed replay and forward recording are byte-identical.
-     - Exit priority (v4 risk-first calibration — see docs/swing-calibration-report.md):
-       (1) a loose 40% hard catastrophe stop (SBT_HARD_STOP_PCT), (2) a 63-session
-       (~3-month) time cap — now the PRIMARY exit. The old 50/200 death-cross early-exit
-       and the tight 4×ATR stop were DROPPED: both clipped winners and worsened drawdown,
-       and a plain 63-day hold + wide backstop won on OOS expectancy + risk (and matches
-       standard trend-following practice). No take-profit / no short-side flip: a trend
-       trade's edge IS letting winners run, so an early target would cap the fat tail.
+     - Entry (v5 "best of the best" gate + v6.2 RS floor — see docs/swing-deep-entry-report.md
+       and docs/swing-bigwin-gate-exit-report.md): a fresh transition into a STRONG swing
+       setup — the reconstructable technical core of the 33-point score (Trend, 3M-Momentum,
+       Near-High, Liquidity, Volume-Surge, Sector-RS → 0-18) at/above 14/18 (~78%), price in
+       a clean uptrend (px>50DMA>200DMA), the sector leading SPY (Sector-RS ≥ 2), ≥$1B/day
+       dollar-volume, AND (v6.2) the name's own 126-session return beating SPY's by ≥ +30pp
+       (SBT_RS_MIN — the buy-side classifier's only IS+OOS-positive filter). A deep 2006-2026
+       out-of-sample/out-of-regime study found the v5 combo is the only one whose edge holds
+       through IS + OOS + real bears; the RS floor lifts it further (+4.7% → +9.6%), fewer names.
+       The 5 fundamental factors (analyst, valuation, quality, leverage, catalyst) are
+       NOT in the entry signal — they can't be reconstructed at a past date, so — exactly
+       like Bounce — the log keys off the EOD-computable factors so the seed replay and
+       forward recording are byte-identical.
+     - Exit priority (v6 "let winners run" — see docs/swing-exit-edge-report.md):
+       (1) a loose 40% hard catastrophe stop (SBT_HARD_STOP_PCT), (2) a 50/200
+       death-cross exit — the PRIMARY exit, RE-ADDED after v4 dropped it: v4 only ever
+       tested it inside a strangling 63-bar window; over a full 252-bar runway on the
+       deep 2006-2026 cache it is the best rule tested (edge vs SPY +6.8% cohort /
+       +8.8% OOS vs +1.4% for the 63-day cap; avg win +49% vs +18%; same worst-case;
+       no win-rate cost) — it lets an AMD-type run breathe (the 63d cap booked that
+       $160→$558 run in four disconnected slices) while cutting real trend deaths —
+       (3) a 189-session (~9-month) time BACKSTOP so a stalled-but-uncrossed name
+       can't park capital forever. Tight trailing/chandelier stops were tested and
+       REJECTED (whipsawed by normal high-beta pullbacks; negative edge everywhere).
+       No take-profit: a trend trade's edge IS the fat right tail.
 
    Pure functions; the endpoints (short-backtest.mjs / short-backtest-seed.mjs)
    and short-pipeline.mjs's live scorer supply the I/O. Self-contained and
@@ -36,23 +46,34 @@ import { marketCloseMinET } from "./market-calendar.mjs";
 
 const MAX_CLOSED = 200;
 // Rolling window: a trade drops off once its ENTRY is older than this (pruning by
-// entry, like Bounce, guarantees a hard "furthest back, ever"). Swing holds run
-// ~40 days, so the window is much wider than Bounce's 15 — ~6.5 months keeps a
-// handful of completed multi-week trades visible per ticker.
-export const SBT_WINDOW_DAYS = 195;
-export const SBT_SEED_SESSIONS = 130;      // trading days replayed on the first seed (~6mo)
+// entry, like Bounce, guarantees a hard "furthest back, ever"). v6 holds run to a
+// death-cross (median ~230 calendar days, backstop 189 sessions ≈ 9mo), so the
+// window is ~14 months — an entry must stay visible long enough for its own exit
+// to ever appear as a completed trade.
+export const SBT_WINDOW_DAYS = 420;
+export const SBT_SEED_SESSIONS = 240;      // trading days replayed on the first seed (~1yr — long enough for early entries to complete)
 export const SBT_STOP_ATR_MULT = 4.0;      // (legacy v1–v3) prior catastrophe stop = entry − 4×ATR14; superseded by SBT_HARD_STOP_PCT
 export const SBT_HARD_STOP_PCT = 0.40;     // v4 catastrophe stop = entry × (1 − 0.40): a loose, rarely-fired backstop that bounds the
-                                           // single-trade NON-gap tail without choking trend winners. Calibration found a tight stop
-                                           // AND the 50/200 death-cross both hurt (they clip winners) — see docs/swing-calibration-report.md.
-export const SBT_TIME_STOP_DAYS = 63;      // sessions — a 63-day hold is now the PRIMARY exit (canonical momentum window)
-export const SBT_ENTRY_MIN = 12;           // technical strong bar (12/18 = same 67% as 22/33 live)
-// Liquidity guardrail: the validation (docs/swing-validation-report.md, Phase 2)
-// showed the swing signal's only positive edge lives in the most-liquid mega-caps
-// (≥$300M/day recent-median $-volume); below ~$300M/day the edge is flat-to-
-// significantly-NEGATIVE. So entries are gated on this floor — a defensive filter
-// that removes a real negative-edge region, NOT an alpha claim.
-export const SBT_LIQ_FLOOR = 300e6;
+                                           // single-trade NON-gap tail without choking trend winners. A tight stop (and, tested again
+                                           // in v6, ANY trailing stop) clips winners — see docs/swing-exit-edge-report.md.
+export const SBT_TIME_STOP_DAYS = 189;     // sessions — v6: a ~9-month BACKSTOP behind the death-cross exit, no longer the primary
+// v6.2 name relative-strength floor. The big-winner classifier (docs/swing-bigwin-gate-
+// exit-report.md) proved big winners and losers are near-indistinguishable at entry
+// (best separator AUC ~0.6) — no clean big-win gate exists. The one filter positive
+// in BOTH the bull OOS and the bear-inclusive in-sample is the name's own 126-session
+// (~6-month) return beating SPY's by ≥ +30 percentage points. It lifts edge vs SPY
+// ~+4.7% → +9.6% at the cost of ~half the trade count. A leadership/momentum TILT (it
+// keeps ~40% losers too), not a big-winner detector — honest framing unchanged.
+export const SBT_RS_MIN = 0.30;            // (name 126d return) − (SPY 126d return) ≥ +30pp
+export const SBT_ENTRY_MIN = 14;           // technical strong bar (14/18 ≈ 78%) — raised from 12 in v5 (see below)
+export const SBT_SECRS_MIN = 2;            // v5: entry also requires the name's sector leading SPY (SECRS ≥ 2, i.e. ETF-ROC − SPY-ROC ≥ +0.08)
+// Liquidity guardrail (v5: raised $300M → $1B/day). A deep 20-year study
+// (docs/swing-deep-entry-report.md, 2006-2026 incl. the 2008/2018/2020 bears) swept
+// the floor and found edge-vs-SPY is flat-to-NEGATIVE (and bear-negative at EVERY
+// tier) below ~$1B/day, and only turns positive — and bear-robust — at $1B+. The
+// most-liquid mega-caps are a flight-to-quality/defensiveness filter, NOT an alpha
+// claim (still ~1/3 leverage; survivor-only numbers are upper bounds).
+export const SBT_LIQ_FLOOR = 1e9;
 // Bump when the entry/exit calibration changes so already-seeded logs re-seed.
 // v1: long-only, entry techScore≥12 & uptrend, exit 4×ATR / 50-200 death-cross / 63d.
 // v2: Near-High factor re-tuned (top mark → 5-18% pullback zone, not pinned at high).
@@ -61,7 +82,29 @@ export const SBT_LIQ_FLOOR = 300e6;
 //     stop; the 50/200 death-cross early-exit and the tight 4×ATR stop are DROPPED (both
 //     clipped winners / worsened drawdown). Prices are now split-adjusted upstream, which
 //     kills the phantom HON −47% split "trade". See docs/swing-calibration-report.md.
-export const SBT_SEED_VERSION = 4;
+// v5: "best of the best" entry — the deep 2006-2026 out-of-sample/out-of-regime study
+//     (docs/swing-deep-entry-report.md) demoted raw entry-strength (techScore≥15's
+//     in-sample edge was ~0; its headline was post-2017 bull) and found the only rule
+//     positive across IS + OOS + bear was techScore≥14 & $-vol≥$1B/day & sector-RS≥2.
+//     So the entry is tightened to that combo. Honest framing unchanged: high-conviction
+//     mega-cap tilt, not alpha; no protection when buying INTO a real bear.
+// v6: "let winners run" exit + conviction tier (docs/swing-exit-edge-report.md, the
+//     "why did we sell AMD at $278 before $557" study). The 63-session TIME cap —
+//     which fired on ~98% of trades and booked AMD's $160→$558 run as four
+//     disconnected slices — is replaced by a 50/200 death-cross exit (CROSS) with a
+//     189-session backstop (TIME). Death-cross is deliberately RE-ADDED (v4 dropped
+//     it off a 63-bar test window that never let it run); trailing/chandelier stops
+//     were re-tested and REJECTED (whipsaw). Adds the conviction tier ($3B/day &
+//     3mo-mom≥40%) stamped on positions/trades + the daily notifier. Replay window
+//     widened (SBT_SEED_SESSIONS 130→240, SBT_WINDOW_DAYS 195→420) so the longer
+//     holds can complete inside the visible log.
+// v6.1: fat-tail propensity score — a 0-3 ★ display rank. REMOVED in v6.2 (the user
+//     wanted the buy criteria changed, not a display tint); superseded by the RS floor.
+// v6.2: name relative-strength floor (docs/swing-bigwin-gate-exit-report.md). The entry
+//     gate ALSO requires the name's 126-session return to beat SPY's by ≥ +30pp (SBT_RS_MIN)
+//     — the only buy-side filter positive in-sample AND out-of-sample. Fewer names fire.
+//     The ★ propensity display + convScore stamping are removed.
+export const SBT_SEED_VERSION = 8;
 
 const round2 = x => (x == null ? null : Math.round(x * 100) / 100);
 
@@ -92,7 +135,7 @@ export function needsShortSeed(log) { return !log || log.seedVersion !== SBT_SEE
    sectorStrength are the IBD-style weighted ROC values as of that bar (the caller
    supplies them so this stays pure). Every threshold matches short-pipeline.mjs's
    long-side scoring so the backtest measures the real screener's timing core. */
-export function computeShortSignal(hist, { spyStrength = null, sectorStrength = null } = {}) {
+export function computeShortSignal(hist, { spyStrength = null, sectorStrength = null, spyRet126 = null } = {}) {
   if (!Array.isArray(hist) || hist.length < 200) return null;
   const closes = hist.slice(0, 260).map(d => d.close ?? d.price).filter(p => p != null);
   if (closes.length < 200) return null;
@@ -114,6 +157,12 @@ export function computeShortSignal(hist, { spyStrength = null, sectorStrength = 
     const ret = price / closes[62] - 1;
     if (ret >= 0.15) momPts = 3; else if (ret >= 0.05) momPts = 2; else if (ret >= 0) momPts = 1; else momPts = 0;
   }
+
+  // v6.2 name relative-strength: the name's own 126-session (~6-month) return minus
+  // SPY's over the same window (spyRet126 supplied by the caller, as of this bar). The
+  // buy-side classifier's only IS+OOS-positive filter (docs/swing-bigwin-gate-exit-report.md).
+  const nameRet126 = (closes.length >= 126 && closes[125] > 0) ? price / closes[125] - 1 : null;
+  const rs126 = (nameRet126 != null && spyRet126 != null) ? nameRet126 - spyRet126 : null;
 
   // 3. Near 52w High — re-tuned to reward the 5-18% "pullback to strength" zone
   //    over being pinned at the high (see checkNearHigh in short-pipeline.mjs).
@@ -174,13 +223,25 @@ export function computeShortSignal(hist, { spyStrength = null, sectorStrength = 
   const techScore = trendPts + momPts + nearPts + liqPts + volPts + secPts;
   const uptrend = price > sma50 && sma50 > sma200;
   const b0 = hist[0];
+  // v5 "best of the best" entry gate: a strong technical core (≥14/18), a clean
+  // uptrend, the mega-cap $1B/day liquidity floor, AND the sector leading SPY
+  // (SECRS ≥ 2). The only combo that held edge across IS + OOS + real bears
+  // (docs/swing-deep-entry-report.md). secPts needs SPY + sector strength; if
+  // either is missing it reads 0, so an unmapped-sector name can't fire — intended.
+  // v6.2 entry gate: the v5 "best of the best" core (techScore≥14, uptrend, ≥$1B/day,
+  // sector-RS≥2) AND the name's own 126-day return beating SPY's by ≥ +30pp. rs126 needs
+  // spyRet126 + ≥126 bars; if either is missing it reads null → the gate can't fire (a
+  // name we can't measure relative strength for is not a "best of the best" entry).
+  const entryStrong = techScore >= SBT_ENTRY_MIN && uptrend
+    && avgDollarVol >= SBT_LIQ_FLOOR && secPts >= SBT_SECRS_MIN
+    && rs126 != null && rs126 >= SBT_RS_MIN;
   return {
     techScore, price, sma50: round2(sma50), sma200: round2(sma200), uptrend,
     deathCross: sma50 < sma200,
     atr14: round2(atrFrom(hist, 0, 14)),
-    liqPts, avgDollarVol: Math.round(avgDollarVol),
-    // Liquidity guardrail: entries require the mega-cap $-volume floor (see SBT_LIQ_FLOOR).
-    entryStrong: techScore >= SBT_ENTRY_MIN && uptrend && avgDollarVol >= SBT_LIQ_FLOOR,
+    liqPts, secPts, avgDollarVol: Math.round(avgDollarVol),
+    rs126: rs126 == null ? null : Math.round(rs126 * 10000) / 10000,
+    entryStrong,
     bar: { date: b0.date, open: b0.open ?? b0.close, high: b0.high ?? b0.close, low: b0.low ?? b0.close, close: b0.close ?? b0.price },
   };
 }
@@ -276,7 +337,7 @@ export function recordShortTransition(sym, sig, prevLog, scoredAt) {
   const openPosition = () => {
     const atr14 = sig.atr14 > 0 ? sig.atr14 : null; // kept for display/reference only
     // v4 catastrophe stop: a fixed % below entry (wide, rarely fired). Bounds the
-    // single-trade non-gap loss without the winner-choking of the old 4×ATR/death-cross.
+    // single-trade non-gap loss without the winner-choking of a tight/trailing stop.
     const stopPrice = round2(bar.close * (1 - SBT_HARD_STOP_PCT));
     return {
       sym, side: "long",
@@ -312,8 +373,6 @@ export function recordShortTransition(sym, sig, prevLog, scoredAt) {
   // 1. STOP — a long is cut when the day's LOW pierces the 40% hard catastrophe line.
   //    A gap through the stop at the open fills at the open (pessimistic); an intraday
   //    touch fills at the stop; a live snapshot with no low fills at min(price, stop).
-  //    (v4: the 50/200 death-cross early-exit was DROPPED — it clipped winners; a plain
-  //    63-day hold with this loose backstop won on OOS expectancy + risk. See the report.)
   if (o.stopPrice != null) {
     const low = bar.low > 0 ? bar.low : null;
     const breachRef = low != null ? low : bar.close;
@@ -328,14 +387,26 @@ export function recordShortTransition(sym, sig, prevLog, scoredAt) {
     }
   }
 
-  // 2. TIME — the primary exit: a 63-session hold, then close to recycle capital.
+  // 2. CROSS — the v6 PRIMARY exit: the 50DMA closing below the 200DMA (death cross)
+  //    at this bar. Exits at the close. Re-added deliberately (v4 dropped it off a
+  //    63-bar test window): over a full runway it lets winners run to a real trend
+  //    death instead of a clock — see docs/swing-exit-edge-report.md. Entries require
+  //    a clean uptrend (px>50>200), so this can never fire on the entry bar.
+  if (sig.deathCross) {
+    closePosition(o, bar.close, "CROSS");
+    log.open = null;
+    return log;
+  }
+
+  // 3. TIME — a ~9-month backstop (189 sessions) so a stalled-but-uncrossed name
+  //    can't park capital forever. No longer the primary exit.
   if (o.barsHeld >= SBT_TIME_STOP_DAYS) {
     closePosition(o, bar.close, "TIME");
     log.open = null;
     return log;
   }
 
-  return log; // under the time cap, above the catastrophe stop → hold
+  return log; // trend intact, above the catastrophe stop, under the backstop → hold
 }
 
 /* ---------- Historical replay → seed log ----------
@@ -354,7 +425,21 @@ export function strengthSeriesFor(hist) {
   for (let i = 0; i < hist.length; i++) out.push({ date: hist[i].date, strength: strengthFactor(hist.slice(i)) });
   return out;
 }
-export function replayShortTrades(sym, hist, spyStrSeries, sectorStrSeries, spyHist, { sessions = SBT_SEED_SESSIONS } = {}) {
+/* SPY's trailing 126-session (~6-month) return at each bar (newest-first). Same
+   {date, strength} shape as strengthSeriesFor so strengthAsOf reads it unchanged
+   (the "strength" field just holds the 126d return here). The caller precomputes it
+   once from spyHist; it's the SPY leg of the v6.2 relative-strength entry gate. */
+export function ret126SeriesFor(spyHist) {
+  const out = [];
+  if (!Array.isArray(spyHist)) return out;
+  for (let i = 0; i < spyHist.length; i++) {
+    const now = spyHist[i].close ?? spyHist[i].price;
+    const then = spyHist[i + 126]?.close ?? spyHist[i + 126]?.price;
+    out.push({ date: spyHist[i].date, strength: (now > 0 && then > 0) ? now / then - 1 : null });
+  }
+  return out;
+}
+export function replayShortTrades(sym, hist, spyStrSeries, sectorStrSeries, spyHist, spyRet126Series, { sessions = SBT_SEED_SESSIONS } = {}) {
   let log = emptyShortLog();
   if (!Array.isArray(hist) || hist.length < 205) return log; // need 200 warmup + a few bars
   const dates = hist.slice(0, sessions).map(b => b.date).reverse(); // oldest→newest
@@ -364,6 +449,7 @@ export function replayShortTrades(sym, hist, spyStrSeries, sectorStrSeries, spyH
     const sig = computeShortSignal(hAsOf, {
       spyStrength: strengthAsOf(spyStrSeries, date),
       sectorStrength: strengthAsOf(sectorStrSeries, date),
+      spyRet126: strengthAsOf(spyRet126Series, date),
     });
     if (!sig) continue;
     log = recordShortTransition(sym, sig, log, `${date}T21:00:00.000Z`);
@@ -377,15 +463,16 @@ export function replayShortTrades(sym, hist, spyStrSeries, sectorStrSeries, spyH
    really for. Replays the full seed window so position state is correct, records
    the ACTION at every session, and returns the last `sessions` days:
      BUY  — a fresh entry fired this session (entryStrong transition, guardrail-passed)
-     SELL — an open position exited this session (reason: STOP / TIME)
+     SELL — an open position exited this session (reason: STOP / CROSS / TIME)
      HOLD — in an open position, trend intact
      WATCH— flat, and this session was strong-but-blocked (uptrend+score but below
-            the $300M/day guardrail, so no entry — shows why a name didn't fire)
+            the $1B/day guardrail, so no entry — shows why a name didn't fire)
      FLAT — flat, no setup
    Honest by construction: it shows the mechanism (which signals fire on real
    data), NOT a profit claim — the validation found the timing adds no edge. Pure;
-   the caller supplies the fetched hist + precomputed SPY/sector strength series. */
-export function dailySignalLog(sym, hist, spyStrSeries, sectorStrSeries, { sessions = 15, replaySessions = SBT_SEED_SESSIONS } = {}) {
+   the caller supplies the fetched hist + precomputed SPY/sector strength + SPY-126d
+   return series (the last is the SPY leg of the v6.2 relative-strength gate). */
+export function dailySignalLog(sym, hist, spyStrSeries, sectorStrSeries, spyRet126Series, { sessions = 15, replaySessions = SBT_SEED_SESSIONS } = {}) {
   if (!Array.isArray(hist) || hist.length < 205) return { sym, days: [], open: null };
   const dates = hist.slice(0, replaySessions).map(b => b.date).reverse(); // oldest→newest
   let log = emptyShortLog();
@@ -396,6 +483,7 @@ export function dailySignalLog(sym, hist, spyStrSeries, sectorStrSeries, { sessi
     const sig = computeShortSignal(hAsOf, {
       spyStrength: strengthAsOf(spyStrSeries, date),
       sectorStrength: strengthAsOf(sectorStrSeries, date),
+      spyRet126: strengthAsOf(spyRet126Series, date),
     });
     if (!sig) continue;
     const hadOpen = !!log.open;

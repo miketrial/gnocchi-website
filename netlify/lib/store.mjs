@@ -118,11 +118,12 @@ export async function getWatchState() {
     demoted:    (v && typeof v.demoted    === 'object' && !Array.isArray(v.demoted))    ? v.demoted    : {},
     activity:   Array.isArray(v?.activity) ? v.activity : [],
     sigHistory: (v && typeof v.sigHistory === 'object' && !Array.isArray(v.sigHistory)) ? v.sigHistory : {},
+    held:       (v && typeof v.held       === 'object' && !Array.isArray(v.held))       ? v.held       : {},
   };
 }
-export async function setWatchState({ flags, demoted, activity, sigHistory }) {
+export async function setWatchState({ flags, demoted, activity, sigHistory, held }) {
   await settingsStore().setJSON("watch-state", {
-    flags, demoted, activity, sigHistory,
+    flags, demoted, activity, sigHistory, held: held || {},
     updated: Date.now(),
   });
 }
